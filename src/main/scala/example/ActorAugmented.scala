@@ -3,8 +3,8 @@ package example
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 
-case class Token(ref: ActorRef[Any], n: Int)
-case class GCRef(x: Token, from: ActorRef[Any], to: ActorRef[Any])
+case class Token(ref: ActorRef[Nothing], n: Int)
+case class GCRef[T](x: Token, from: ActorRef[Nothing], to: ActorRef[T])
 
 object ActorAugmented {
   // message protocol
@@ -49,9 +49,9 @@ class ActorAugmented(context: ActorContext[Any], creator: ActorRef[Any], token: 
   private def spawn(): GCRef = {
     val token = createToken()
     val childRef = context.spawn(ActorAugmented(context.self, token), "child")
-    val childFancyRef = GCRef(token, context.self, childRef)
-    refs += childFancyRef
-    childFancyRef
+    val childGCRef = GCRef(token, context.self, childRef)
+    refs += childGCRef
+    childGCRef
   }
 
   def createRef(target: GCRef, recipient: GCRef): GCRef = {
