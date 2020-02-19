@@ -4,25 +4,25 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 
 case class Token(ref: ActorRef[Any], n: Int)
-case class FancyRef(x: Token, from: ActorRef[Any], to: ActorRef[Any])
+case class GCRef(x: Token, from: ActorRef[Any], to: ActorRef[Any])
 
 object ActorAugmented {
   // message protocol
   sealed trait InternalCommand
-  final case class Release(releasing: Set[FancyRef], creations: Set[FancyRef]) extends InternalCommand
+  final case class Release(releasing: Set[GCRef], creations: Set[GCRef]) extends InternalCommand
   // a message with a set of references for the recipient to add to its own refs collection
-  final case class ReceiveRefs(receivedRefs: Set[FancyRef]) extends InternalCommand
+  final case class ReceiveRefs(receivedRefs: Set[GCRef]) extends InternalCommand
   object ReceiveRefs {
     def apply(receiveRefs: ReceiveRefs*) = new ReceiveRefs(receiveRefs.toSet)
   }
 
 
-  final case class RefReply(refs: FancyRef)
+  final case class RefReply(refs: GCRef)
 
   sealed trait ExternalCommand
   final case class Spawn(replyTo: ActorRef[Any]) extends ExternalCommand
-  final case class Share(target: FancyRef, recipient: FancyRef) extends ExternalCommand
-  final case class Forget(fancyRefs: Set[FancyRef]) extends ExternalCommand
+  final case class Share(target: GCRef, recipient: GCRef) extends ExternalCommand
+  final case class Forget(fancyRefs: Set[GCRef]) extends ExternalCommand
 //  final case class Release() extends ExternalCommand
 
 
@@ -34,10 +34,10 @@ object ActorAugmented {
 class ActorAugmented(context: ActorContext[Any], creator: ActorRef[Any], token: Token)
   extends AbstractBehavior[Any](context) {
 
-  private var refs: Set[FancyRef] = Set()
-  private var created: Set[FancyRef] = Set()
-  private var owners: Set[FancyRef] = Set(FancyRef(token, creator, context.self))
-  private var released_owners: Set[FancyRef] = Set()
+  private var refs: Set[GCRef] = Set()
+  private var created: Set[GCRef] = Set()
+  private var owners: Set[GCRef] = Set(GCRef(token, creator, context.self))
+  private var released_owners: Set[GCRef] = Set()
   private var tokenCount: Int = 0;
 
   private def createToken(): Token = {
@@ -46,17 +46,17 @@ class ActorAugmented(context: ActorContext[Any], creator: ActorRef[Any], token: 
     token
   }
 
-  private def spawn(): FancyRef = {
+  private def spawn(): GCRef = {
     val token = createToken()
     val childRef = context.spawn(ActorAugmented(context.self, token), "child")
-    val childFancyRef = FancyRef(token, context.self, childRef)
+    val childFancyRef = GCRef(token, context.self, childRef)
     refs += childFancyRef
     childFancyRef
   }
 
-  def createRef(target: FancyRef, recipient: FancyRef): FancyRef = {
+  def createRef(target: GCRef, recipient: GCRef): GCRef = {
     val token = createToken()
-    val sharedRef = FancyRef(token, recipient.to, target.to)
+    val sharedRef = GCRef(token, recipient.to, target.to)
     created += sharedRef
     sharedRef
   }
@@ -87,7 +87,7 @@ class ActorAugmented(context: ActorContext[Any], creator: ActorRef[Any], token: 
         // for every reference that is being released
         releasing.foreach((fancyRef => {
           val toForget = fancyRef.to // get the target being released
-          val creations: Set[FancyRef] = created.filter {
+          val creations: Set[GCRef] = created.filter {
             createdRef => createdRef.to == toForget
           } // get the refs in the created set that point to the target
           created --= creations // remove those refs from created
