@@ -12,19 +12,15 @@ import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Beha
 abstract class AbstractBehavior[T](context: ActorContext[T])
   extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
 
-  private def addRefs(payload : Seq[ActorRef[Nothing]]) : Unit
-
-  private def handleRelease(releasing : Seq[ActorRef[T]], created : Seq[ActorRef[T]]) : Unit
-
   def onMessage(msg : T) : Behavior[T]
 
   final def onMessage(msg : GCMessage[T]) : AkkaBehavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(releasing, created) =>
-        handleRelease(releasing, created)
+        context.handleRelease(releasing, created)
         AkkaBehaviors.same
       case AppMsg(payload : Message) =>
-        addRefs(payload.refs)
+        context.addRefs(payload.refs)
         onMessage(payload)
     }
 }
