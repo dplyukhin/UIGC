@@ -6,6 +6,8 @@ ThisBuild / organizationName := "gc"
 name := "akka-gc"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.8" % Test
 libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed" % "2.6.3"
+libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % "2.6.3"
+libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
 
 
 // See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for instructions on how to publish to Sonatype.

@@ -26,20 +26,10 @@ class ActorContext[T](
 
   private var refs: Set[ActorRef[Nothing]] = Set(self)
   private var created: Set[ActorRef[Nothing]] = Set()
+  private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef(token, creator, context.self))
+  private var released_owners: Set[ActorRef[Nothing]] = Set()
 
-  private[this] var _owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef(token, creator, context.self))
-  def owners: Set[ActorRef[Nothing]] = _owners
-  def owners_=(value: Set[ActorRef[Nothing]]): Unit = {
-    _owners = value
-  }
-
-  private[this] var _released_owners: Set[ActorRef[Nothing]] = Set()
-  def released_owners: Set[ActorRef[Nothing]] = _released_owners
-  def released_owners_=(value: Set[ActorRef[Nothing]]): Unit = {
-    _released_owners = value
-  }
-
-  private var tokenCount: Int = 0
+  protected var tokenCount: Int = 0
 
   def spawn[S](factory : ActorFactory[S], name : String) : ActorRef[S] = {
     val x = newToken()
@@ -70,8 +60,8 @@ class ActorContext[T](
       }
     })
     if (owners.isEmpty && released_owners.isEmpty) {
-      // TODO release any refs held by this actor
       release(refs.asInstanceOf[Seq[ActorRef[Nothing]]])
+      context.stop(context.self)
     }
   }
 
@@ -96,13 +86,13 @@ class ActorContext[T](
    * @param releasing
    * @tparam S
    */
-  def releaseHomogeneous[S](releasing : Seq[ActorRef[Nothing]]): Unit = {
+  def releaseHomogeneous[S](releasing : Seq[ActorRef[S]]): Unit = {
     val toForget = releasing.head.target
     val creations = created.filter {
       createdRef => createdRef.target == toForget
     }
     created --= creations
-    toForget ! ReleaseMsg(releasing, creations.asInstanceOf[Seq[ActorRef[Nothing]]])
+    toForget ! ReleaseMsg[S](releasing, creations.asInstanceOf[Seq[ActorRef[S]]])
   }
 
   def release[S](releasing: Seq[ActorRef[Nothing]]): Unit = {
