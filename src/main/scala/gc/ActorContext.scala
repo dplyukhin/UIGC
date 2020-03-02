@@ -29,7 +29,7 @@ class ActorContext[T](
   private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef(token, creator, context.self))
   private var released_owners: Set[ActorRef[Nothing]] = Set()
 
-  protected var tokenCount: Int = 0
+  private var tokenCount: Int = 0
 
   def spawn[S](factory : ActorFactory[S], name : String) : ActorRef[S] = {
     val x = newToken()
@@ -92,21 +92,21 @@ class ActorContext[T](
       createdRef => createdRef.target == toForget
     }
     created --= creations
-    toForget ! ReleaseMsg[S](releasing, creations.asInstanceOf[Seq[ActorRef[S]]])
+    toForget ! ReleaseMsg(releasing, creations.toSeq)
   }
 
-  def release[S](releasing: Seq[ActorRef[Nothing]]): Unit = {
-    var targets: Set[AkkaActorRef[Nothing]] = Set()
+  def release(releasing: Set[ActorRef[Nothing]]): Unit = {
+    var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
     releasing.foreach(ref => {
-      targets += ref.target
+      val key = ref.target
+      val set = targets.getOrElse(key, Set())
+      targets(key) = set + ref
     })
-    targets.foreach(target => {
-      val homogeneousSet = releasing.filter(ref => {
-        ref.target == target
-      })
-      releaseHomogeneous(homogeneousSet)
+    targets.keys.foreach(target => {
+      releaseHomogeneous(targets(target))
     })
   }
+
 
   private def newToken() : Token = {
     val token = Token(context.self, tokenCount)

@@ -9,7 +9,7 @@ import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Beha
  * Unlike [[AkkaAbstractBehavior]], child classes of [[AbstractBehavior]] must implement
  * [[processMessage]].
  */
-abstract class AbstractBehavior[T](context: ActorContext[T])
+abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
 
   def onMessage(msg : T) : Behavior[T]
@@ -19,7 +19,7 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
       case ReleaseMsg(releasing, created) =>
         context.handleRelease(releasing, created)
         AkkaBehaviors.same
-      case AppMsg(payload : Message) =>
+      case AppMsg(payload) =>
         context.addRefs(payload.refs)
         onMessage(payload)
     }

@@ -20,6 +20,6 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
-class ActorRef[-T <: Message](val x: Token, val owner: AkkaActorRef[Nothing], val target: AkkaActorRef[GCMessage[T]]) {
+class ActorRef[-T <: Message](val token: Token, val owner: AkkaActorRef[Nothing], val target: AkkaActorRef[GCMessage[T]]) {
   def !(msg : T) : Unit = target.tell(AppMsg(msg))
 }

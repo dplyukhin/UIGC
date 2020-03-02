@@ -4,11 +4,14 @@ import org.scalatest.WordSpecLike
 import gc._
 
 object SimpleActor {
-  case class StringMsg(str: String, sharedRefs: Seq[ActorRef[StringMsg]]) extends Message {
-    /**
-     * This method must return all the references contained in the message.
-     */
-    override def refs: Seq[ActorRef[Nothing]] = sharedRefs
+  trait SimpleMessage extends Message {
+    override def refs: Seq[ActorRef[Nothing]] = Seq()
+  }
+  sealed trait Msg
+  final case class Init extends Msg with SimpleMessage
+  final case class Release extends Msg with SimpleMessage
+  final case class Share(ref : ActorRef[Msg]) extends Msg with Message {
+    override def refs: Seq[ActorRef[Nothing]] = Seq(ref)
   }
 
   def apply(): ActorFactory[SimpleActor.StringMsg] = {
