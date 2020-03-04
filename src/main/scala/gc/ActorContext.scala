@@ -3,6 +3,8 @@ package gc
 import akka.actor.typed.{ActorRef => AkkaActorRef}
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
 
+import scala.collection.mutable
+
 /**
  * A version of [[AkkaActorContext]] used by garbage-collected actors. Provides
  * methods for spawning garbage-collected actors, creating new references, and
@@ -16,7 +18,7 @@ import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
  * @param token A globally unique token.
  * @tparam T The type of application-level messages handled by the actor.
  */
-class ActorContext[T](
+class ActorContext[T <: Message](
   val context : AkkaActorContext[GCMessage[T]],
   val creator : AkkaActorRef[Nothing],
   val token : Token
@@ -26,12 +28,12 @@ class ActorContext[T](
 
   private var refs: Set[ActorRef[Nothing]] = Set(self)
   private var created: Set[ActorRef[Nothing]] = Set()
-  private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef(token, creator, context.self))
+  private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef[T](token, creator, context.self))
   private var released_owners: Set[ActorRef[Nothing]] = Set()
 
   private var tokenCount: Int = 0
 
-  def spawn[S](factory : ActorFactory[S], name : String) : ActorRef[S] = {
+  def spawn[S <: Message](factory : ActorFactory[S], name : String) : ActorRef[S] = {
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
@@ -42,7 +44,7 @@ class ActorContext[T](
     refs ++= payload
   }
 
-  def handleRelease(releasing : Seq[ActorRef[T]], created : Seq[ActorRef[T]]) : Unit = {
+  def handleRelease(releasing : Seq[ActorRef[Nothing]], created : Seq[ActorRef[Nothing]]) : Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -60,7 +62,7 @@ class ActorContext[T](
       }
     })
     if (owners.isEmpty && released_owners.isEmpty) {
-      release(refs.asInstanceOf[Seq[ActorRef[Nothing]]])
+      release(refs)
       context.stop(context.self)
     }
   }
@@ -73,7 +75,7 @@ class ActorContext[T](
    * @tparam S The type of [[Message]](?) that the actor handles.
    * @return The created reference.
    */
-  def createRef[S](target : ActorRef[S], owner : ActorRef[Nothing]) : ActorRef[S] = {
+  def createRef[S <: Message](target : ActorRef[S], owner : ActorRef[Nothing]) : ActorRef[S] = {
     val token = newToken()
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
@@ -81,20 +83,9 @@ class ActorContext[T](
   }
 
   /**
-   * Releases a set of references from an actor. This assumes every [[ActorRef]]
-   * in the sequence points to the same actor.
+   * Releases a set of references from an actor.
    * @param releasing
-   * @tparam S
    */
-  def releaseHomogeneous[S](releasing : Seq[ActorRef[S]]): Unit = {
-    val toForget = releasing.head.target
-    val creations = created.filter {
-      createdRef => createdRef.target == toForget
-    }
-    created --= creations
-    toForget ! ReleaseMsg(releasing, creations.toSeq)
-  }
-
   def release(releasing: Set[ActorRef[Nothing]]): Unit = {
     var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
     releasing.foreach(ref => {
@@ -103,11 +94,18 @@ class ActorContext[T](
       targets(key) = set + ref
     })
     targets.keys.foreach(target => {
-      releaseHomogeneous(targets(target))
+      val creations = created.filter {
+        createdRef => createdRef.target == target
+      }
+      created --= creations
+      target ! ReleaseMsg[Nothing](releasing.toSeq, creations.toSeq)
     })
   }
 
-
+  /**
+   * Creates a new [[Token]]. Increments the internal token count of the actor.
+   * @return The new [[Token]].
+   */
   private def newToken() : Token = {
     val token = Token(context.self, tokenCount)
     tokenCount += 1

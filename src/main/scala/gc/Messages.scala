@@ -11,8 +11,8 @@ trait Message {
 }
 
 
-sealed trait GCMessage[T <: Message]
+sealed trait GCMessage[+T <: Message]
 
-final case class AppMsg[T <: Message](payload : T) extends GCMessage[T]
+final case class AppMsg[+T <: Message](payload : T) extends GCMessage[T]
 
-final case class ReleaseMsg[T <: Message](releasing : Seq[ActorRef[T]], created : Seq[ActorRef[T]]) extends GCMessage[T]
+final case class ReleaseMsg[+T <: Message](releasing : Seq[ActorRef[Nothing]], created : Seq[ActorRef[Nothing]]) extends GCMessage[T]
