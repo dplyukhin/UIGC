@@ -33,6 +33,13 @@ class ActorContext[T <: Message](
 
   private var tokenCount: Int = 0
 
+  /**
+   *
+   * @param factory
+   * @param name
+   * @tparam S
+   * @return
+   */
   def spawn[S <: Message](factory : ActorFactory[S], name : String) : ActorRef[S] = {
     val x = newToken()
     val self = context.self
@@ -40,11 +47,20 @@ class ActorContext[T <: Message](
     new ActorRef[S](x, self, child)
   }
 
-  def addRefs(payload : Seq[ActorRef[Nothing]]) : Unit = {
+  /**
+   *
+   * @param payload
+   */
+  def addRefs(payload : Iterable[ActorRef[Nothing]]) : Unit = {
     refs ++= payload
   }
 
-  def handleRelease(releasing : Seq[ActorRef[Nothing]], created : Seq[ActorRef[Nothing]]) : Unit = {
+  /**
+   *
+   * @param releasing
+   * @param created
+   */
+  def handleRelease(releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]) : Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -86,7 +102,7 @@ class ActorContext[T <: Message](
    * Releases a set of references from an actor.
    * @param releasing
    */
-  def release(releasing: Set[ActorRef[Nothing]]): Unit = {
+  def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
     var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
     releasing.foreach(ref => {
       val key = ref.target
@@ -98,7 +114,7 @@ class ActorContext[T <: Message](
         createdRef => createdRef.target == target
       }
       created --= creations
-      target ! ReleaseMsg[Nothing](releasing.toSeq, creations.toSeq)
+      target ! ReleaseMsg[Nothing](releasing, creations)
     })
   }
 
