@@ -4,7 +4,7 @@ ThisBuild / organization     := "edu.illinois"
 ThisBuild / organizationName := "gc"
 
 name := "akka-gc"
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.8" % Test
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.1" % "test"
 libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed" % "2.6.3"
 libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % "2.6.3"
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
