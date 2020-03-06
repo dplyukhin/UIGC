@@ -1,6 +1,7 @@
 package gc
 
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.UnhandledMessage
+import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -24,37 +25,36 @@ case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
 }
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-  val probe = testKit.createTestProbe[testMessage]()
-  // TESTS HERE
+  val probe : TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
-    "spawn" in {
+    "be able to spawn actors" in {
       actorA ! Init
       probe.expectMessage(Spawned)
       probe.expectMessage(Spawned)
     }
-    "send app messages" in {
+    "be able to send messages" in {
       actorA ! SendC(Hello)
       probe.expectMessage(Hello)
     }
-    "share references" in {
+    "be able to share references" in {
       actorA ! TellBAboutC
       actorA ! SendB(SendC(Hello))
       probe.expectMessage(Hello)
     }
-    "release references without terminating" in {
+    "not terminate when some owners still exist" in {
       actorA ! ReleaseC
       probe.expectNoMessage()
     }
-    "references gets maintained" in {
+    "be able to send messages after other owners have released" in {
       actorA ! SendB(SendC(Hello))
       probe.expectMessage(Hello)
     }
-    "eventually releasing all references terminates" in {
+    "terminate after all references have been released" in {
       actorA ! SendB(ReleaseC)
       probe.expectMessage(Terminated)
     }
-    "simply releasing a reference terminates" in {
+    "terminate after the only reference has been released" in {
       actorA ! ReleaseB
       probe.expectMessage(Terminated)
     }
@@ -65,18 +65,18 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
   object ActorB {
     def apply() : ActorFactory[testMessage] = {
-      Behaviors.setup((context => new ActorB(context)))
+      Behaviors.setup(context => new ActorB(context))
     }
   }
   object ActorC {
     def apply(): ActorFactory[testMessage] = {
-      Behaviors.setup((context => new ActorC(context)))
+      Behaviors.setup(context => new ActorC(context))
     }
   }
 
   class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB : ActorRef[testMessage] = null
-    var actorC : ActorRef[testMessage]= null
+    var actorB : ActorRef[testMessage] = _
+    var actorC : ActorRef[testMessage] = _
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Init =>
@@ -99,11 +99,12 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case ReleaseB =>
           context.release(Iterable(actorB))
           this
+        case _ => this
       }
     }
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC : ActorRef[testMessage]= null
+    var actorC : ActorRef[testMessage]= _
     probe.ref ! Spawned
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
@@ -116,6 +117,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case ReleaseC =>
           context.release(Iterable(actorC))
           this
+        case _ => this
       }
     }
     override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
@@ -131,6 +133,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case Hello =>
           probe.ref ! Hello
           this
+        case _ => this
       }
     }
     override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
