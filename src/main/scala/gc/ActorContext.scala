@@ -77,7 +77,7 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-    if (owners.isEmpty && released_owners.isEmpty) {
+    if (owners == Set(self) && released_owners.isEmpty) {
       release(refs)
       context.stop(context.self)
     }
