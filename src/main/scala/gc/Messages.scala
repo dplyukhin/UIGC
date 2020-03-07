@@ -7,12 +7,12 @@ trait Message {
   /**
    * This method must return all the references contained in the message.
    */
-  def refs: Seq[ActorRef[Nothing]]
+  def refs: Iterable[ActorRef[Nothing]]
 }
 
 
-sealed trait GCMessage[T <: Message]
+sealed trait GCMessage[+T <: Message]
 
-final case class AppMsg[T <: Message](payload : T) extends GCMessage[T]
+final case class AppMsg[+T <: Message](payload : T) extends GCMessage[T]
 
-final case class ReleaseMsg[T <: Message](releasing : Seq[ActorRef[T]], created : Seq[ActorRef[T]]) extends GCMessage[T]
+final case class ReleaseMsg[+T <: Message](releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]) extends GCMessage[T]
