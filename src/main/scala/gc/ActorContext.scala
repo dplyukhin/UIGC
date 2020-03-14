@@ -34,11 +34,11 @@ class ActorContext[T <: Message](
   private var tokenCount: Int = 0
 
   /**
-   *
-   * @param factory
-   * @param name
-   * @tparam S
-   * @return
+   * Spawns a new actor into the GC system.
+   * @param factory The behavior factory for the spawned actor.
+   * @param name The name of the spawned actor.
+   * @tparam S The type of application-level messages to be handled by this actor.
+   * @return The [[ActorRef]] of the spawned actor.
    */
   def spawn[S <: Message](factory : ActorFactory[S], name : String) : ActorRef[S] = {
     val x = newToken()
@@ -48,7 +48,7 @@ class ActorContext[T <: Message](
   }
 
   /**
-   *
+   * Adds a collection of references to this actor's internal collection.
    * @param payload
    */
   def addRefs(payload : Iterable[ActorRef[Nothing]]) : Unit = {
@@ -56,11 +56,12 @@ class ActorContext[T <: Message](
   }
 
   /**
-   *
-   * @param releasing
-   * @param created
+   * Handles the internal logistics of this actor receiving a [[ReleaseMsg]].
+   * @param releasing The collection of references to be released by this actor.
+   * @param created The collection of references the releaser has created.
+   * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]) : Unit = {
+  def handleRelease(releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]): Boolean = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -79,8 +80,9 @@ class ActorContext[T <: Message](
     })
     if (owners == Set(self) && released_owners.isEmpty) {
       release(refs)
-      context.stop(context.self)
+      return true
     }
+    false
   }
 
   /**
@@ -99,16 +101,18 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Releases a set of references from an actor.
-   * @param releasing
+   * Releases a collection of references from an actor.
+   * @param releasing A collection of references
    */
   def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
     var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
+    // group the references in releasing by target
     releasing.foreach(ref => {
       val key = ref.target
       val set = targets.getOrElse(key, Set())
       targets(key) = set + ref
     })
+    // filter the created set by target
     targets.keys.foreach(target => {
       val creations = created.filter {
         createdRef => createdRef.target == target
@@ -119,8 +123,8 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Creates a new [[Token]]. Increments the internal token count of the actor.
-   * @return The new [[Token]].
+   * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
+   * @return The new token.
    */
   private def newToken() : Token = {
     val token = Token(context.self, tokenCount)

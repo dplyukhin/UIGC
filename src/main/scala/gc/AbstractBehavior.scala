@@ -17,10 +17,13 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   final def onMessage(msg : GCMessage[T]) : AkkaBehavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(releasing, created) =>
-        context.handleRelease(releasing, created)
+        if (context.handleRelease(releasing, created)) {
+          return AkkaBehaviors.stopped
+        }
         AkkaBehaviors.same
       case AppMsg(payload) =>
         context.addRefs(payload.refs)
         onMessage(payload)
+        AkkaBehaviors.same
     }
 }
