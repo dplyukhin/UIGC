@@ -118,7 +118,7 @@ class ActorContext[T <: Message](
         createdRef => createdRef.target == target
       }
       created --= creations
-      target ! ReleaseMsg[Nothing](releasing, creations)
+      target ! ReleaseMsg[Nothing](targets(target), creations)
     })
   }
 
