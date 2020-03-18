@@ -26,15 +26,21 @@ class ActorContext[T <: Message](
 
   val self = new ActorRef[T](newToken(), context.self, context.self)
 
+  /** References this actor owns. Starts with its self reference */
   private var refs: Set[ActorRef[Nothing]] = Set(self)
+  /** References this actor has created for other actors. */
   private var created: Set[ActorRef[Nothing]] = Set()
+  /** References to this actor. Starts with its self reference and its creator's reference to it. */
   private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef[T](token, creator, context.self))
+  /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[ActorRef[Nothing]] = Set()
 
   private var tokenCount: Int = 0
+  private var releaseCount: Int = 0
+  private var epoch: Int = 0
 
   /**
-   * Spawns a new actor into the GC system.
+   * Spawns a new actor into the GC system and adds it to [[refs]].
    * @param factory The behavior factory for the spawned actor.
    * @param name The name of the spawned actor.
    * @tparam S The type of application-level messages to be handled by this actor.
@@ -44,7 +50,9 @@ class ActorContext[T <: Message](
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    new ActorRef[S](x, self, child)
+    val ref = new ActorRef[S](x, self, child)
+    refs += ref
+    ref
   }
 
   /**
@@ -112,14 +120,27 @@ class ActorContext[T <: Message](
       val set = targets.getOrElse(key, Set())
       targets(key) = set + ref
     })
-    // filter the created set by target
+    // filter the created and refs sets by target
     targets.keys.foreach(target => {
       val creations = created.filter {
         createdRef => createdRef.target == target
       }
       created --= creations
+      val matchedRefs = refs.filter(
+        ref => ref.target == target
+      )
       target ! ReleaseMsg[Nothing](targets(target), creations)
     })
+    refs --= releasing
+  }
+
+  /**
+   * Gets the current [[ActorSnapshot]] and increments the epoch afterward.
+   * @return The current snapshot.
+   */
+  def snapshot(): ActorSnapshot = {
+    epoch += 1
+    ActorSnapshot(refs ++ owners ++ created)
   }
 
   /**

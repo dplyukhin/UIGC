@@ -23,3 +23,10 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
 case class ActorRef[-T <: Message](token: Token, owner: AkkaActorRef[Nothing], target: AkkaActorRef[GCMessage[T]]) {
   def !(msg : T) : Unit = target.tell(AppMsg(msg))
 }
+
+// TODO: Add epochs to Snapshots
+/**
+ * A collection of all the [[ActorRef]]s an actor is aware of at a specific time.
+ * @param knowledgeSet An actor's knowledge set, consisting of an ActorRef's refs, owners, and created sets.
+ */
+case class ActorSnapshot(knowledgeSet: Set[ActorRef[Nothing]])
