@@ -20,14 +20,14 @@ case object ShareCWithB extends KnowledgeTestMessage with NoRefsMessage
 case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
   override def refs: Iterable[ActorRef[Nothing]] = Iterable(ref)
 }
-// sent by tester to tell A to release B and C respectively
+// sent by tester to tell A to release C
 case object ForgetC extends KnowledgeTestMessage with NoRefsMessage
 
 class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[KnowledgeTestMessage] = testKit.createTestProbe[KnowledgeTestMessage]()
-  var aKnowledge: Knowledge = _
-  var gcRefAToC: ActorRef[KnowledgeTestMessage] = _
-  var gcRefBToC: ActorRef[KnowledgeTestMessage] = _
+  var aKnowledge: Knowledge = _ // A's knowledge set, gets updated as the test progresses
+  var gcRefAToC: ActorRef[KnowledgeTestMessage] = _ // A's reference to C
+  var gcRefBToC: ActorRef[KnowledgeTestMessage] = _ // B's reference to C
 
   "Knowledge sets must" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
@@ -42,33 +42,33 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       actorA ! InitB
       val gcRefAToB = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
-      val expectedKnowledgeB = Knowledge(ActorSnapshot(
+      val expectedB = Knowledge(ActorSnapshot(
         aKnowledge.actorSnapshot.knowledgeSet + gcRefAToB))
-      aKnowledge = probe.expectMessage(expectedKnowledgeB)
+      aKnowledge = probe.expectMessage(expectedB)
 
       actorA ! InitC
       gcRefAToC = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
-      val expectedKnowledgeC = Knowledge(ActorSnapshot(
+      val expectedC = Knowledge(ActorSnapshot(
         aKnowledge.actorSnapshot.knowledgeSet + gcRefAToC))
-      aKnowledge = probe.expectMessage(expectedKnowledgeC)
+      aKnowledge = probe.expectMessage(expectedC)
     }
 
     "contain knowledge of created references" in {
       actorA ! ShareCWithB
       gcRefBToC = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
-      val expectedKnowledgeBC = Knowledge(ActorSnapshot(
+      val expected = Knowledge(ActorSnapshot(
         aKnowledge.actorSnapshot.knowledgeSet + gcRefBToC))
-      aKnowledge = probe.expectMessage(expectedKnowledgeBC)
+      aKnowledge = probe.expectMessage(expected)
     }
 
     "lose knowledge of released references" in {
       actorA ! ForgetC
-      val expectedKnowledgeA = Knowledge(ActorSnapshot(
+      val expected = Knowledge(ActorSnapshot(
         aKnowledge.actorSnapshot.knowledgeSet - gcRefBToC - gcRefAToC))
       actorA ! RequestKnowledge
-      aKnowledge = probe.expectMessage(expectedKnowledgeA)
+      aKnowledge = probe.expectMessage(expected)
     }
   }
 
@@ -89,7 +89,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   class ActorA(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
     var actorB : ActorRef[KnowledgeTestMessage] = _
     var actorC : ActorRef[KnowledgeTestMessage] = _
-//    probe.ref ! Ref(context.self)
+
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {
         case InitB =>
@@ -117,6 +117,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
   class ActorB(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
     var actorC : ActorRef[KnowledgeTestMessage]= _
+
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {
         case Ref(ref) =>
