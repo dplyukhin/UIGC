@@ -1,7 +1,7 @@
 package gc
 
-import akka.actor.typed.{ActorRef => AkkaActorRef}
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
+import akka.actor.typed.{ActorRef => AkkaActorRef}
 
 import scala.collection.mutable
 
@@ -34,9 +34,13 @@ class ActorContext[T <: Message](
   private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[ActorRef[Nothing]] = Set()
+  /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
+  private var releasing_buffer: Set[ActorRef[Nothing]] = Set()
+  private var acknowledgement_buffer: Set[AckReleaseMsg[Nothing]] = Set()
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
+  private var acknowledgeCount: Int = 0
   private var epoch: Int = 0
 
   /**
@@ -126,12 +130,44 @@ class ActorContext[T <: Message](
         createdRef => createdRef.target == target
       }
       created --= creations
-      val matchedRefs = refs.filter(
-        ref => ref.target == target
-      )
-      target ! ReleaseMsg[Nothing](targets(target), creations)
+      releasing_buffer ++= creations
+      target ! ReleaseMsg[Nothing](context.self, targets(target), creations, releaseCount)
+      releaseCount += 1
     })
     refs --= releasing
+    releasing_buffer ++= (refs intersect releasing.toSet)
+  }
+
+  /**
+   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
+   * @param releasing The forwarded releasing set.
+   * @param created The forwarded created set.
+   * @param sequenceNum The sequence number of this release.
+   */
+  def finishRelease(releasing: Iterable[ActorRef[Nothing]], created: Iterable[ActorRef[Nothing]], sequenceNum: Int): Unit = {
+    if (sequenceNum > acknowledgeCount) {
+      // save the out of order acknowledgement for later
+      // TODO: maybe insert sorted by sequenceNum?
+      acknowledgement_buffer += AckReleaseMsg(releasing, created, sequenceNum)
+    }
+    else if (sequenceNum == acknowledgeCount) {
+      // remove the acknowledged references
+      releasing_buffer --= releasing
+      releasing_buffer --= created
+      acknowledgeCount += 1
+      // check for an acknowledgement that is next in line
+      val nextAckMessageMaybe = acknowledgement_buffer find (ack => ack.sequenceNum == acknowledgeCount)
+      nextAckMessageMaybe match {
+        case Some(nextAckMsg) =>
+          acknowledgement_buffer -= nextAckMsg
+          finishRelease(nextAckMsg.releasing, nextAckMsg.created, nextAckMsg.sequenceNum)
+        case None =>
+          ()
+      }
+    }
+    else {
+      // something has gone horribly wrong
+    }
   }
 
   /**
@@ -140,7 +176,7 @@ class ActorContext[T <: Message](
    */
   def snapshot(): ActorSnapshot = {
     epoch += 1
-    ActorSnapshot(refs ++ owners ++ created)
+    ActorSnapshot(refs ++ owners ++ created ++ releasing_buffer)
   }
 
   /**

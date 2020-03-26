@@ -1,5 +1,7 @@
 package gc
 
+import akka.actor.typed.{ActorRef => AkkaActorRef}
+
 /**
  * An interface that all messages sent to a garbage-collected actor must adhere to.
  */
@@ -15,4 +17,5 @@ sealed trait GCMessage[+T <: Message]
 
 final case class AppMsg[+T <: Message](payload : T) extends GCMessage[T]
 
-final case class ReleaseMsg[+T <: Message](releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]) extends GCMessage[T]
+final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[T]], releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]], sequenceNum: Int) extends GCMessage[T]
+final case class AckReleaseMsg[+T <: Message](releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]], sequenceNum: Int) extends GCMessage[T]
