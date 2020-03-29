@@ -17,5 +17,5 @@ sealed trait GCMessage[+T <: Message]
 
 final case class AppMsg[+T <: Message](payload : T) extends GCMessage[T]
 
-final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[T]], releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]], sequenceNum: Int) extends GCMessage[T]
-final case class AckReleaseMsg[+T <: Message](releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]], sequenceNum: Int) extends GCMessage[T]
+final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]], releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]], sequenceNum: Int) extends GCMessage[T]
+final case class AckReleaseMsg[+T <: Message](sequenceNum: Int) extends GCMessage[T]

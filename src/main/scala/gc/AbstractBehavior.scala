@@ -19,15 +19,15 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
     msg match {
       case ReleaseMsg(from, releasing, created, sequenceNum) =>
         val readyToTerminate: Boolean = context.handleRelease(releasing, created)
-        from ! AckReleaseMsg(releasing, created, sequenceNum)
+        from ! AckReleaseMsg(sequenceNum)
         if (readyToTerminate) {
           AkkaBehaviors.stopped
         }
         else {
           AkkaBehaviors.same
         }
-      case AckReleaseMsg(releasing, created, sequenceNum) =>
-        context.finishRelease(releasing, created, sequenceNum)
+      case AckReleaseMsg(sequenceNum) =>
+        context.finishRelease(sequenceNum)
         AkkaBehaviors.same
       case AppMsg(payload) =>
         context.addRefs(payload.refs)
