@@ -11,7 +11,7 @@ case object SnapshotAsk extends AckTestMsg with NoRefsMessage
 // actor's reply containing their snapshot
 case class SnapshotReply(snapshot: ActorSnapshot) extends AckTestMsg with NoRefsMessage
 // message to initialize test scenario
-case object Init extends AckTestMsg with NoRefsMessage
+case object AckTestInit extends AckTestMsg with NoRefsMessage
 // invoke A to release B
 case object Release extends AckTestMsg with NoRefsMessage
 // invoke A to release C1 and C2
@@ -30,7 +30,7 @@ class AckReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
   "Actors using AckReleaseMessages" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
-    actorA ! Init
+    actorA ! AckTestInit
 
     "keep unacknowledged releases in the knowledge set" in {
       actorA ! SnapshotAsk
@@ -92,7 +92,7 @@ class AckReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case SnapshotAsk =>
           probe.ref ! SnapshotReply(context.snapshot())
           this
-        case Init =>
+        case AckTestInit =>
           actorB = context.spawn(ActorB(), "actorB")
           actorC1 = context.spawn(ActorC(), "actorC")
           actorC2 = context.createRef(actorC1, context.self)
