@@ -1,8 +1,12 @@
 package gc
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import scala.concurrent.duration.FiniteDuration
 
 
 sealed trait KnowledgeTestMessage extends Message
@@ -67,6 +71,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       actorA ! ForgetC
       val expected = Knowledge(ActorSnapshot(
         aKnowledge.actorSnapshot.knowledgeSet - gcRefBToC - gcRefAToC))
+      probe.expectNoMessage(FiniteDuration(10, TimeUnit.MILLISECONDS)) // stall for acknowledgement message to land
       actorA ! RequestKnowledge
       aKnowledge = probe.expectMessage(expected)
     }
