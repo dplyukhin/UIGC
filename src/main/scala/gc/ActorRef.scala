@@ -29,4 +29,4 @@ case class ActorRef[-T <: Message](token: Token, owner: AkkaActorRef[Nothing], t
  * A collection of all the [[ActorRef]]s an actor is aware of at a specific time.
  * @param knowledgeSet An actor's knowledge set, consisting of an ActorRef's refs, owners, and created sets.
  */
-case class ActorSnapshot(knowledgeSet: Set[ActorRef[Nothing]])
+case class ActorSnapshot(knowledgeSet: Set[AnyActorRef])

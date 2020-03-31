@@ -22,7 +22,7 @@ case object InitC extends KnowledgeTestMessage with NoRefsMessage
 case object ShareCWithB extends KnowledgeTestMessage with NoRefsMessage
 // a message containing a single reference, used in above scenario
 case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
-  override def refs: Iterable[ActorRef[Nothing]] = Iterable(ref)
+  override def refs: Iterable[AnyActorRef] = Iterable(ref)
 }
 // sent by tester to tell A to release C
 case object ForgetC extends KnowledgeTestMessage with NoRefsMessage

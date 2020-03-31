@@ -12,4 +12,9 @@ package object gc {
    */
   type ActorFactory[T <: Message] = (AkkaActorRef[Nothing], Token) => Behavior[T]
 
+  /**
+   * A type representing any kind of ActorRef.
+   */
+  type AnyActorRef = ActorRef[Nothing]
+
 }

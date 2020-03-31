@@ -27,15 +27,15 @@ class ActorContext[T <: Message](
   val self = new ActorRef[T](newToken(), context.self, context.self)
 
   /** References this actor owns. Starts with its self reference */
-  private var refs: Set[ActorRef[Nothing]] = Set(self)
+  private var refs: Set[AnyActorRef] = Set(self)
   /** References this actor has created for other actors. */
-  private var created: Set[ActorRef[Nothing]] = Set()
+  private var created: Set[AnyActorRef] = Set()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef[T](token, creator, context.self))
+  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
-  private var released_owners: Set[ActorRef[Nothing]] = Set()
+  private var released_owners: Set[AnyActorRef] = Set()
   /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
-  private var releasing_buffer: mutable.Map[Int, Set[ActorRef[Nothing]]] = mutable.Map()
+  private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
@@ -61,7 +61,7 @@ class ActorContext[T <: Message](
    * Adds a collection of references to this actor's internal collection.
    * @param payload
    */
-  def addRefs(payload : Iterable[ActorRef[Nothing]]) : Unit = {
+  def addRefs(payload : Iterable[AnyActorRef]) : Unit = {
     refs ++= payload
   }
 
@@ -71,7 +71,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]): Boolean = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -103,7 +103,7 @@ class ActorContext[T <: Message](
    * @tparam S The type of [[Message]](?) that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target : ActorRef[S], owner : ActorRef[Nothing]) : ActorRef[S] = {
+  def createRef[S <: Message](target : ActorRef[S], owner : AnyActorRef) : ActorRef[S] = {
     val token = newToken()
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
@@ -114,8 +114,8 @@ class ActorContext[T <: Message](
    * Releases a collection of references from an actor.
    * @param releasing A collection of references
    */
-  def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
-    var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
+  def release(releasing: Iterable[AnyActorRef]): Unit = {
+    var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
     // group the references in releasing by target
     releasing.foreach(ref => {
       val key = ref.target
@@ -133,7 +133,7 @@ class ActorContext[T <: Message](
       refs --= targets(target)
       // combine the references pointing to this target in the created set and the refs set
       // and add it to the buffer
-      val refsToRelease: Set[ActorRef[Nothing]] = targetedCreations ++ targets(target)
+      val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targets(target)
       releasing_buffer(releaseCount) = refsToRelease
 
       target ! ReleaseMsg[Nothing](context.self, targets(target), targetedCreations, releaseCount)
@@ -155,7 +155,7 @@ class ActorContext[T <: Message](
    */
   def snapshot(): ActorSnapshot = {
     epoch += 1
-    val buffer: Iterable[ActorRef[Nothing]] = releasing_buffer.values.flatten
+    val buffer: Iterable[AnyActorRef] = releasing_buffer.values.flatten
     ActorSnapshot(refs ++ owners ++ created ++ buffer)
   }
 

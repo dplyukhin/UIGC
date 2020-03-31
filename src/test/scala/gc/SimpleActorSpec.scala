@@ -5,7 +5,7 @@ import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 trait NoRefsMessage extends Message {
-  override def refs: Iterable[ActorRef[Nothing]] = Seq()
+  override def refs: Iterable[AnyActorRef] = Seq()
 }
 
 sealed trait testMessage extends Message
@@ -19,7 +19,7 @@ case object Hello extends testMessage with NoRefsMessage
 case object Spawned extends testMessage with NoRefsMessage
 case object Terminated extends testMessage with NoRefsMessage
 case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-  override def refs: Iterable[ActorRef[Nothing]] = Iterable()
+  override def refs: Iterable[AnyActorRef] = Iterable()
   Iterable(ref)
 }
 
