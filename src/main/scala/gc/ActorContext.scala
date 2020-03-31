@@ -127,17 +127,13 @@ class ActorContext[T <: Message](
       val targetedCreations = created filter {
         createdRef => createdRef.target == target
       }
-      val targetedRefs = refs filter {
-        ref => ref.target == target
-      }
 
       // remove those references from their sets
       created --= targetedCreations
-      // TODO: can this just be targets(target)?
-      refs --= targetedRefs
+      refs --= targets(target)
       // combine the references pointing to this target in the created set and the refs set
       // and add it to the buffer
-      val refsToRelease: Set[ActorRef[Nothing]] = targetedCreations ++ targetedRefs
+      val refsToRelease: Set[ActorRef[Nothing]] = targetedCreations ++ targets(target)
       releasing_buffer(releaseCount) = refsToRelease
 
       target ! ReleaseMsg[Nothing](context.self, targets(target), targetedCreations, releaseCount)
@@ -159,7 +155,7 @@ class ActorContext[T <: Message](
    */
   def snapshot(): ActorSnapshot = {
     epoch += 1
-    val buffer: Set[ActorRef[Nothing]] = releasing_buffer.values.flatten.toSet
+    val buffer: Iterable[ActorRef[Nothing]] = releasing_buffer.values.flatten
     ActorSnapshot(refs ++ owners ++ created ++ buffer)
   }
 
