@@ -1,8 +1,9 @@
 package gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
-import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
+import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
+
 
 sealed trait AckTestMsg extends Message
 
@@ -10,12 +11,18 @@ sealed trait AckTestMsg extends Message
 case object SnapshotAsk extends AckTestMsg with NoRefsMessage
 // actor's reply containing their snapshot
 case class SnapshotReply(snapshot: ActorSnapshot) extends AckTestMsg with NoRefsMessage
-// message to initialize test scenario
-case object AckTestInit extends AckTestMsg with NoRefsMessage
+// message to initialize test scenario, includes an ActorRef to a probe that han
+case class AckTestInit(probeRef: ActorRef[AckTestMsg]) extends AckTestMsg with Message {
+  override def refs: Iterable[AnyActorRef] = Iterable(probeRef)
+}
+case object SelfAsk extends AckTestMsg with NoRefsMessage
+case class Self(self: AkkaActorRef[GCMessage[AckTestMsg]]) extends AckTestMsg with NoRefsMessage
+case object CreateRefs extends AckTestMsg with NoRefsMessage
+case class CreatedRefs(refSet: Set[AnyActorRef]) extends AckTestMsg with NoRefsMessage
 // invoke A to release B
 case object Release extends AckTestMsg with NoRefsMessage
 // invoke A to release C1 and C2
-case object DoubleRelease extends AckTestMsg with NoRefsMessage
+case object ReleaseMultiple extends AckTestMsg with NoRefsMessage
 // message sent on termination
 case object SelfTerminated extends AckTestMsg with NoRefsMessage
 
@@ -26,121 +33,113 @@ case object SelfTerminated extends AckTestMsg with NoRefsMessage
  * - A releases C1 and C2 consecutively.
  */
 class AckReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+  // probe for receiving info like snapshots
   val probe: TestProbe[AckTestMsg] = testKit.createTestProbe[AckTestMsg]()
+  // probe that intercepts GC messages
+  val probe2: TestProbe[GCMessage[AckTestMsg]] = testKit.createTestProbe()
 
-  "Actors using AckReleaseMessages" must {
-    val actorA = testKit.spawn(ActorA(), "actorA")
-    actorA ! AckTestInit
+  "Actors using AckReleaseMessages" when {
+//    val actorA = testKit.spawn(ActorA(), "actorA")
+//    actorA ! SelfAsk
+//    val akkaActorA = probe.expectMessageType[Self].self
 
-    "keep unacknowledged releases in the knowledge set" in {
-      actorA ! SnapshotAsk
-      val aKnowledge = probe.expectMessageType[SnapshotReply]
-      actorA ! Release
-      // the delay here is short enough for us to get the knowledge set before the AckReleaseMessage lands
-      actorA ! SnapshotAsk
-      probe.expectMessage(aKnowledge)
-      probe.expectMessage(SelfTerminated)
-      // if we ask again, the knowledge set should be smaller
-      actorA ! SnapshotAsk
-      val aKnowledgeWithoutB = probe.expectMessageType[SnapshotReply]
-      assert(aKnowledge.snapshot.knowledgeSet.size > aKnowledgeWithoutB.snapshot.knowledgeSet.size)
+    "releasing an owned reference" should {
+      val actorA = testKit.spawn(ActorA())
+      val probe2Ref: ActorRef[AckTestMsg] = ActorRef(null, actorA, probe2.ref)
+      actorA ! SelfAsk
+      val akkaActorA = probe.expectMessageType[Self].self
+
+      "keep unacknowledged releases in the knowledge set" in {
+        actorA ! AckTestInit(probe2Ref)
+        actorA ! Release
+        actorA ! SnapshotAsk
+        val aKnowledge = probe.expectMessageType[SnapshotReply].snapshot
+
+        aKnowledge.knowledgeSet should contain (probe2Ref)
+      }
+
+      "remove acknowledged releases from the knowledge set" in {
+        actorA ! SnapshotAsk
+        var aKnowledge = probe.expectMessageType[SnapshotReply].snapshot
+        akkaActorA ! AckReleaseMsg(0)
+        actorA ! SnapshotAsk
+        aKnowledge = probe.expectMessageType[SnapshotReply].snapshot
+
+        aKnowledge.knowledgeSet should not contain (probe2Ref)
+      }
     }
+
+    "releasing created references" should {
+      val actorA = testKit.spawn(ActorA())
+      actorA ! SelfAsk
+      val akkaActorA = probe.expectMessageType[Self].self
+      val probe2Ref: ActorRef[AckTestMsg] = ActorRef(null, actorA, probe2.ref)
+
+      "keep unacknowledged references in the knowledge set" in {
+        actorA ! AckTestInit(probe2Ref)
+
+        actorA ! CreateRefs
+        val refs = probe.expectMessageType[CreatedRefs].refSet
+        actorA ! SnapshotAsk
+        var aKnowledge = probe.expectMessageType[SnapshotReply].snapshot
+        actorA ! ReleaseMultiple
+        actorA ! SnapshotAsk
+        aKnowledge = probe.expectMessageType[SnapshotReply].snapshot
+        aKnowledge.knowledgeSet should contain (refs)
+      }
+    }
+
+
+//    "not be able to release references more than once" ignore {
+//      actorA ! SnapshotAsk
+//      val aKnowledge = probe.expectMessageType[SnapshotReply]
+//      actorA ! Release
+//      actorA ! SnapshotAsk
+//      probe.expectMessage(aKnowledge)
+//    }
+
+
 
     // this test probably doesn't really prove anything useful
-    "not be able to release references more than once" in {
-      actorA ! SnapshotAsk
-      val aKnowledge = probe.expectMessageType[SnapshotReply]
-      actorA ! Release
-      actorA ! SnapshotAsk
-      probe.expectMessage(aKnowledge)
-    }
-
-    // TODO: actually find a way to figure out how to test order??
-    "handle acknowledgement in the original release order" in {
-      actorA ! SnapshotAsk
-      val aKnowledge = probe.expectMessageType[SnapshotReply]
-      actorA ! DoubleRelease
-      actorA ! SnapshotAsk
-      probe.expectMessage(aKnowledge) // before acknowledgement messages land
-      probe.expectMessage(SelfTerminated)
-      actorA ! SnapshotAsk
-      val aKnowledgeWithoutC =probe.expectMessageType[SnapshotReply]
-      assert(aKnowledge.snapshot.knowledgeSet.size > aKnowledgeWithoutC.snapshot.knowledgeSet.size)
-    }
   }
 
   object ActorA {
     def apply(): AkkaBehavior[AckTestMsg] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
-  object ActorB {
-    def apply() : ActorFactory[AckTestMsg] = {
-      Behaviors.setup(context => new ActorB(context))
-    }
-  }
-  object ActorC {
-    def apply() : ActorFactory[AckTestMsg] = {
-      Behaviors.setup(context => new ActorC(context))
-    }
-  }
 
   class ActorA(context: ActorContext[AckTestMsg]) extends AbstractBehavior[AckTestMsg](context) {
-    var actorB: ActorRef[AckTestMsg] = _
-    var actorC1: ActorRef[AckTestMsg] = _
-    var actorC2: ActorRef[AckTestMsg] = _
+    var internalProbeRef: ActorRef[AckTestMsg] = _
+    var createdRefs: Set[AnyActorRef] = Set()
     override def onMessage(msg: AckTestMsg): Behavior[AckTestMsg] = {
       msg match {
         case SnapshotAsk =>
           probe.ref ! SnapshotReply(context.snapshot())
           this
-        case AckTestInit =>
-          actorB = context.spawn(ActorB(), "actorB")
-          actorC1 = context.spawn(ActorC(), "actorC")
-          actorC2 = context.createRef(actorC1, context.self)
+        case AckTestInit(probeRef) =>
+          internalProbeRef = probeRef
+//          actorB = context.spawn(ActorB(), "actorB")
+//          actorC1 = context.spawn(ActorC(), "actorC")
+//          actorC2 = context.createRef(actorC1, context.self)
           this
         case Release =>
-          context.release(Iterable(actorB))
+//          context.release(Iterable(actorB))
+          context.release(Iterable(internalProbeRef))
           this
-        case DoubleRelease =>
-          context.release((Iterable(actorC1)))
-          context.release((Iterable(actorC2)))
+        case SelfAsk =>
+          probe.ref ! Self(context.self.target)
           this
-        case _ =>
+        case CreateRefs =>
+          for (i <- 1 to 3) {
+            createdRefs += context.createRef(internalProbeRef, null)
+          }
+          probe.ref ! CreatedRefs(createdRefs)
           this
-      }
-    }
-  }
-
-  class ActorB(context: ActorContext[AckTestMsg]) extends AbstractBehavior[AckTestMsg](context) {
-    override def onMessage(msg: AckTestMsg): Behavior[AckTestMsg] = {
-      msg match {
-        case SnapshotAsk =>
-          probe.ref ! SnapshotReply(context.snapshot())
+        case ReleaseMultiple =>
+          context.release(createdRefs)
           this
         case _ =>
           this
       }
-    }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[AckTestMsg]]] = {
-      case PostStop =>
-        probe.ref ! SelfTerminated
-        this
-    }
-  }
-
-  class ActorC(context: ActorContext[AckTestMsg]) extends AbstractBehavior[AckTestMsg](context) {
-    override def onMessage(msg: AckTestMsg): Behavior[AckTestMsg] = {
-      msg match {
-        case SnapshotAsk =>
-          probe.ref ! SnapshotReply(context.snapshot())
-          this
-        case _ =>
-          this
-      }
-    }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[AckTestMsg]]] = {
-      case PostStop =>
-        probe.ref ! SelfTerminated
-        this
     }
   }
 }
