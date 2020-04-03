@@ -71,7 +71,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Unit = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -88,9 +88,19 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
+    // if there's no more owners, prepare to self-terminate
     if (owners == Set(self) && released_owners.isEmpty) {
-      release(refs)
+      // if there's no other references, we can self-terminate right away
+      if ((refs - self).isEmpty) {
+        return true
+      }
+      else {
+        // release the references first
+        release(refs - self)
+        // actor will then be terminated in finishRelease
+      }
     }
+    false
   }
 
   /**
@@ -123,7 +133,7 @@ class ActorContext[T <: Message](
       }
     })
     // filter the created and refs sets by target
-    targets.foreach(t => releaseTo(t._1, t._2))
+    targets.foreachEntry((target, targetedRefs) => releaseTo(target, targetedRefs))
   }
 
   /**
@@ -158,11 +168,10 @@ class ActorContext[T <: Message](
    * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
    * @param sequenceNum The sequence number of this release.
    */
-  def finishRelease(sequenceNum: Int): Unit = {
+  def finishRelease(sequenceNum: Int): Boolean = {
     releasing_buffer -= sequenceNum
-    if (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty) {
-      context.stop(context.self)
-    }
+    // we can release if there's no owners and the releasing_buffer is empty
+    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty)
   }
 
   /**

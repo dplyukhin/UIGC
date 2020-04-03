@@ -33,7 +33,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   var gcRefAToC: ActorRef[KnowledgeTestMessage] = _ // A's reference to C
   var gcRefBToC: ActorRef[KnowledgeTestMessage] = _ // B's reference to C
 
-  "Knowledge sets must" must {
+  "Knowledge sets" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
 //    val gcActorA = probe.expectMessageType[Ref]
 

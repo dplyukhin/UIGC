@@ -18,17 +18,23 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   final def onMessage(msg : GCMessage[T]) : AkkaBehavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(from, releasing, created, sequenceNum) =>
-        context.handleRelease(releasing, created)
+        val readyToTerminate = context.handleRelease(releasing, created)
         from ! AckReleaseMsg(sequenceNum)
-//        if (readyToTerminate) {
-//          AkkaBehaviors.stopped
-//        }
-//        else {
+        if (readyToTerminate) {
+          AkkaBehaviors.stopped
+        }
+        else {
           AkkaBehaviors.same
-//        }
-      case AckReleaseMsg(sequenceNum) =>
-        context.finishRelease(sequenceNum)
+        }
         AkkaBehaviors.same
+      case AckReleaseMsg(sequenceNum) =>
+        val readyToTerminate = context.finishRelease(sequenceNum)
+        if (readyToTerminate) {
+          AkkaBehaviors.stopped
+        }
+        else {
+          AkkaBehaviors.same
+        }
       case AppMsg(payload) =>
         context.addRefs(payload.refs)
         onMessage(payload)
