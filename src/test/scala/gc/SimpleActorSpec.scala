@@ -19,8 +19,7 @@ case object Hello extends testMessage with NoRefsMessage
 case object Spawned extends testMessage with NoRefsMessage
 case object Terminated extends testMessage with NoRefsMessage
 case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-  override def refs: Iterable[AnyActorRef] = Iterable()
-  Iterable(ref)
+  override def refs: Iterable[AnyActorRef] = Iterable(ref)
 }
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
