@@ -71,7 +71,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -88,11 +88,9 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-    if (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty) {
+    if (owners == Set(self) && released_owners.isEmpty) {
       release(refs)
-      return true
     }
-    false
   }
 
   /**
@@ -125,7 +123,7 @@ class ActorContext[T <: Message](
       }
     })
     // filter the created and refs sets by target
-    targets.keys.foreach(target => releaseTo(target, targets(target)))
+    targets.foreach(t => releaseTo(t._1, t._2))
   }
 
   /**
@@ -162,6 +160,9 @@ class ActorContext[T <: Message](
    */
   def finishRelease(sequenceNum: Int): Unit = {
     releasing_buffer -= sequenceNum
+    if (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty) {
+      context.stop(context.self)
+    }
   }
 
   /**
