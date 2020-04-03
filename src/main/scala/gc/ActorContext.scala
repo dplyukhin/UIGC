@@ -112,10 +112,10 @@ class ActorContext[T <: Message](
 
   /**
    * Releases a collection of references from an actor.
-   * @param releasing A collection of references
+   * @param releasing A collection of references.
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
-    var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
+    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
     // group the references in releasing by target
     releasing.foreach(ref => {
       val key = ref.target
@@ -127,19 +127,26 @@ class ActorContext[T <: Message](
       val targetedCreations = created filter {
         createdRef => createdRef.target == target
       }
-
       // remove those references from their sets
-      created --= targetedCreations
-      refs --= targets(target)
-      // combine the references pointing to this target in the created set and the refs set
-      // and add it to the buffer
-      val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targets(target)
-      releasing_buffer(releaseCount) = refsToRelease
+      if ((targets(target) intersect refs).nonEmpty || targetedCreations.nonEmpty) {
+        created --= targetedCreations
+        refs --= targets(target)
+        // combine the references pointing to this target in the created set and the refs set
+        // and add it to the buffer
+        val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targets(target)
+        releasing_buffer(releaseCount) = refsToRelease
 
-      target ! ReleaseMsg[Nothing](context.self, targets(target), targetedCreations, releaseCount)
-      releaseCount += 1
+        target ! ReleaseMsg[Nothing](context.self, targets(target), targetedCreations, releaseCount)
+        releaseCount += 1
+      }
     })
   }
+
+  /**
+   * Releases a reference from an actor.
+   * @param releasing A reference.
+   */
+  def release(releasing: AnyActorRef): Unit = release(Iterable(releasing))
 
   /**
    * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
