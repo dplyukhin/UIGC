@@ -12,10 +12,33 @@ trait Message {
   def refs: Iterable[AnyActorRef]
 }
 
-
+/**
+ *
+ * @tparam T
+ */
 sealed trait GCMessage[+T <: Message]
 
-final case class AppMsg[+T <: Message](payload : T) extends GCMessage[T]
+/**
+ *
+ * @param payload
+ * @param token
+ * @tparam T
+ */
+final case class AppMsg[+T <: Message](payload : T, token : Token) extends GCMessage[T]
 
+/**
+ *
+ * @param from
+ * @param releasing
+ * @param created
+ * @param sequenceNum
+ * @tparam T
+ */
 final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]], releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef], sequenceNum: Int) extends GCMessage[T]
+
+/**
+ *
+ * @param sequenceNum
+ * @tparam T
+ */
 final case class AckReleaseMsg[+T <: Message](sequenceNum: Int) extends GCMessage[T]

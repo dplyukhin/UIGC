@@ -24,18 +24,23 @@ class ActorContext[T <: Message](
   val token : Token
 ) {
 
-  val self = new ActorRef[T](newToken(), context.self, context.self)
+  val self = new ActorRef[T](newToken(), context.self, context.self, this)
 
   /** References this actor owns. Starts with its self reference */
   private var refs: Set[AnyActorRef] = Set(self)
   /** References this actor has created for other actors. */
   private var created: Set[AnyActorRef] = Set()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
+  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self, this))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyActorRef] = Set()
   /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
   private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
+
+  /** Tracks how many messages are sent using each reference. */
+  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map()
+  /** Tracks how many messages are received using each reference. */
+  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map()
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
@@ -52,17 +57,18 @@ class ActorContext[T <: Message](
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    val ref = new ActorRef[S](x, self, child)
+    val ref = new ActorRef[S](x, self, child, this)
     refs += ref
     ref
   }
 
   /**
-   * Adds a collection of references to this actor's internal collection.
+   * Adds a collection of references to this actor's internal collection and marks their context fields.
    * @param payload
    */
-  def addRefs(payload : Iterable[AnyActorRef]) : Unit = {
+  def handleRefs(payload : Iterable[AnyActorRef]) : Unit = {
     refs ++= payload
+    refs.foreach(ref => ref.lastContext = this)
   }
 
   /**
@@ -90,8 +96,8 @@ class ActorContext[T <: Message](
     })
     // if there's no more owners, prepare to self-terminate
     if (owners == Set(self) && released_owners.isEmpty) {
-      // if there's no other references, we can self-terminate right away
-      if ((refs - self).isEmpty) {
+      // if there's no other references and there's no pending self-messages, we can self-terminate right away
+      if ((refs - self).isEmpty && received_per_ref(self.token) == sent_per_ref(self.token)) {
         return true
       }
       else {
@@ -108,12 +114,12 @@ class ActorContext[T <: Message](
    * and adds it to the creator's [[created]] field.
    * @param target The [[ActorRef]] the created reference points to.
    * @param owner The [[ActorRef]] that will receive the created reference.
-   * @tparam S The type of [[Message]](?) that the actor handles.
+   * @tparam S The type of [[AppMsg]](?) that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef) : ActorRef[S] = {
+  def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
-    val sharedRef = new ActorRef[S](token, owner.target, target.target)
+    val sharedRef = new ActorRef[S](token, owner.target, target.target, this)
     created += sharedRef
     sharedRef
   }
@@ -182,6 +188,14 @@ class ActorContext[T <: Message](
     epoch += 1
     val buffer: Iterable[AnyActorRef] = releasing_buffer.values.flatten
     ActorSnapshot(refs ++ owners ++ created ++ buffer)
+  }
+
+  def refUsedReceived(token: Token): Unit = {
+    received_per_ref(token) += 1
+  }
+
+  def refUsedSent(token: Token): Unit = {
+    sent_per_ref(token) += 1
   }
 
   /**

@@ -18,10 +18,17 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * @param token A token that uniquely identifies this reference.
  * @param owner The [[AkkaActorRef]] of the only actor that can use this reference.
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
+ * @param lastContext The [[ActorContext]] this reference was most recently received in.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
-case class ActorRef[-T <: Message](token: Token, owner: AkkaActorRef[Nothing], target: AkkaActorRef[GCMessage[T]]) {
-  def !(msg : T) : Unit = target.tell(AppMsg(msg))
+case class ActorRef[-T <: Message](token: Token,
+                                   owner: AkkaActorRef[Nothing],
+                                   target: AkkaActorRef[GCMessage[T]],
+                                   var lastContext: ActorContext[T]) {
+  def !(msg : T) : Unit = {
+    target.tell(AppMsg(msg, token))
+    lastContext.refUsedSent(token)
+  }
 }
 
 // TODO: Add epochs to Snapshots

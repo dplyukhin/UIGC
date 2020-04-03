@@ -13,7 +13,7 @@ object Behaviors {
 
   private class ReceptionistAdapter[T <: Message](implicit interceptMessageClassTag: ClassTag[T]) extends BehaviorInterceptor[T, GCMessage[T]] {
     def aroundReceive(ctx : TypedActorContext[T], msg : T, target : ReceiveTarget[GCMessage[T]]) : AkkaBehavior[GCMessage[T]] =
-      target.apply(ctx, AppMsg(msg))
+      target.apply(ctx, AppMsg(msg, null))
   }
 
   def setupReceptionist[T <: Message](factory : ActorContext[T] => Behavior[T])(implicit classTag: ClassTag[T]) : AkkaBehavior[T] = {
