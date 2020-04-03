@@ -26,7 +26,6 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
         else {
           AkkaBehaviors.same
         }
-        AkkaBehaviors.same
       case AckReleaseMsg(sequenceNum) =>
         val readyToTerminate = context.finishRelease(sequenceNum)
         if (readyToTerminate) {
