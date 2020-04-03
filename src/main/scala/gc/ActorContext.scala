@@ -1,7 +1,7 @@
 package gc
 
-import akka.actor.typed.{ActorRef => AkkaActorRef}
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
+import akka.actor.typed.{ActorRef => AkkaActorRef}
 
 import scala.collection.mutable
 
@@ -26,15 +26,23 @@ class ActorContext[T <: Message](
 
   val self = new ActorRef[T](newToken(), context.self, context.self)
 
-  private var refs: Set[ActorRef[Nothing]] = Set(self)
-  private var created: Set[ActorRef[Nothing]] = Set()
-  private var owners: Set[ActorRef[Nothing]] = Set(self, new ActorRef[T](token, creator, context.self))
-  private var released_owners: Set[ActorRef[Nothing]] = Set()
+  /** References this actor owns. Starts with its self reference */
+  private var refs: Set[AnyActorRef] = Set(self)
+  /** References this actor has created for other actors. */
+  private var created: Set[AnyActorRef] = Set()
+  /** References to this actor. Starts with its self reference and its creator's reference to it. */
+  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
+  /** References to this actor discovered through [[ReleaseMsg]]. */
+  private var released_owners: Set[AnyActorRef] = Set()
+  /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
+  private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
 
   private var tokenCount: Int = 0
+  private var releaseCount: Int = 0
+  private var epoch: Int = 0
 
   /**
-   * Spawns a new actor into the GC system.
+   * Spawns a new actor into the GC system and adds it to [[refs]].
    * @param factory The behavior factory for the spawned actor.
    * @param name The name of the spawned actor.
    * @tparam S The type of application-level messages to be handled by this actor.
@@ -44,14 +52,16 @@ class ActorContext[T <: Message](
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    new ActorRef[S](x, self, child)
+    val ref = new ActorRef[S](x, self, child)
+    refs += ref
+    ref
   }
 
   /**
    * Adds a collection of references to this actor's internal collection.
    * @param payload
    */
-  def addRefs(payload : Iterable[ActorRef[Nothing]]) : Unit = {
+  def addRefs(payload : Iterable[AnyActorRef]) : Unit = {
     refs ++= payload
   }
 
@@ -61,7 +71,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[ActorRef[Nothing]], created : Iterable[ActorRef[Nothing]]): Boolean = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -78,9 +88,17 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
+    // if there's no more owners, prepare to self-terminate
     if (owners == Set(self) && released_owners.isEmpty) {
-      release(refs)
-      return true
+      // if there's no other references, we can self-terminate right away
+      if ((refs - self).isEmpty) {
+        return true
+      }
+      else {
+        // release the references first
+        release(refs - self)
+        // actor will then be terminated in finishRelease
+      }
     }
     false
   }
@@ -93,7 +111,7 @@ class ActorContext[T <: Message](
    * @tparam S The type of [[Message]](?) that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target : ActorRef[S], owner : ActorRef[Nothing]) : ActorRef[S] = {
+  def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef) : ActorRef[S] = {
     val token = newToken()
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
@@ -102,24 +120,68 @@ class ActorContext[T <: Message](
 
   /**
    * Releases a collection of references from an actor.
-   * @param releasing A collection of references
+   * @param releasing A collection of references.
    */
-  def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
-    var targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[ActorRef[Nothing]]] = mutable.Map()
-    // group the references in releasing by target
+  def release(releasing: Iterable[AnyActorRef]): Unit = {
+    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
+    // group the references in releasing that are in refs by target
     releasing.foreach(ref => {
-      val key = ref.target
-      val set = targets.getOrElse(key, Set())
-      targets(key) = set + ref
-    })
-    // filter the created set by target
-    targets.keys.foreach(target => {
-      val creations = created.filter {
-        createdRef => createdRef.target == target
+      if (refs contains ref) {
+        val key = ref.target
+        val set = targets.getOrElse(key, Set())
+        targets(key) = set + ref
       }
-      created --= creations
-      target ! ReleaseMsg[Nothing](targets(target), creations)
     })
+    // filter the created and refs sets by target
+    targets.foreachEntry((target, targetedRefs) => releaseTo(target, targetedRefs))
+  }
+
+  /**
+   * Releases a single reference from an actor.
+   * @param releasing A reference.
+   */
+  def release(releasing: AnyActorRef): Unit = release(Iterable(releasing))
+
+  /**
+   * Helper method for [[release()]], moves the references referring to the target to [[releasing_buffer]].
+   * Sends a release message to the target.
+   * @param target The actor to whom the references being released by this actor point to.
+   * @param targetedRefs The associated references to target in this actor's [[refs]] set.
+   */
+  private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Set[AnyActorRef]): Unit = {
+    val targetedCreations = created filter {
+      createdRef => createdRef.target == target
+    }
+    // remove those references from their sets
+    created --= targetedCreations
+    refs --= targetedRefs
+    // combine the references pointing to this target in the created set and the refs set
+    // and add it to the buffer
+    val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targetedRefs
+    releasing_buffer(releaseCount) = refsToRelease
+    // send the message and increment the release count
+    target ! ReleaseMsg(context.self, targetedRefs, targetedCreations, releaseCount)
+    releaseCount += 1
+  }
+
+  /**
+   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
+   * @param sequenceNum The sequence number of this release.
+   */
+  def finishRelease(sequenceNum: Int): Boolean = {
+    releasing_buffer -= sequenceNum
+    // we can release if there's no owners and the releasing_buffer is empty
+    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty)
+  }
+
+  /**
+   * Gets the current [[ActorSnapshot]] and increments the epoch afterward.
+   * @return The current snapshot.
+   */
+  def snapshot(): ActorSnapshot = {
+    epoch += 1
+    val buffer: Iterable[AnyActorRef] = releasing_buffer.values.flatten
+    ActorSnapshot(refs ++ owners ++ created ++ buffer)
   }
 
   /**
