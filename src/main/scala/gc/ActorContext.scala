@@ -24,14 +24,14 @@ class ActorContext[T <: Message](
   val token : Token
 ) {
 
-  val self = new ActorRef[T](newToken(), context.self, context.self, this)
+  val self = new ActorRef[T](newToken(), context.self, context.self)
 
   /** References this actor owns. Starts with its self reference */
   private var refs: Set[AnyActorRef] = Set(self)
   /** References this actor has created for other actors. */
   private var created: Set[AnyActorRef] = Set()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self, this))
+  private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyActorRef] = Set()
   /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
@@ -57,9 +57,21 @@ class ActorContext[T <: Message](
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    val ref = new ActorRef[S](x, self, child, this)
+    val ref = new ActorRef[S](x, self, child)
+    ref.initialize(this)
     refs += ref
     ref
+  }
+
+  /**
+   * Accepts the references from a message and increments the receive count
+   * of the reference that was used to send the message.
+   * @param messageRefs The refs sent with the message.
+   * @param token Token of the ref this message was sent with.
+   */
+  def handleMessage(messageRefs: Iterable[AnyActorRef], token: Token): Unit = {
+    handleRefs(messageRefs)
+    incReceivedCount(token)
   }
 
   /**
@@ -68,7 +80,7 @@ class ActorContext[T <: Message](
    */
   def handleRefs(payload : Iterable[AnyActorRef]) : Unit = {
     refs ++= payload
-    refs.foreach(ref => ref.lastContext = this)
+    refs.foreach(ref => ref.initialize(this))
   }
 
   /**
@@ -94,10 +106,10 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-    // if there's no more owners, prepare to self-terminate
-    if (owners == Set(self) && released_owners.isEmpty) {
-      // if there's no other references and there's no pending self-messages, we can self-terminate right away
-      if ((refs - self).isEmpty && received_per_ref(self.token) == sent_per_ref(self.token)) {
+    // if there's no more owners and there's no pending self-messages, prepare to self-terminate
+    if (owners == Set(self) && received_per_ref(self.token) == sent_per_ref(self.token) && released_owners.isEmpty) {
+      // if there's no other references, we can self-terminate right away
+      if ((refs - self).isEmpty) {
         return true
       }
       else {
@@ -114,12 +126,12 @@ class ActorContext[T <: Message](
    * and adds it to the creator's [[created]] field.
    * @param target The [[ActorRef]] the created reference points to.
    * @param owner The [[ActorRef]] that will receive the created reference.
-   * @tparam S The type of [[AppMsg]](?) that the actor handles.
+   * @tparam S The type that the actor handles.
    * @return The created reference.
    */
   def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
-    val sharedRef = new ActorRef[S](token, owner.target, target.target, this)
+    val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
     sharedRef
   }
@@ -190,12 +202,22 @@ class ActorContext[T <: Message](
     ActorSnapshot(refs ++ owners ++ created ++ buffer)
   }
 
-  def refUsedReceived(token: Token): Unit = {
-    received_per_ref(token) += 1
+  def incReceivedCount(token: Token): Unit = {
+    received_per_ref.get(token) match {
+      case None =>
+        received_per_ref(token) = 1
+      case Some(_) =>
+        received_per_ref(token) += 1
+    }
   }
 
-  def refUsedSent(token: Token): Unit = {
-    sent_per_ref(token) += 1
+  def incSentCount(token: Token): Unit = {
+    sent_per_ref.get(token) match {
+      case None =>
+        sent_per_ref(token) = 1
+      case Some(_) =>
+        sent_per_ref(token) += 1
+    }
   }
 
   /**

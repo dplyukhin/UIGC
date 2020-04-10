@@ -35,8 +35,7 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
           AkkaBehaviors.same
         }
       case AppMsg(payload, token) =>
-        context.handleRefs(payload.refs)
-        context.refUsedReceived(token)
+        context.handleMessage(payload.refs, token)
         onMessage(payload)
     }
 }
