@@ -38,9 +38,9 @@ class ActorContext[T <: Message](
   private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
 
   /** Tracks how many messages are sent using each reference. */
-  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map()
+  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(token -> 0)
   /** Tracks how many messages are received using each reference. */
-  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map()
+  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(token -> 0)
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
@@ -89,7 +89,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -110,7 +110,7 @@ class ActorContext[T <: Message](
     if (owners == Set(self) && received_per_ref(self.token) == sent_per_ref(self.token) && released_owners.isEmpty) {
       // if there's no other references, we can self-terminate right away
       if ((refs - self).isEmpty) {
-        return true
+//        return true
       }
       else {
         // release the references first
@@ -118,7 +118,6 @@ class ActorContext[T <: Message](
         // actor will then be terminated in finishRelease
       }
     }
-    false
   }
 
   /**
@@ -186,10 +185,14 @@ class ActorContext[T <: Message](
    * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
    * @param sequenceNum The sequence number of this release.
    */
-  def finishRelease(sequenceNum: Int): Boolean = {
+  def finishRelease(sequenceNum: Int): Unit = {
     releasing_buffer -= sequenceNum
     // we can release if there's no owners and the releasing_buffer is empty
-    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty)
+//    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty && received_per_ref(self.token) == sent_per_ref(self.token))
+  }
+
+  def isReadyToTerminate: Boolean = {
+    owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty && received_per_ref(self.token) == sent_per_ref(self.token)
   }
 
   /**
