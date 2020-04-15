@@ -1,6 +1,6 @@
 package gc
 
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
+import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
 
 import scala.collection.mutable
@@ -25,6 +25,7 @@ class ActorContext[T <: Message](
 ) {
 
   val self = new ActorRef[T](newToken(), context.self, context.self)
+  self.initialize(this)
 
   /** References this actor owns. Starts with its self reference */
   private var refs: Set[AnyActorRef] = Set(self)
@@ -36,6 +37,11 @@ class ActorContext[T <: Message](
   private var released_owners: Set[AnyActorRef] = Set()
   /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
   private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
+
+  /** Tracks how many messages are sent using each reference. */
+  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  /** Tracks how many messages are received using each reference. */
+  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
@@ -53,17 +59,23 @@ class ActorContext[T <: Message](
     val self = context.self
     val child = context.spawn(factory(self, x), name)
     val ref = new ActorRef[S](x, self, child)
+    ref.initialize(this)
     refs += ref
     ref
   }
 
   /**
-   * Adds a collection of references to this actor's internal collection.
-   * @param payload
+   * Accepts the references from a message and increments the receive count
+   * of the reference that was used to send the message.
+   * @param messageRefs The refs sent with the message.
+   * @param token Token of the ref this message was sent with.
    */
-  def addRefs(payload : Iterable[AnyActorRef]) : Unit = {
-    refs ++= payload
+  def handleMessage(messageRefs: Iterable[AnyActorRef], token: Token): Unit = {
+    refs ++= messageRefs
+    messageRefs.foreach(ref => ref.initialize(this))
+    incReceivedCount(token)
   }
+
 
   /**
    * Handles the internal logistics of this actor receiving a [[ReleaseMsg]].
@@ -71,7 +83,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Boolean = {
+  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -88,19 +100,50 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-    // if there's no more owners, prepare to self-terminate
-    if (owners == Set(self) && released_owners.isEmpty) {
-      // if there's no other references, we can self-terminate right away
-      if ((refs - self).isEmpty) {
-        return true
-      }
-      else {
-        // release the references first
-        release(refs - self)
-        // actor will then be terminated in finishRelease
-      }
+  }
+
+  /**
+   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
+   * @param sequenceNum The sequence number of this release.
+   */
+  def finishRelease(sequenceNum: Int): Unit = {
+    releasing_buffer -= sequenceNum
+  }
+
+  /**
+   * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
+   * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
+   */
+  def tryTerminate(): Behavior[T] = {
+    // Check if there are any unreleased references to this actor.
+    if (owners != Set(self) || released_owners.nonEmpty) {
+      AkkaBehaviors.same
     }
-    false
+    // There are no references to this actor remaining.
+    // Check if there are any pending messages from this actor to itself.
+    else if (received_per_ref(self.token) != sent_per_ref(self.token)) {
+      // Remind this actor to try and terminate after all those messages have been delivered.
+      self.target ! SelfCheck()
+      AkkaBehaviors.same
+    }
+    // There are no application messages to this actor remaining.
+    // Therefore it should begin the termination process.
+    // Check if this actor still holds any references.
+    else if ((refs - self).nonEmpty) {
+      // Release all the references and check back again when the AckRelease messages are delivered.
+      release(refs - self)
+      AkkaBehaviors.same
+    }
+    // There are no application messages to this actor remaining, and it doesn't hold any references.
+    // Check if there are any pending AckRelease messages.
+    else if (releasing_buffer.nonEmpty) {
+      // Keep waiting for the rest of the AckRelease messages to roll in
+      AkkaBehaviors.same
+    }
+    // There are no references to this actor and all of its references have been released.
+    else {
+      AkkaBehaviors.stopped
+    }
   }
 
   /**
@@ -108,10 +151,10 @@ class ActorContext[T <: Message](
    * and adds it to the creator's [[created]] field.
    * @param target The [[ActorRef]] the created reference points to.
    * @param owner The [[ActorRef]] that will receive the created reference.
-   * @tparam S The type of [[Message]](?) that the actor handles.
+   * @tparam S The type that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef) : ActorRef[S] = {
+  def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
@@ -165,16 +208,6 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
-   * @param sequenceNum The sequence number of this release.
-   */
-  def finishRelease(sequenceNum: Int): Boolean = {
-    releasing_buffer -= sequenceNum
-    // we can release if there's no owners and the releasing_buffer is empty
-    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty)
-  }
-
-  /**
    * Gets the current [[ActorSnapshot]] and increments the epoch afterward.
    * @return The current snapshot.
    */
@@ -182,6 +215,24 @@ class ActorContext[T <: Message](
     epoch += 1
     val buffer: Iterable[AnyActorRef] = releasing_buffer.values.flatten
     ActorSnapshot(refs ++ owners ++ created ++ buffer)
+  }
+
+  def incReceivedCount(token: Token): Unit = {
+    received_per_ref.get(token) match {
+      case None =>
+        received_per_ref(token) = 1
+      case Some(_) =>
+        received_per_ref(token) += 1
+    }
+  }
+
+  def incSentCount(token: Token): Unit = {
+    sent_per_ref.get(token) match {
+      case None =>
+        sent_per_ref(token) = 1
+      case Some(_) =>
+        sent_per_ref(token) += 1
+    }
   }
 
   /**

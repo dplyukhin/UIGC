@@ -1,7 +1,7 @@
 package gc
 
+import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior}
 import akka.actor.typed.{Behavior => AkkaBehavior}
-import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Behaviors => AkkaBehaviors}
 
 
 /**
@@ -18,24 +18,16 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   final def onMessage(msg : GCMessage[T]) : AkkaBehavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(from, releasing, created, sequenceNum) =>
-        val readyToTerminate = context.handleRelease(releasing, created)
+        context.handleRelease(releasing, created)
         from ! AckReleaseMsg(sequenceNum)
-        if (readyToTerminate) {
-          AkkaBehaviors.stopped
-        }
-        else {
-          AkkaBehaviors.same
-        }
+        context.tryTerminate()
       case AckReleaseMsg(sequenceNum) =>
-        val readyToTerminate = context.finishRelease(sequenceNum)
-        if (readyToTerminate) {
-          AkkaBehaviors.stopped
-        }
-        else {
-          AkkaBehaviors.same
-        }
-      case AppMsg(payload) =>
-        context.addRefs(payload.refs)
+        context.finishRelease(sequenceNum)
+        context.tryTerminate()
+      case AppMsg(payload, token) =>
+        context.handleMessage(payload.refs, token)
         onMessage(payload)
+      case SelfCheck() =>
+        context.tryTerminate()
     }
 }
