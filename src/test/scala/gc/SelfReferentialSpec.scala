@@ -10,7 +10,6 @@ sealed trait SelfRefMsg extends Message
 
 final case class Countdown(n: Int) extends SelfRefMsg with NoRefsMessage
 case object SelfRefTestInit extends SelfRefMsg with NoRefsMessage
-case object SelfRefTestRelease extends SelfRefMsg with NoRefsMessage
 case object SelfRefTerminated extends SelfRefMsg with NoRefsMessage
 
 class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
@@ -20,7 +19,6 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
     val actorA = testKit.spawn(ActorA(), "actorA")
     "not self-terminate when self-messages are in transit" in {
       actorA ! SelfRefTestInit
-      actorA ! SelfRefTestRelease
       probe.expectMessage( SelfRefTerminated)
     }
   }
@@ -35,9 +33,7 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
     override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {
         case SelfRefTestInit =>
-          actorB ! Countdown(100)
-          this
-        case SelfRefTestRelease =>
+          actorB ! Countdown(100000)
           context.release(actorB)
           this
         case _ =>

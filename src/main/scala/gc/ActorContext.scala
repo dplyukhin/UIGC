@@ -1,6 +1,6 @@
 package gc
 
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext}
+import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
 
 import scala.collection.mutable
@@ -38,9 +38,9 @@ class ActorContext[T <: Message](
   private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
 
   /** Tracks how many messages are sent using each reference. */
-  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(token -> 0)
+  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Tracks how many messages are received using each reference. */
-  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(token -> 0)
+  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
 
   private var tokenCount: Int = 0
   private var releaseCount: Int = 0
@@ -106,18 +106,35 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-    // if there's no more owners and there's no pending self-messages, prepare to self-terminate
-    if (owners == Set(self) && received_per_ref(self.token) == sent_per_ref(self.token) && released_owners.isEmpty) {
-      // if there's no other references, we can self-terminate right away
-      if ((refs - self).isEmpty) {
-//        return true
+  }
+
+  /**
+   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
+   * @param sequenceNum The sequence number of this release.
+   */
+  def finishRelease(sequenceNum: Int): Unit = {
+    releasing_buffer -= sequenceNum
+  }
+
+  /**
+   * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
+   * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
+   */
+  def tryTerminate(): Behavior[T] = {
+    if (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty) { // no incoming references
+      if (received_per_ref(self.token) == sent_per_ref(self.token)) { // no pending self-messages
+        if ((refs - self).isEmpty) {
+          // if this actor owns no other references, we can release
+          return AkkaBehaviors.stopped
+        }
+        else {
+          // release any references we still have
+          release(refs - self)
+        }
       }
-      else {
-        // release the references first
-        release(refs - self)
-        // actor will then be terminated in finishRelease
-      }
+      self.target ! SelfCheck() // send a self check messages to try again
     }
+    AkkaBehaviors.same
   }
 
   /**
@@ -179,20 +196,6 @@ class ActorContext[T <: Message](
     // send the message and increment the release count
     target ! ReleaseMsg(context.self, targetedRefs, targetedCreations, releaseCount)
     releaseCount += 1
-  }
-
-  /**
-   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
-   * @param sequenceNum The sequence number of this release.
-   */
-  def finishRelease(sequenceNum: Int): Unit = {
-    releasing_buffer -= sequenceNum
-    // we can release if there's no owners and the releasing_buffer is empty
-//    (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty && received_per_ref(self.token) == sent_per_ref(self.token))
-  }
-
-  def isReadyToTerminate: Boolean = {
-    owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty && received_per_ref(self.token) == sent_per_ref(self.token)
   }
 
   /**

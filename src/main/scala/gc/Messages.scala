@@ -42,3 +42,8 @@ final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]
  * @tparam T
  */
 final case class AckReleaseMsg[+T <: Message](sequenceNum: Int) extends GCMessage[T]
+
+/**
+ * A message sent by an actor to itself to check whether it's ready to terminate.
+ */
+final case class SelfCheck[+T <: Message]() extends GCMessage[T]
