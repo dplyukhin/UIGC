@@ -9,8 +9,8 @@ import org.scalatest.wordspec.AnyWordSpecLike
 sealed trait SelfRefMsg extends Message
 
 final case class Countdown(n: Int) extends SelfRefMsg with NoRefsMessage
-case object SelfRefTestInit extends SelfRefMsg with NoRefsMessage
-case object SelfRefTerminated extends SelfRefMsg with NoRefsMessage
+final case class SelfRefTestInit(n: Int) extends SelfRefMsg with NoRefsMessage
+final case class SelfRefTerminated(n: Int) extends SelfRefMsg with NoRefsMessage
 
 class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[SelfRefMsg] = testKit.createTestProbe[SelfRefMsg]()
@@ -18,8 +18,9 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
   "Isolated actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
     "not self-terminate when self-messages are in transit" in {
-      actorA ! SelfRefTestInit
-      probe.expectMessage( SelfRefTerminated)
+      val n = 10000
+      actorA ! SelfRefTestInit(n)
+      probe.expectMessage(SelfRefTerminated(n))
     }
   }
 
@@ -32,8 +33,8 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
 
     override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {
-        case SelfRefTestInit =>
-          actorB ! Countdown(100000)
+        case SelfRefTestInit(n) =>
+          actorB ! Countdown(n)
           context.release(actorB)
           this
         case _ =>
@@ -48,12 +49,13 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
     }
   }
   class ActorB(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
+    private var count = 0
     override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {
         case Countdown(n) =>
-          println(n)
           if (n > 0) {
             context.self ! Countdown(n - 1)
+            count += 1
           }
           this
         case _ =>
@@ -62,7 +64,7 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
     }
     override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[SelfRefMsg]]] = {
       case PostStop =>
-        probe.ref ! SelfRefTerminated
+        probe.ref ! SelfRefTerminated(count)
         this
     }
   }

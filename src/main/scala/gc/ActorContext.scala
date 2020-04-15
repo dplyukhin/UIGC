@@ -25,6 +25,7 @@ class ActorContext[T <: Message](
 ) {
 
   val self = new ActorRef[T](newToken(), context.self, context.self)
+  self.initialize(this)
 
   /** References this actor owns. Starts with its self reference */
   private var refs: Set[AnyActorRef] = Set(self)
@@ -70,18 +71,11 @@ class ActorContext[T <: Message](
    * @param token Token of the ref this message was sent with.
    */
   def handleMessage(messageRefs: Iterable[AnyActorRef], token: Token): Unit = {
-    handleRefs(messageRefs)
+    refs ++= messageRefs
+    messageRefs.foreach(ref => ref.initialize(this))
     incReceivedCount(token)
   }
 
-  /**
-   * Adds a collection of references to this actor's internal collection and marks their context fields.
-   * @param payload
-   */
-  def handleRefs(payload : Iterable[AnyActorRef]) : Unit = {
-    refs ++= payload
-    refs.foreach(ref => ref.initialize(this))
-  }
 
   /**
    * Handles the internal logistics of this actor receiving a [[ReleaseMsg]].
@@ -121,20 +115,35 @@ class ActorContext[T <: Message](
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
   def tryTerminate(): Behavior[T] = {
-    if (owners == Set(self) && released_owners.isEmpty && releasing_buffer.isEmpty) { // no incoming references
-      if (received_per_ref(self.token) == sent_per_ref(self.token)) { // no pending self-messages
-        if ((refs - self).isEmpty) {
-          // if this actor owns no other references, we can release
-          return AkkaBehaviors.stopped
-        }
-        else {
-          // release any references we still have
-          release(refs - self)
-        }
-      }
-      self.target ! SelfCheck() // send a self check messages to try again
+    // Check if there are any unreleased references to this actor.
+    if (owners != Set(self) || released_owners.nonEmpty) {
+      AkkaBehaviors.same
     }
-    AkkaBehaviors.same
+    // There are no references to this actor remaining.
+    // Check if there are any pending messages from this actor to itself.
+    else if (received_per_ref(self.token) != sent_per_ref(self.token)) {
+      // Remind this actor to try and terminate after all those messages have been delivered.
+      self.target ! SelfCheck()
+      AkkaBehaviors.same
+    }
+    // There are no application messages to this actor remaining.
+    // Therefore it should begin the termination process.
+    // Check if this actor still holds any references.
+    else if ((refs - self).nonEmpty) {
+      // Release all the references and check back again when the AckRelease messages are delivered.
+      release(refs - self)
+      AkkaBehaviors.same
+    }
+    // There are no application messages to this actor remaining, and it doesn't hold any references.
+    // Check if there are any pending AckRelease messages.
+    else if (releasing_buffer.nonEmpty) {
+      // Keep waiting for the rest of the AckRelease messages to roll in
+      AkkaBehaviors.same
+    }
+    // There are no references to this actor and all of its references have been released.
+    else {
+      AkkaBehaviors.stopped
+    }
   }
 
   /**
