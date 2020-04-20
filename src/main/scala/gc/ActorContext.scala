@@ -131,7 +131,7 @@ class ActorContext[T <: Message](
     // Check if this actor still holds any references.
     else if ((refs - self).nonEmpty) {
       // Release all the references and check back again when the AckRelease messages are delivered.
-      release(refs - self)
+      releaseEverything()
       AkkaBehaviors.same
     }
     // There are no application messages to this actor remaining, and it doesn't hold any references.
@@ -180,10 +180,15 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Releases a single reference from an actor.
-   * @param releasing A reference.
+   * Releases all of the given references.
+   * @param releasing A list of references.
    */
-  def release(releasing: AnyActorRef): Unit = release(Iterable(releasing))
+  def release(releasing: AnyActorRef*): Unit = release(releasing)
+
+  /**
+   * Release all references owned by this actor.
+   */
+  def releaseEverything(): Unit = release(refs - self)
 
   /**
    * Helper method for [[release()]], moves the references referring to the target to [[releasing_buffer]].

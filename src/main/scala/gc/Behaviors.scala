@@ -22,4 +22,18 @@ object Behaviors {
     )
     AkkaBehaviors.intercept(() => new ReceptionistAdapter[T]())(b)
   }
+
+  private class Stopped[T <: Message](context : ActorContext[T]) extends AbstractBehavior[T](context) {
+    context.releaseEverything()
+    override def onMessage(msg: T): Behavior[T] = {
+      context.release(msg.refs)
+      this
+    }
+  }
+
+  /**
+   * Returns a behavior that releases all its references, ignores all messages,
+   * and waits to be terminated by the garbage collector.
+   */
+  def stopped[T <: Message](context: ActorContext[T]) : Behavior[T] = new Stopped(context)
 }
