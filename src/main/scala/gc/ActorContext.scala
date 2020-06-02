@@ -35,11 +35,11 @@ class ActorContext[T <: Message](
   private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyActorRef] = Set()
-  
+
   /** Tracks how many messages are sent using each reference. */
-  private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  private val sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Tracks how many messages are received using each reference. */
-  private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  private val received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
 
   /** Used for token generation */
   private var tokenCount: Int = 0
@@ -82,6 +82,10 @@ class ActorContext[T <: Message](
    */
   def handleRelease(releasing: Iterable[AnyActorRef], created: Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
+      // delete receive count for this refob
+      received_per_ref remove ref.token
+      // if this actor already knew this refob was in its owner set then remove that info,
+      // otherwise add to released_owners, we didn't know about this refob
       if (owners.contains(ref)) {
         owners -= ref
       }
@@ -89,7 +93,10 @@ class ActorContext[T <: Message](
         released_owners += ref
       }
     })
+
     created.foreach(ref => {
+      // if this actor already discovered this refob from when it was released, remove that info
+      // otherwise, add it to its owner set
       if (released_owners.contains(ref)) {
         released_owners -= ref
       }
@@ -97,13 +104,6 @@ class ActorContext[T <: Message](
         owners += ref
       }
     })
-  }
-
-  /**
-   * Handles an [[AckReleaseMsg]], removing the references from the knowledge set.
-   * @param sequenceNum The sequence number of this release.
-   */
-  def finishRelease(sequenceNum: Int): Unit = {
   }
 
   /**
@@ -158,8 +158,10 @@ class ActorContext[T <: Message](
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
     val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
-    // group the references in releasing that are in refs by target
     releasing.foreach(ref => {
+      // remove each released reference's sent count
+      sent_per_ref remove ref.token
+      // group the references that are in refs by target
       if (refs contains ref) {
         val key = ref.target
         val set = targets.getOrElse(key, Set())
@@ -182,7 +184,7 @@ class ActorContext[T <: Message](
   def releaseEverything(): Unit = release(refs - self)
 
   /**
-   * Helper method for [[release()]], moves the references referring to the target to [[releasing_buffer]].
+   * Helper method for [[release()]].
    * Sends a release message to the target.
    * @param target The actor to whom the references being released by this actor point to.
    * @param targetedRefs The associated references to target in this actor's [[refs]] set.
