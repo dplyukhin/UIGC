@@ -35,17 +35,14 @@ class ActorContext[T <: Message](
   private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyActorRef] = Set()
-  /** Groups of references that have been released by this actor but are waiting for an acknowledgement  */
-  private var releasing_buffer: mutable.Map[Int, Set[AnyActorRef]] = mutable.Map()
-
+  
   /** Tracks how many messages are sent using each reference. */
   private var sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Tracks how many messages are received using each reference. */
   private var received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
 
+  /** Used for token generation */
   private var tokenCount: Int = 0
-  private var releaseCount: Int = 0
-  private var epoch: Int = 0
 
   /**
    * Spawns a new actor into the GC system and adds it to [[refs]].
@@ -107,7 +104,6 @@ class ActorContext[T <: Message](
    * @param sequenceNum The sequence number of this release.
    */
   def finishRelease(sequenceNum: Int): Unit = {
-    releasing_buffer -= sequenceNum
   }
 
   /**
@@ -135,11 +131,6 @@ class ActorContext[T <: Message](
       AkkaBehaviors.same
     }
     // There are no application messages to this actor remaining, and it doesn't hold any references.
-    // Check if there are any pending AckRelease messages.
-    else if (releasing_buffer.nonEmpty) {
-      // Keep waiting for the rest of the AckRelease messages to roll in
-      AkkaBehaviors.same
-    }
     // There are no references to this actor and all of its references have been released.
     else {
       AkkaBehaviors.stopped
@@ -206,10 +197,8 @@ class ActorContext[T <: Message](
     // combine the references pointing to this target in the created set and the refs set
     // and add it to the buffer
     val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targetedRefs
-    releasing_buffer(releaseCount) = refsToRelease
     // send the message and increment the release count
-    target ! ReleaseMsg(context.self, targetedRefs, targetedCreations, releaseCount)
-    releaseCount += 1
+    target ! ReleaseMsg(context.self, targetedRefs, targetedCreations)
   }
 
   /**
@@ -217,9 +206,7 @@ class ActorContext[T <: Message](
    * @return The current snapshot.
    */
   def snapshot(): ActorSnapshot = {
-    epoch += 1
-    val buffer: Iterable[AnyActorRef] = releasing_buffer.values.flatten
-    ActorSnapshot(refs ++ owners ++ created ++ buffer)
+    ActorSnapshot(refs ++ owners ++ created)
   }
 
   def incReceivedCount(token: Token): Unit = {
