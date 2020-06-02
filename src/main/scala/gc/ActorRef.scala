@@ -45,9 +45,17 @@ case class ActorRef[-T <: Message](token: Token,
 //  }
 }
 
+
 /**
- * A collection of all the [[ActorRef]]s an actor is aware of at a specific time.
- * @param knowledgeSet An actor's knowledge set, consisting of an ActorRef's refs, owners, and created sets.
+ * An instance of an actor's state.
+ * @param refs [[ActorContext.refs]]
+ * @param owners [[ActorContext.owners]]
+ * @param releasedRefs [[ActorContext.released_owners]]
+ * @param sentCounts [[ActorContext.sent_per_ref]]
+ * @param recvCounts [[ActorContext.received_per_ref]]
  */
-// TODO: split into fields
-case class ActorSnapshot(knowledgeSet: Set[AnyActorRef])
+case class ActorSnapshot(refs: Set[AnyActorRef],
+                         owners: Set[AnyActorRef],
+                         releasedRefs: Set[AnyActorRef],
+                         sentCounts: Map[Token, Int],
+                         recvCounts: Map[Token, Int])

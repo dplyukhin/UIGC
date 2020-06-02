@@ -208,7 +208,9 @@ class ActorContext[T <: Message](
    * @return The current snapshot.
    */
   def snapshot(): ActorSnapshot = {
-    ActorSnapshot(refs ++ owners ++ created)
+    val sentCounts: Map[Token, Int] = sent_per_ref.toMap
+    val recvCounts: Map[Token, Int] = received_per_ref.toMap
+    ActorSnapshot(refs, owners, released_owners, sentCounts, recvCounts)
   }
 
   def incReceivedCount(token: Token): Unit = {
