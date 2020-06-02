@@ -81,7 +81,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     def apply(): AkkaBehavior[KnowledgeTestMessage] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
   object ActorB {
-    def apply() : ActorFactory[KnowledgeTestMessage] = {
+    def apply(): ActorFactory[KnowledgeTestMessage] = {
       Behaviors.setup(context => new ActorB(context))
     }
   }
@@ -92,8 +92,8 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
-    var actorB : ActorRef[KnowledgeTestMessage] = _
-    var actorC : ActorRef[KnowledgeTestMessage] = _
+    var actorB: ActorRef[KnowledgeTestMessage] = _
+    var actorC: ActorRef[KnowledgeTestMessage] = _
 
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {
@@ -121,7 +121,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
-    var actorC : ActorRef[KnowledgeTestMessage]= _
+    var actorC: ActorRef[KnowledgeTestMessage]= _
 
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {

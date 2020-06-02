@@ -44,7 +44,7 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
   }
 
   object ActorB {
-    def apply() : ActorFactory[SelfRefMsg] = {
+    def apply(): ActorFactory[SelfRefMsg] = {
       Behaviors.setup(context => new ActorB(context))
     }
   }

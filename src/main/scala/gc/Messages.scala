@@ -24,7 +24,7 @@ sealed trait GCMessage[+T <: Message]
  * @param token
  * @tparam T
  */
-final case class AppMsg[+T <: Message](payload : T, token : Token) extends GCMessage[T]
+final case class AppMsg[+T <: Message](payload: T, token: Token) extends GCMessage[T]
 
 /**
  *
@@ -34,9 +34,9 @@ final case class AppMsg[+T <: Message](payload : T, token : Token) extends GCMes
  * @param sequenceNum
  * @tparam T
  */
-final case class ReleaseMsg[+T <: Message](from : AkkaActorRef[GCMessage[Nothing]],
-                                           releasing : Iterable[AnyActorRef],
-                                           created : Iterable[AnyActorRef],
+final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]],
+                                           releasing: Iterable[AnyActorRef],
+                                           created: Iterable[AnyActorRef],
                                            ) extends GCMessage[T]
 
 /**

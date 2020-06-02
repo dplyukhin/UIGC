@@ -19,9 +19,9 @@ import scala.collection.mutable
  * @tparam T The type of application-level messages handled by the actor.
  */
 class ActorContext[T <: Message](
-  val context : AkkaActorContext[GCMessage[T]],
-  val creator : AkkaActorRef[Nothing],
-  val token : Token
+  val context: AkkaActorContext[GCMessage[T]],
+  val creator: AkkaActorRef[Nothing],
+  val token: Token
 ) {
 
   val self = new ActorRef[T](newToken(), context.self, context.self)
@@ -51,7 +51,7 @@ class ActorContext[T <: Message](
    * @tparam S The type of application-level messages to be handled by this actor.
    * @return The [[ActorRef]] of the spawned actor.
    */
-  def spawn[S <: Message](factory : ActorFactory[S], name : String) : ActorRef[S] = {
+  def spawn[S <: Message](factory: ActorFactory[S], name: String): ActorRef[S] = {
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
@@ -80,7 +80,7 @@ class ActorContext[T <: Message](
    * @param created The collection of references the releaser has created.
    * @return True if this actor's behavior should stop.
    */
-  def handleRelease(releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef]): Unit = {
+  def handleRelease(releasing: Iterable[AnyActorRef], created: Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       if (owners.contains(ref)) {
         owners -= ref
@@ -231,7 +231,7 @@ class ActorContext[T <: Message](
    * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
    * @return The new token.
    */
-  private def newToken() : Token = {
+  private def newToken(): Token = {
     val token = Token(context.self, tokenCount)
     tokenCount += 1
     token

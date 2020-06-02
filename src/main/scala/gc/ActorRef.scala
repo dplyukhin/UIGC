@@ -30,7 +30,7 @@ case class ActorRef[-T <: Message](token: Token,
   def initialize[S <: Message](_context: ActorContext[S]): Unit = {
     context = Some(_context)
   }
-  def !(msg : T) : Unit = {
+  def !(msg: T): Unit = {
     target.tell(AppMsg(msg, token))
     context.get.incSentCount(token)
   }

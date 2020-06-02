@@ -13,9 +13,9 @@ import akka.actor.typed.{Behavior => AkkaBehavior}
 abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
 
-  def onMessage(msg : T) : Behavior[T]
+  def onMessage(msg: T): Behavior[T]
 
-  final def onMessage(msg : GCMessage[T]) : AkkaBehavior[GCMessage[T]] =
+  final def onMessage(msg: GCMessage[T]): AkkaBehavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(from, releasing, created) =>
         context.handleRelease(releasing, created)
