@@ -40,7 +40,8 @@ class ActorContext[T <: Message](
   private val sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Tracks how many messages are received using each reference. */
   private val received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
-
+  /** Maps a key reference to a value set of references that were creating using that key */
+  private val createdUsing: mutable.Map[AnyActorRef, Set[AnyActorRef]] = mutable.Map()
   /** Used for token generation */
   private var tokenCount: Int = 0
 
@@ -138,8 +139,8 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Creates a reference to an actor to be sent to another actor
-   * and adds it to the creator's [[created]] field.
+   * Creates a reference to an actor to be sent to another actor and adds it to the creator's [[created]] field.
+   * e.g. A has x: A->B and y: A->C. A could create z: B->C using y and send it to B along x.
    * @param target The [[ActorRef]] the created reference points to.
    * @param owner The [[ActorRef]] that will receive the created reference.
    * @tparam S The type that the actor handles.
@@ -147,8 +148,13 @@ class ActorContext[T <: Message](
    */
   def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
+    // create reference and add it to the created set
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
     created += sharedRef
+    // also add it to the created map
+    var createdSet: Set[AnyActorRef] = createdUsing getOrElseUpdate (target, Set())
+    createdSet += sharedRef
+
     sharedRef
   }
 
@@ -190,16 +196,16 @@ class ActorContext[T <: Message](
    * @param targetedRefs The associated references to target in this actor's [[refs]] set.
    */
   private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Set[AnyActorRef]): Unit = {
-    val targetedCreations = created filter {
-      createdRef => createdRef.target == target
-    }
+    var targetedCreations = Set() // set of all refs created using the targeted refs
+    // TODO: is it possible to do this in release beforehand so as to not have potentially O(n²) runtime?
+    targetedRefs foreach({ref =>
+      val createdUsingThisRef = createdUsing getOrElse(ref, Set()) // get the set of refs created using this reference
+      created --= createdUsingThisRef // remove them from the created set
+    })
     // remove those references from their sets
-    created --= targetedCreations
     refs --= targetedRefs
-    // combine the references pointing to this target in the created set and the refs set
-    // and add it to the buffer
-    val refsToRelease: Set[AnyActorRef] = targetedCreations ++ targetedRefs
-    // send the message and increment the release count
+    targetedCreations --= targetedCreations
+    // send the release message
     target ! ReleaseMsg(context.self, targetedRefs, targetedCreations)
   }
 
