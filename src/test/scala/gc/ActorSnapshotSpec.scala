@@ -31,17 +31,21 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[KnowledgeTestMessage] = testKit.createTestProbe[KnowledgeTestMessage]()
   var aKnowledge: ActorSnapshot = _ // A's knowledge set, gets updated as the test progresses
   var gcRefAToC: ActorRef[KnowledgeTestMessage] = _ // A's reference to C
+  var gcRefAToB: ActorRef[KnowledgeTestMessage] = _ // A's reference to B
   var gcRefBToC: ActorRef[KnowledgeTestMessage] = _ // B's reference to C
 
   "Knowledge sets" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
 //    val gcActorA = probe.expectMessageType[Ref]
+    // get A's initial knowledge
     actorA ! RequestKnowledge
     aKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
 
     "expand when actors are spawned" in {
+      // have A spawn B and get that reference
       actorA ! InitB
-      val gcRefAToB = probe.expectMessageType[Ref].ref
+      gcRefAToB = probe.expectMessageType[Ref].ref
+      // check that the knowledge set has only gained that reference
       actorA ! RequestKnowledge
       var newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
       assert(newKnowledge.refs == aKnowledge.refs + gcRefAToB)
@@ -49,8 +53,10 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       assert(newKnowledge.releasedRefs == aKnowledge.releasedRefs)
       assert(newKnowledge.sentCounts == aKnowledge.sentCounts)
       assert(newKnowledge.recvCounts == aKnowledge.recvCounts)
+      // update knowledge for later tests
       aKnowledge = newKnowledge;
 
+      // same for C
       actorA ! InitC
       gcRefAToC = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
@@ -63,25 +69,34 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       aKnowledge = newKnowledge
     }
 
-    "contain knowledge of created references" in {
+    "contain knowledge of message counts" in {
+      // have A create and share a reference to C with B
       actorA ! ShareCWithB
       gcRefBToC = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
-//      val expected = Knowledge(ActorSnapshot(
-//        aKnowledge.actorSnapshot.knowledgeSet + gcRefBToC))
-//      aKnowledge = probe.expectMessage(expected)
+      // A's sent message count to B should increase by 1
+      var newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
+      assert(newKnowledge.refs == aKnowledge.refs)
+      assert(newKnowledge.owners == aKnowledge.owners)
+      assert(newKnowledge.sentCounts(gcRefAToB.token.get) ==
+        aKnowledge.sentCounts(gcRefAToB.token.get) + 1)
+      assert(newKnowledge.recvCounts == aKnowledge.recvCounts)
+      // update knowledge for later tests
+      aKnowledge = newKnowledge
     }
 
     "lose knowledge of released references" in {
+      // have A release C
       actorA ! ForgetC
-      val expected = Knowledge(ActorSnapshot(
-        aKnowledge.refs - gcRefAToC,
-        aKnowledge.owners,
-        aKnowledge.releasedRefs,
-        aKnowledge.sentCounts,
-        aKnowledge.recvCounts))
       actorA ! RequestKnowledge
-      aKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
+      // A's sent message count to C should be removed
+      var newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
+      assert(newKnowledge.refs == aKnowledge.refs - gcRefAToC)
+      assert(newKnowledge.owners == aKnowledge.owners)
+      assert(newKnowledge.sentCounts == aKnowledge.sentCounts - gcRefAToC.token.get)
+      assert(newKnowledge.recvCounts == aKnowledge.recvCounts)
+      // update knowledge for later tests
+      aKnowledge = newKnowledge
     }
   }
 
