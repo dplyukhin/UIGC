@@ -39,13 +39,9 @@ class ActorContext[T <: Message](
   private var released_owners: Set[AnyActorRef] = Set()
 
   /** Tracks how many messages are sent using each reference. */
-  private val sentCounts: mutable.Map[Token, Int] = mutable.Map()
+  private val sentCounts: mutable.Map[Token, Int] = mutable.Map(self.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
-  private val receivedCounts: mutable.Map[Token, Int] = mutable.Map()
-  if (self.token.isDefined) {
-    sentCounts += (self.token.get -> 0)
-    receivedCounts += (self.token.get -> 0)
-  }
+  private val receivedCounts: mutable.Map[Token, Int] = mutable.Map(self.token.get -> 0)
   /** Used for token generation */
   private var tokenCount: Int = 0
 
@@ -154,12 +150,14 @@ class ActorContext[T <: Message](
     // create reference and add it to the created map
     val sharedRef = new ActorRef[S](Some(token), Some(owner.target), target.target)
     // get or create the set
-    (createdUsing get target) match {
-      case Some(set) =>
-        createdUsing(target) += sharedRef
-      case None =>
-        createdUsing(target) = Set(sharedRef)
-    }
+//    (createdUsing get target) match {
+//      case Some(set) =>
+//        createdUsing(target) += sharedRef
+//      case None =>
+//        createdUsing(target) = Set(sharedRef)
+//    }
+    val set = createdUsing getOrElse(target, Set())
+    createdUsing(target) = set + sharedRef
     sharedRef
   }
 
@@ -168,18 +166,14 @@ class ActorContext[T <: Message](
    * @param releasing A collection of references.
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
-    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
-    releasing.foreach(ref => {
+    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Seq[AnyActorRef]] = mutable.Map()
+    releasing.filter(ref => refs contains ref).foreach(ref => {
       // remove each released reference's sent count
-      if (ref.token.isDefined) {
-        sentCounts remove ref.token.get
-      }
+      sentCounts remove ref.token.get
       // group the references that are in refs by target
-      if (refs contains ref) {
-        val key = ref.target
-        val set = targets.getOrElse(key, Set())
-        targets(key) = set + ref
-      }
+      val key = ref.target
+      val seq = targets.getOrElse(key, Seq())
+      targets(key) = seq :+ ref
     })
     // filter the created and refs sets by target
     targets.foreachEntry((target, targetedRefs) => releaseTo(target, targetedRefs))
@@ -202,7 +196,7 @@ class ActorContext[T <: Message](
    * @param target The actor to whom the references being released by this actor point to.
    * @param targetedRefs The associated references to target in this actor's [[refs]] set.
    */
-  private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Set[AnyActorRef]): Unit = {
+  private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Seq[AnyActorRef]): Unit = {
     var targetedCreations: Set[AnyActorRef] = Set() // set of all refs created using the targeted refs
     // TODO: is it possible to do this in release beforehand so as to not have potentially O(n²) runtime?
     targetedRefs foreach({ref =>
@@ -229,30 +223,25 @@ class ActorContext[T <: Message](
     // get immutable copies
     val sent: Map[Token, Int] = sentCounts.toMap
     val recv: Map[Token, Int] = receivedCounts.toMap
-    ActorSnapshot(refs, owners, released_owners, sent, recv)
+    val created: Seq[AnyActorRef] = createdUsing.values.toSeq.flatten
+    ActorSnapshot(refs, owners, created, released_owners, sent, recv)
   }
 
   def incReceivedCount(optoken: Option[Token]): Unit = {
-    if (optoken.isDefined) {
-      val token = optoken.get
-      receivedCounts.get(token) match {
-        case None =>
-          receivedCounts(token) = 1
-        case Some(_) =>
-          receivedCounts(token) += 1
-      }
+    optoken match {
+      case Some(token) =>
+        val count = receivedCounts getOrElse (token, 0)
+        receivedCounts(token) = count + 1
+      case None =>
     }
   }
 
   def incSentCount(optoken: Option[Token]): Unit = {
-    if (optoken.isDefined) {
-      val token = optoken.get
-      sentCounts.get(token) match {
-        case None =>
-          sentCounts(token) = 1
-        case Some(_) =>
-          sentCounts(token) += 1
-      }
+    optoken match {
+      case Some(token) =>
+        val count = sentCounts getOrElse (token, 0)
+        sentCounts(token) = count + 1
+      case None =>
     }
   }
 

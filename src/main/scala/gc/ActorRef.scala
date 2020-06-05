@@ -15,8 +15,8 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
  * should only be used by the *owner* to send messages to the *target.
  *
- * @param token A token that uniquely identifies this reference. If the token is None, it represents an external actor.
- * @param owner The [[AkkaActorRef]] of the only actor that can use this reference.
+ * @param token A token that uniquely identifies this reference. If None, it represents an external actor.
+ * @param owner The [[AkkaActorRef]] of the only actor that can use this reference. If None, it represents an external actor.
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
@@ -54,12 +54,14 @@ case class ActorRef[-T <: Message](token: Option[Token],
  * An instance of an actor's state.
  * @param refs [[ActorContext.refs]]
  * @param owners [[ActorContext.owners]]
+ * @param created [[ActorContext.createdUsing]]'s values, flattened
  * @param releasedRefs [[ActorContext.released_owners]]
- * @param sentCounts [[ActorContext.sent_per_ref]]
- * @param recvCounts [[ActorContext.received_per_ref]]
+ * @param sentCounts [[ActorContext.sentCounts]]
+ * @param recvCounts [[ActorContext.receivedCounts]]
  */
 case class ActorSnapshot(refs: Set[AnyActorRef],
                          owners: Set[AnyActorRef],
+                         created: Seq[AnyActorRef],
                          releasedRefs: Set[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
