@@ -20,11 +20,11 @@ import scala.collection.mutable
  */
 class ActorContext[T <: Message](
   val context: AkkaActorContext[GCMessage[T]],
-  val creator: AkkaActorRef[Nothing],
-  val token: Token
+  val creator: Option[AkkaActorRef[Nothing]],
+  val token: Option[Token]
 ) {
 
-  val self = new ActorRef[T](newToken(), context.self, context.self)
+  val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
 
   /** References this actor owns. Starts with its self reference */
@@ -39,9 +39,13 @@ class ActorContext[T <: Message](
   private var released_owners: Set[AnyActorRef] = Set()
 
   /** Tracks how many messages are sent using each reference. */
-  private val sentCounts: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  private val sentCounts: mutable.Map[Token, Int] = mutable.Map()
   /** Tracks how many messages are received using each reference. */
-  private val receivedCounts: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  private val receivedCounts: mutable.Map[Token, Int] = mutable.Map()
+  if (self.token.isDefined) {
+    sentCounts += (self.token.get -> 0)
+    receivedCounts += (self.token.get -> 0)
+  }
   /** Used for token generation */
   private var tokenCount: Int = 0
 
@@ -56,7 +60,7 @@ class ActorContext[T <: Message](
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    val ref = new ActorRef[S](x, self, child)
+    val ref = new ActorRef[S](Some(x), Some(self), child)
     ref.initialize(this)
     refs += ref
     ref
@@ -68,7 +72,7 @@ class ActorContext[T <: Message](
    * @param messageRefs The refs sent with the message.
    * @param token Token of the ref this message was sent with.
    */
-  def handleMessage(messageRefs: Iterable[AnyActorRef], token: Token): Unit = {
+  def handleMessage(messageRefs: Iterable[AnyActorRef], token: Option[Token]): Unit = {
     refs ++= messageRefs
     messageRefs.foreach(ref => ref.initialize(this))
     incReceivedCount(token)
@@ -84,7 +88,7 @@ class ActorContext[T <: Message](
   def handleRelease(releasing: Iterable[AnyActorRef], created: Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       // delete receive count for this refob
-      receivedCounts remove ref.token
+      receivedCounts remove ref.token.get
       // if this actor already knew this refob was in its owner set then remove that info,
       // otherwise add to released_owners, we didn't know about this refob
       if (owners.contains(ref)) {
@@ -118,7 +122,7 @@ class ActorContext[T <: Message](
     }
     // There are no references to this actor remaining.
     // Check if there are any pending messages from this actor to itself.
-    else if (receivedCounts(self.token) != sentCounts(self.token)) {
+    else if (receivedCounts(self.token.get) != sentCounts(self.token.get)) {
       // Remind this actor to try and terminate after all those messages have been delivered.
       self.target ! SelfCheck() // TODO: should this change message counts?
       AkkaBehaviors.same
@@ -148,7 +152,7 @@ class ActorContext[T <: Message](
   def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
     // create reference and add it to the created map
-    val sharedRef = new ActorRef[S](token, owner.target, target.target)
+    val sharedRef = new ActorRef[S](Some(token), Some(owner.target), target.target)
     // get or create the set
     (createdUsing get target) match {
       case Some(set) =>
@@ -167,7 +171,9 @@ class ActorContext[T <: Message](
     val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
     releasing.foreach(ref => {
       // remove each released reference's sent count
-      sentCounts remove ref.token
+      if (ref.token.isDefined) {
+        sentCounts remove ref.token.get
+      }
       // group the references that are in refs by target
       if (refs contains ref) {
         val key = ref.target
@@ -226,21 +232,27 @@ class ActorContext[T <: Message](
     ActorSnapshot(refs, owners, released_owners, sent, recv)
   }
 
-  def incReceivedCount(token: Token): Unit = {
-    receivedCounts.get(token) match {
-      case None =>
-        receivedCounts(token) = 1
-      case Some(_) =>
-        receivedCounts(token) += 1
+  def incReceivedCount(optoken: Option[Token]): Unit = {
+    if (optoken.isDefined) {
+      val token = optoken.get
+      receivedCounts.get(token) match {
+        case None =>
+          receivedCounts(token) = 1
+        case Some(_) =>
+          receivedCounts(token) += 1
+      }
     }
   }
 
-  def incSentCount(token: Token): Unit = {
-    sentCounts.get(token) match {
-      case None =>
-        sentCounts(token) = 1
-      case Some(_) =>
-        sentCounts(token) += 1
+  def incSentCount(optoken: Option[Token]): Unit = {
+    if (optoken.isDefined) {
+      val token = optoken.get
+      sentCounts.get(token) match {
+        case None =>
+          sentCounts(token) = 1
+        case Some(_) =>
+          sentCounts(token) += 1
+      }
     }
   }
 

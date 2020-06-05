@@ -24,14 +24,13 @@ sealed trait GCMessage[+T <: Message]
  * @param token
  * @tparam T
  */
-final case class AppMsg[+T <: Message](payload: T, token: Token) extends GCMessage[T]
+final case class AppMsg[+T <: Message](payload: T, token: Option[Token]) extends GCMessage[T]
 
 /**
  *
  * @param from
  * @param releasing
  * @param created
- * @param sequenceNum
  * @tparam T
  */
 final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]],

@@ -15,14 +15,14 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
  * should only be used by the *owner* to send messages to the *target.
  *
- * @param token A token that uniquely identifies this reference.
+ * @param token A token that uniquely identifies this reference. If the token is None, it represents an external actor.
  * @param owner The [[AkkaActorRef]] of the only actor that can use this reference.
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
 
-case class ActorRef[-T <: Message](token: Token,
-                                   owner: AkkaActorRef[Nothing],
+case class ActorRef[-T <: Message](token: Option[Token],
+                                   owner: Option[AkkaActorRef[Nothing]],
                                    target: AkkaActorRef[GCMessage[T]],
                                    ) {
   private var context: Option[ActorContext[_ <: Message]] = None
@@ -36,7 +36,7 @@ case class ActorRef[-T <: Message](token: Token,
   }
 
   override def toString: String = {
-    f"ActorRef#${token.hashCode()}: ${owner.path.name}->${target.path.name}"
+    f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
   }
 
 //  override def equals(obj: Any): Boolean = {
