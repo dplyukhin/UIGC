@@ -29,19 +29,19 @@ class ActorContext[T <: Message](
 
   /** References this actor owns. Starts with its self reference */
   private var refs: Set[AnyActorRef] = Set(self)
-  /** References this actor has created for other actors. */
-  private var created: Set[AnyActorRef] = Set()
+  /**
+   * References this actor has created for other actors.
+   * Maps a key reference to a value set of references that were creating using that key */
+  private val createdUsing: mutable.Map[AnyActorRef, Set[AnyActorRef]] = mutable.Map()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
   private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyActorRef] = Set()
 
   /** Tracks how many messages are sent using each reference. */
-  private val sent_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
+  private val sentCounts: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Tracks how many messages are received using each reference. */
-  private val received_per_ref: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
-  /** Maps a key reference to a value set of references that were creating using that key */
-  private val createdUsing: mutable.Map[AnyActorRef, Set[AnyActorRef]] = mutable.Map()
+  private val receivedCounts: mutable.Map[Token, Int] = mutable.Map(self.token -> 0)
   /** Used for token generation */
   private var tokenCount: Int = 0
 
@@ -84,7 +84,7 @@ class ActorContext[T <: Message](
   def handleRelease(releasing: Iterable[AnyActorRef], created: Iterable[AnyActorRef]): Unit = {
     releasing.foreach(ref => {
       // delete receive count for this refob
-      received_per_ref remove ref.token
+      receivedCounts remove ref.token
       // if this actor already knew this refob was in its owner set then remove that info,
       // otherwise add to released_owners, we didn't know about this refob
       if (owners.contains(ref)) {
@@ -118,28 +118,27 @@ class ActorContext[T <: Message](
     }
     // There are no references to this actor remaining.
     // Check if there are any pending messages from this actor to itself.
-    else if (received_per_ref(self.token) != sent_per_ref(self.token)) {
+    else if (receivedCounts(self.token) != sentCounts(self.token)) {
       // Remind this actor to try and terminate after all those messages have been delivered.
-      self.target ! SelfCheck()
+      self.target ! SelfCheck() // TODO: should this change message counts?
       AkkaBehaviors.same
     }
     // There are no application messages to this actor remaining.
     // Therefore it should begin the termination process.
     // Check if this actor still holds any references.
-    else if ((refs - self).nonEmpty) {
-      // Release all the references and check back again when the AckRelease messages are delivered.
-      releaseEverything()
-      AkkaBehaviors.same
-    }
+    else {
+      if ((refs - self).nonEmpty) {
+        // Release all the references held by this actor.
+        releaseEverything()
+      }
     // There are no application messages to this actor remaining, and it doesn't hold any references.
     // There are no references to this actor and all of its references have been released.
-    else {
       AkkaBehaviors.stopped
     }
   }
 
   /**
-   * Creates a reference to an actor to be sent to another actor and adds it to the creator's [[created]] field.
+   * Creates a reference to an actor to be sent to another actor and adds it to the created collection.
    * e.g. A has x: A->B and y: A->C. A could create z: B->C using y and send it to B along x.
    * @param target The [[ActorRef]] the created reference points to.
    * @param owner The [[ActorRef]] that will receive the created reference.
@@ -148,13 +147,15 @@ class ActorContext[T <: Message](
    */
   def createRef[S <: Message](target: ActorRef[S], owner: AnyActorRef): ActorRef[S] = {
     val token = newToken()
-    // create reference and add it to the created set
+    // create reference and add it to the created map
     val sharedRef = new ActorRef[S](token, owner.target, target.target)
-    created += sharedRef
-    // also add it to the created map
-    var createdSet: Set[AnyActorRef] = createdUsing getOrElseUpdate (target, Set())
-    createdSet += sharedRef
-
+    // get or create the set
+    (createdUsing get target) match {
+      case Some(set) =>
+        createdUsing(target) += sharedRef
+      case None =>
+        createdUsing(target) = Set(sharedRef)
+    }
     sharedRef
   }
 
@@ -166,7 +167,7 @@ class ActorContext[T <: Message](
     val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Set[AnyActorRef]] = mutable.Map()
     releasing.foreach(ref => {
       // remove each released reference's sent count
-      sent_per_ref remove ref.token
+      sentCounts remove ref.token
       // group the references that are in refs by target
       if (refs contains ref) {
         val key = ref.target
@@ -196,44 +197,50 @@ class ActorContext[T <: Message](
    * @param targetedRefs The associated references to target in this actor's [[refs]] set.
    */
   private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Set[AnyActorRef]): Unit = {
-    var targetedCreations = Set() // set of all refs created using the targeted refs
+    var targetedCreations: Set[AnyActorRef] = Set() // set of all refs created using the targeted refs
     // TODO: is it possible to do this in release beforehand so as to not have potentially O(n²) runtime?
     targetedRefs foreach({ref =>
-      val createdUsingThisRef = createdUsing getOrElse(ref, Set()) // get the set of refs created using this reference
-      created --= createdUsingThisRef // remove them from the created set
+      // get the set of refs created using this reference
+      (createdUsing get ref) match {
+        case Some(set) =>
+          targetedCreations ++= set
+          createdUsing remove ref
+        case None =>
+
+      }
     })
     // remove those references from their sets
     refs --= targetedRefs
-    targetedCreations --= targetedCreations
     // send the release message
     target ! ReleaseMsg(context.self, targetedRefs, targetedCreations)
   }
 
   /**
-   * Gets the current [[ActorSnapshot]] and increments the epoch afterward.
+   * Gets the current [[ActorSnapshot]].
    * @return The current snapshot.
    */
   def snapshot(): ActorSnapshot = {
-    val sentCounts: Map[Token, Int] = sent_per_ref.toMap
-    val recvCounts: Map[Token, Int] = received_per_ref.toMap
-    ActorSnapshot(refs, owners, released_owners, sentCounts, recvCounts)
+    // get immutable copies
+    val sent: Map[Token, Int] = sentCounts.toMap
+    val recv: Map[Token, Int] = receivedCounts.toMap
+    ActorSnapshot(refs, owners, released_owners, sent, recv)
   }
 
   def incReceivedCount(token: Token): Unit = {
-    received_per_ref.get(token) match {
+    receivedCounts.get(token) match {
       case None =>
-        received_per_ref(token) = 1
+        receivedCounts(token) = 1
       case Some(_) =>
-        received_per_ref(token) += 1
+        receivedCounts(token) += 1
     }
   }
 
   def incSentCount(token: Token): Unit = {
-    sent_per_ref.get(token) match {
+    sentCounts.get(token) match {
       case None =>
-        sent_per_ref(token) = 1
+        sentCounts(token) = 1
       case Some(_) =>
-        sent_per_ref(token) += 1
+        sentCounts(token) += 1
     }
   }
 

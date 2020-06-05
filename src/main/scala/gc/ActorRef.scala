@@ -35,6 +35,10 @@ case class ActorRef[-T <: Message](token: Token,
     context.get.incSentCount(token)
   }
 
+  override def toString: String = {
+    f"ActorRef#${token.hashCode()}: ${owner.path.name}->${target.path.name}"
+  }
+
 //  override def equals(obj: Any): Boolean = {
 //    obj match {
 //      case ActorRef(token, owner, target) => (
