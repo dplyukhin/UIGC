@@ -2,7 +2,6 @@ package gc
 
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
-
 import scala.collection.mutable
 
 /**
@@ -149,13 +148,6 @@ class ActorContext[T <: Message](
     val token = newToken()
     // create reference and add it to the created map
     val sharedRef = new ActorRef[S](Some(token), Some(owner.target), target.target)
-    // get or create the set
-//    (createdUsing get target) match {
-//      case Some(set) =>
-//        createdUsing(target) += sharedRef
-//      case None =>
-//        createdUsing(target) = Set(sharedRef)
-//    }
     val set = createdUsing getOrElse(target, Set())
     createdUsing(target) = set + sharedRef
     sharedRef
@@ -166,17 +158,31 @@ class ActorContext[T <: Message](
    * @param releasing A collection of references.
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
-    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], Seq[AnyActorRef]] = mutable.Map()
-    releasing.filter(ref => refs contains ref).foreach(ref => {
+    // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
+    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], (Set[AnyActorRef], Seq[AnyActorRef])] = mutable.Map()
+    // process the references that are actually in the refs set
+    releasing withFilter (ref => refs contains ref) foreach (ref => {
       // remove each released reference's sent count
       sentCounts remove ref.token.get
-      // group the references that are in refs by target
+      // get the reference's target for grouping
       val key = ref.target
-      val seq = targets.getOrElse(key, Seq())
-      targets(key) = seq :+ ref
+      // get current mapping/make new one if not found
+      val (set: Set[AnyActorRef], seq: Seq[AnyActorRef]) = targets getOrElse(key, (Set(), Seq()))
+      // get the references created using this reference
+      val created = createdUsing getOrElse(ref, Set())
+      // add this ref to the set of refs with this same target
+      // append the group of refs created using this ref to the group of created refs to this target
+      targets(key) = (set + ref, seq :++ created.toSeq)
+      // remove this ref's created info
+      createdUsing remove ref
     })
-    // filter the created and refs sets by target
-    targets.foreachEntry((target, targetedRefs) => releaseTo(target, targetedRefs))
+
+    for ((target, (targetedRefs, createdRefs)) <- targets) {
+      // remove from refs
+      refs --= targetedRefs
+      // sent the release message for each target actor
+      target ! ReleaseMsg(context.self, targetedRefs, createdRefs)
+    }
   }
 
   /**
@@ -191,31 +197,6 @@ class ActorContext[T <: Message](
   def releaseEverything(): Unit = release(refs - self)
 
   /**
-   * Helper method for [[release()]].
-   * Sends a release message to the target.
-   * @param target The actor to whom the references being released by this actor point to.
-   * @param targetedRefs The associated references to target in this actor's [[refs]] set.
-   */
-  private def releaseTo(target: AkkaActorRef[GCMessage[Nothing]], targetedRefs: Seq[AnyActorRef]): Unit = {
-    var targetedCreations: Set[AnyActorRef] = Set() // set of all refs created using the targeted refs
-    // TODO: is it possible to do this in release beforehand so as to not have potentially O(n²) runtime?
-    targetedRefs foreach({ref =>
-      // get the set of refs created using this reference
-      (createdUsing get ref) match {
-        case Some(set) =>
-          targetedCreations ++= set
-          createdUsing remove ref
-        case None =>
-
-      }
-    })
-    // remove those references from their sets
-    refs --= targetedRefs
-    // send the release message
-    target ! ReleaseMsg(context.self, targetedRefs, targetedCreations)
-  }
-
-  /**
    * Gets the current [[ActorSnapshot]].
    * @return The current snapshot.
    */
@@ -228,20 +209,16 @@ class ActorContext[T <: Message](
   }
 
   def incReceivedCount(optoken: Option[Token]): Unit = {
-    optoken match {
-      case Some(token) =>
-        val count = receivedCounts getOrElse (token, 0)
-        receivedCounts(token) = count + 1
-      case None =>
+    for (token <- optoken) {
+      val count = receivedCounts getOrElse (token, 0)
+      receivedCounts(token) = count + 1
     }
   }
 
   def incSentCount(optoken: Option[Token]): Unit = {
-    optoken match {
-      case Some(token) =>
-        val count = sentCounts getOrElse (token, 0)
-        sentCounts(token) = count + 1
-      case None =>
+    for (token <- optoken) {
+      val count = sentCounts getOrElse (token, 0)
+      sentCounts(token) = count + 1
     }
   }
 
