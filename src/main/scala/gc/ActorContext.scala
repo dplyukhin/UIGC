@@ -23,14 +23,15 @@ class ActorContext[T <: Message](
   val token: Option[Token]
 ) {
 
+  /** This actor's self reference. */
   val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
 
-  /** References this actor owns. Starts with its self reference */
+  /** References this actor owns. Starts with its self reference. */
   private var refs: Set[AnyActorRef] = Set(self)
   /**
    * References this actor has created for other actors.
-   * Maps a key reference to a value set of references that were creating using that key */
+   * Maps a key reference to a value set of references that were creating using that key. */
   private val createdUsing: mutable.Map[AnyActorRef, Seq[AnyActorRef]] = mutable.Map()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
   private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
@@ -206,6 +207,10 @@ class ActorContext[T <: Message](
     ActorSnapshot(refs, owners, created, released_owners, sent, recv)
   }
 
+  /**
+   * Increments the received count of the given reference token, assuming it exists.
+   * @param optoken The (optional) token of the reference to be incremented.
+   */
   def incReceivedCount(optoken: Option[Token]): Unit = {
     for (token <- optoken) {
       val count = receivedCounts getOrElse (token, 0)
@@ -213,6 +218,10 @@ class ActorContext[T <: Message](
     }
   }
 
+  /**
+   * Increments the sent count of the given reference token, assuming it exists.
+   * @param optoken The (optional) token of the reference to be incremented.
+   */
   def incSentCount(optoken: Option[Token]): Unit = {
     for (token <- optoken) {
       val count = sentCounts getOrElse (token, 0)
