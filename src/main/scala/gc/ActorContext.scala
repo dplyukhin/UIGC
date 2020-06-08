@@ -31,7 +31,7 @@ class ActorContext[T <: Message](
   /**
    * References this actor has created for other actors.
    * Maps a key reference to a value set of references that were creating using that key */
-  private val createdUsing: mutable.Map[AnyActorRef, Set[AnyActorRef]] = mutable.Map()
+  private val createdUsing: mutable.Map[AnyActorRef, Seq[AnyActorRef]] = mutable.Map()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
   private var owners: Set[AnyActorRef] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
@@ -148,39 +148,37 @@ class ActorContext[T <: Message](
     val token = newToken()
     // create reference and add it to the created map
     val sharedRef = new ActorRef[S](Some(token), Some(owner.target), target.target)
-    val set = createdUsing getOrElse(target, Set())
-    createdUsing(target) = set + sharedRef
+    val seq = createdUsing getOrElse(target, Seq())
+    createdUsing(target) = seq :+ sharedRef
     sharedRef
   }
 
   /**
-   * Releases a collection of references from an actor.
+   * Releases a collection of references from an actor, sending batches [[ReleaseMsg]] to each targeted actor.
    * @param releasing A collection of references.
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
-    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], (Set[AnyActorRef], Seq[AnyActorRef])] = mutable.Map()
+    val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], (Seq[AnyActorRef], Seq[AnyActorRef])] = mutable.Map()
     // process the references that are actually in the refs set
-    releasing withFilter (ref => refs contains ref) foreach (ref => {
+    for (ref <- releasing if refs contains ref) {
       // remove each released reference's sent count
       sentCounts remove ref.token.get
       // get the reference's target for grouping
       val key = ref.target
       // get current mapping/make new one if not found
-      val (set: Set[AnyActorRef], seq: Seq[AnyActorRef]) = targets getOrElse(key, (Set(), Seq()))
+      val (targetRefs: Seq[AnyActorRef], targetCreated: Seq[AnyActorRef]) = targets getOrElse(key, (Seq(), Seq()))
       // get the references created using this reference
-      val created = createdUsing getOrElse(ref, Set())
+      val created = createdUsing getOrElse(ref, Seq())
       // add this ref to the set of refs with this same target
       // append the group of refs created using this ref to the group of created refs to this target
-      targets(key) = (set + ref, seq :++ created.toSeq)
-      // remove this ref's created info
+      targets(key) = (targetRefs :+ ref, targetCreated :++ created)
+      // remove this ref's created info and remove it from the refs set
       createdUsing remove ref
-    })
-
+      refs -= ref
+    }
+    // send the release message for each target actor
     for ((target, (targetedRefs, createdRefs)) <- targets) {
-      // remove from refs
-      refs --= targetedRefs
-      // sent the release message for each target actor
       target ! ReleaseMsg(context.self, targetedRefs, createdRefs)
     }
   }
