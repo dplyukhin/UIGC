@@ -23,7 +23,7 @@ case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
 }
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-  val probe : TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
+  val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
     "be able to spawn actors" in {
@@ -62,7 +62,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     def apply(): AkkaBehavior[testMessage] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
   object ActorB {
-    def apply() : ActorFactory[testMessage] = {
+    def apply(): ActorFactory[testMessage] = {
       Behaviors.setup(context => new ActorB(context))
     }
   }
@@ -73,8 +73,8 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB : ActorRef[testMessage] = _
-    var actorC : ActorRef[testMessage] = _
+    var actorB: ActorRef[testMessage] = _
+    var actorC: ActorRef[testMessage] = _
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Init =>
@@ -102,7 +102,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC : ActorRef[testMessage]= _
+    var actorC: ActorRef[testMessage]= _
     probe.ref ! Spawned
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {

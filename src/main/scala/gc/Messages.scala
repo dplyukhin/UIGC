@@ -24,24 +24,19 @@ sealed trait GCMessage[+T <: Message]
  * @param token
  * @tparam T
  */
-final case class AppMsg[+T <: Message](payload : T, token : Token) extends GCMessage[T]
+final case class AppMsg[+T <: Message](payload: T, token: Option[Token]) extends GCMessage[T]
 
 /**
  *
  * @param from
  * @param releasing
  * @param created
- * @param sequenceNum
  * @tparam T
  */
-final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]], releasing : Iterable[AnyActorRef], created : Iterable[AnyActorRef], sequenceNum: Int) extends GCMessage[T]
-
-/**
- *
- * @param sequenceNum
- * @tparam T
- */
-final case class AckReleaseMsg[+T <: Message](sequenceNum: Int) extends GCMessage[T]
+final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]],
+                                           releasing: Iterable[AnyActorRef],
+                                           created: Iterable[AnyActorRef],
+                                           ) extends GCMessage[T]
 
 /**
  * A message sent by an actor to itself to check whether it's ready to terminate.

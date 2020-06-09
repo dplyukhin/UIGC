@@ -24,7 +24,7 @@ class BehaviorsSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   "Stopped actors" must {
     // Create an actor and send it a reference to `target`, then ask it to stop.
     val actor = testKit.spawn[BehaviorMsg](HelloActor(), "HelloActor")
-    actor ! GetRef(ActorRef[Nothing](token1, null, target.ref))
+    actor ! GetRef(ActorRef[Nothing](Some(token1), None, target.ref))
     actor ! Stop
 
     "release their references when they stop" in {
@@ -35,7 +35,7 @@ class BehaviorsSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       probe.expectNoMessage()
     }
     "release any references they receive after they stop" in {
-      actor ! GetRef(ActorRef[Nothing](token2, null, target.ref))
+      actor ! GetRef(ActorRef[Nothing](Some(token2), None, target.ref))
       target.expectMessageType[ReleaseMsg[Nothing]]
     }
   }
