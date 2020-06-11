@@ -16,18 +16,18 @@ class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[ReleaseSpecMsg] = testKit.createTestProbe[ReleaseSpecMsg]()
 
   "Release protocol" must {
-    val A = testKit.spawn(ActorA(), "A")
-    "be correct" in {
-      val B = probe.expectMessageType[RefInfo].ref
-      A ! Create
-      val x = probe.expectMessageType[RefInfo].ref
-      Thread.sleep(10)
+    val A = testKit.spawn(ActorA(), "A") // A is created and immediately spawns B and C, sending B's ref to the probe
+    "use the proper references" in {
+      val B = probe.expectMessageType[RefInfo].ref // receive B's ref
+      A ! Create // A creates refs x and y to C for B, and sends x to the probe
+      val x = probe.expectMessageType[RefInfo].ref // receive x
+      Thread.sleep(10) // wait for messages to proliferate
 
-      B ! Create
-      val w = probe.expectMessageType[RefInfo].ref
-      B ! State(None)
-      val bState = probe.expectMessageType[State].snapshot.get
-      bState.refs shouldNot contain(x, w)
+      B ! Create // B spawns D and creates refs w and z from x and y respectively, but then releases x
+      val w = probe.expectMessageType[RefInfo].ref // the probe receives w
+      B ! State(None) // ask for B's state
+      val bState = probe.expectMessageType[State].snapshot.get // get B's state
+      bState.refs shouldNot contain(x, w) // having released x, w should have been released as well
     }
   }
 
