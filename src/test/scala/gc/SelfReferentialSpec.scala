@@ -29,7 +29,7 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
     def apply(): AkkaBehavior[SelfRefMsg] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
   class ActorA(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
-    val actorB: ActorRef[SelfRefMsg] = context.spawn(ActorB(), "actorB")
+    val actorB: RefOb[SelfRefMsg] = context.spawn(ActorB(), "actorB")
 
     override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {

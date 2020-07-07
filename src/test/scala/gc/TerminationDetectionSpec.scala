@@ -15,15 +15,15 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
   val aToken: Token = Token(A, 0)
   val bToken: Token = Token(B, 0)
   val cToken: Token = Token(C, 0)
-  val selfA: ActorRef[Message] = ActorRef(Some(aToken), Some(A), A)
-  val selfB: ActorRef[Message] = ActorRef(Some(bToken), Some(B), B)
+  val selfA: RefOb[Message] = RefOb(Some(aToken), Some(A), A)
+  val selfB: RefOb[Message] = RefOb(Some(bToken), Some(B), B)
 
   "Basic cycles" should {
     // A has ref x:A->B and B has ref y:B->A.
     val xToken = Token(A, 1)
     val yToken = Token(B, 1)
-    val x = ActorRef(Some(xToken), Some(A), B) // x: a->b
-    val y = ActorRef(Some(yToken), Some(B), A) // y: b->a
+    val x = RefOb(Some(xToken), Some(A), B) // x: a->b
+    val y = RefOb(Some(yToken), Some(B), A) // y: b->a
     "be detected when they appear blocked" in {
       // A has sent 1 message along x and B has sent 2 along y. The message counts agree.
       val dummyA: ActorSnapshot = ActorSnapshot(
@@ -69,5 +69,5 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
       terminated should contain only(B)
     }
   }
-  // TODO: tests for more complex configurations, such as 
+  // TODO: tests for more complex configurations, such as
 }

@@ -21,9 +21,9 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
 
-case class ActorRef[-T <: Message](token: Option[Token],
-                                   owner: Option[AkkaActorRef[Nothing]],
-                                   target: AkkaActorRef[GCMessage[T]],
+case class RefOb[-T <: Message](token: Option[Token],
+                                owner: Option[AkkaActorRef[Nothing]],
+                                target: AkkaActorRef[GCMessage[T]],
                                    ) {
   private var context: Option[ActorContext[_ <: Message]] = None
 
@@ -59,9 +59,9 @@ case class ActorRef[-T <: Message](token: Option[Token],
  * @param sentCounts [[ActorContext.sentCounts]]
  * @param recvCounts [[ActorContext.receivedCounts]]
  */
-case class ActorSnapshot(refs: Set[AnyActorRef],
-                         owners: Set[AnyActorRef],
-                         created: Seq[AnyActorRef],
-                         releasedRefs: Set[AnyActorRef],
+case class ActorSnapshot(refs: Set[AnyRefOb],
+                         owners: Set[AnyRefOb],
+                         created: Seq[AnyRefOb],
+                         releasedRefs: Set[AnyRefOb],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])

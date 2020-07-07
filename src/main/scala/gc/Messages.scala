@@ -9,7 +9,7 @@ trait Message {
   /**
    * This method must return all the references contained in the message.
    */
-  def refs: Iterable[AnyActorRef]
+  def refs: Iterable[AnyRefOb]
 }
 
 /**
@@ -34,8 +34,8 @@ final case class AppMsg[+T <: Message](payload: T, token: Option[Token]) extends
  * @tparam T
  */
 final case class ReleaseMsg[+T <: Message](from: AkkaActorRef[GCMessage[Nothing]],
-                                           releasing: Iterable[AnyActorRef],
-                                           created: Iterable[AnyActorRef],
+                                           releasing: Iterable[AnyRefOb],
+                                           created: Iterable[AnyRefOb],
                                            ) extends GCMessage[T]
 
 /**

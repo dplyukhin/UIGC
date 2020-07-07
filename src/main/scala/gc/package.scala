@@ -15,6 +15,8 @@ package object gc {
   /**
    * A type representing any kind of ActorRef.
    */
-  type AnyActorRef = ActorRef[Nothing]
+  type AnyRefOb = RefOb[Nothing]
+  type AnyName = AkkaActorRef[Nothing]
+
 
 }

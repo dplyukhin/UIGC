@@ -5,7 +5,7 @@ import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 trait NoRefsMessage extends Message {
-  override def refs: Iterable[AnyActorRef] = Seq()
+  override def refs: Iterable[AnyRefOb] = Seq()
 }
 
 sealed trait testMessage extends Message
@@ -18,8 +18,8 @@ case object ReleaseB extends testMessage with NoRefsMessage
 case object Hello extends testMessage with NoRefsMessage
 case object Spawned extends testMessage with NoRefsMessage
 case object Terminated extends testMessage with NoRefsMessage
-case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-  override def refs: Iterable[AnyActorRef] = Iterable(ref)
+case class GetRef(ref: RefOb[testMessage]) extends testMessage with Message {
+  override def refs: Iterable[AnyRefOb] = Iterable(ref)
 }
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
@@ -73,8 +73,8 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB: ActorRef[testMessage] = _
-    var actorC: ActorRef[testMessage] = _
+    var actorB: RefOb[testMessage] = _
+    var actorC: RefOb[testMessage] = _
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Init =>
@@ -102,7 +102,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC: ActorRef[testMessage]= _
+    var actorC: RefOb[testMessage]= _
     probe.ref ! Spawned
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
