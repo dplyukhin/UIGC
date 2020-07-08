@@ -35,8 +35,9 @@ object TerminationDetector {
    */
   private def collectReachable(A: AnyName, S: mutable.Set[AnyName], U: mutable.Map[AnyName, mutable.Set[AnyRefOb]]): Unit = {
     S += A // add this to the set
+    val neighbors = U(A)
     U -= A // remove it from the map
-    for (refob <- U(A)) {
+    for (refob <- neighbors) {
       // for each outgoing unreleased refob
       val B = refob.target
       if (!S.contains(B)) {
