@@ -19,7 +19,7 @@ case object ShareCWithB extends KnowledgeTestMessage with NoRefsMessage
 case class TellB(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
 case class TellC(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
 // a message containing a single reference, used in above scenario
-case class Ref(ref: RefOb[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
+case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
   override def refs: Iterable[AnyRefOb] = Iterable(ref)
 }
 // sent by tester to tell A to release C
@@ -28,9 +28,9 @@ case object ForgetC extends KnowledgeTestMessage with NoRefsMessage
 class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[KnowledgeTestMessage] = testKit.createTestProbe[KnowledgeTestMessage]()
   var aKnowledge: ActorSnapshot = _ // A's knowledge set, gets updated as the test progresses
-  var gcRefAToC: RefOb[KnowledgeTestMessage] = _ // A's reference to C
-  var gcRefAToB: RefOb[KnowledgeTestMessage] = _ // A's reference to B
-  var gcRefBToC: RefOb[KnowledgeTestMessage] = _ // B's reference to C
+  var gcRefAToC: ActorRef[KnowledgeTestMessage] = _ // A's reference to C
+  var gcRefAToB: ActorRef[KnowledgeTestMessage] = _ // A's reference to B
+  var gcRefBToC: ActorRef[KnowledgeTestMessage] = _ // B's reference to C
 
   "Knowledge sets" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
@@ -147,8 +147,8 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
-    var actorB: RefOb[KnowledgeTestMessage] = _
-    var actorC: RefOb[KnowledgeTestMessage] = _
+    var actorB: ActorRef[KnowledgeTestMessage] = _
+    var actorC: ActorRef[KnowledgeTestMessage] = _
 
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {
@@ -182,7 +182,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[KnowledgeTestMessage]) extends AbstractBehavior[KnowledgeTestMessage](context) {
-    var actorC: RefOb[KnowledgeTestMessage]= _
+    var actorC: ActorRef[KnowledgeTestMessage]= _
 
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {

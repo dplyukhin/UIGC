@@ -18,7 +18,7 @@ case object ReleaseB extends testMessage with NoRefsMessage
 case object Hello extends testMessage with NoRefsMessage
 case object Spawned extends testMessage with NoRefsMessage
 case object Terminated extends testMessage with NoRefsMessage
-case class GetRef(ref: RefOb[testMessage]) extends testMessage with Message {
+case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
   override def refs: Iterable[AnyRefOb] = Iterable(ref)
 }
 
@@ -73,8 +73,8 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB: RefOb[testMessage] = _
-    var actorC: RefOb[testMessage] = _
+    var actorB: ActorRef[testMessage] = _
+    var actorC: ActorRef[testMessage] = _
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Init =>
@@ -102,7 +102,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC: RefOb[testMessage]= _
+    var actorC: ActorRef[testMessage]= _
     probe.ref ! Spawned
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {

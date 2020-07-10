@@ -24,7 +24,7 @@ class ActorContext[T <: Message](
 ) {
 
   /** This actor's self reference. */
-  val self = new RefOb[T](Some(newToken()), Some(context.self), context.self)
+  val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
 
   /** References this actor owns. Starts with its self reference. */
@@ -34,7 +34,7 @@ class ActorContext[T <: Message](
    * Maps a key reference to a value set of references that were creating using that key. */
   private val createdUsing: mutable.Map[AnyRefOb, Seq[AnyRefOb]] = mutable.Map()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  private var owners: Set[AnyRefOb] = Set(self, new RefOb[T](token, creator, context.self))
+  private var owners: Set[AnyRefOb] = Set(self, new ActorRef[T](token, creator, context.self))
   /** References to this actor discovered through [[ReleaseMsg]]. */
   private var released_owners: Set[AnyRefOb] = Set()
 
@@ -51,13 +51,13 @@ class ActorContext[T <: Message](
    * @param factory The behavior factory for the spawned actor.
    * @param name The name of the spawned actor.
    * @tparam S The type of application-level messages to be handled by this actor.
-   * @return The [[RefOb]] of the spawned actor.
+   * @return The [[ActorRef]] of the spawned actor.
    */
-  def spawn[S <: Message](factory: ActorFactory[S], name: String): RefOb[S] = {
+  def spawn[S <: Message](factory: ActorFactory[S], name: String): ActorRef[S] = {
     val x = newToken()
     val self = context.self
     val child = context.spawn(factory(self, x), name)
-    val ref = new RefOb[S](Some(x), Some(self), child)
+    val ref = new ActorRef[S](Some(x), Some(self), child)
     ref.initialize(this)
     refs += ref
     ref
@@ -142,15 +142,15 @@ class ActorContext[T <: Message](
    * Creates a reference to an actor to be sent to another actor and adds it to the created collection.
    * e.g. A has x: A->B and y: A->C. A could create z: B->C using y and send it to B along x.
  *
-   * @param target The [[RefOb]] the created reference points to.
-   * @param owner  The [[RefOb]] that will receive the created reference.
+   * @param target The [[ActorRef]] the created reference points to.
+   * @param owner  The [[ActorRef]] that will receive the created reference.
    * @tparam S The type that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target: RefOb[S], owner: AnyRefOb): RefOb[S] = {
+  def createRef[S <: Message](target: ActorRef[S], owner: AnyRefOb): ActorRef[S] = {
     val token = newToken()
     // create reference and add it to the created map
-    val sharedRef = new RefOb[S](Some(token), Some(owner.target), target.target)
+    val sharedRef = new ActorRef[S](Some(token), Some(owner.target), target.target)
     val seq = createdUsing getOrElse(target, Seq())
     createdUsing(target) = seq :+ sharedRef
     sharedRef
@@ -232,7 +232,7 @@ class ActorContext[T <: Message](
   }
 
   /**
-   * Creates a new [[Token]] for use in an [[RefOb]]. Increments the internal token count of the actor.
+   * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
    *
    * @return The new token.
    */

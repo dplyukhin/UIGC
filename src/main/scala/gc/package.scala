@@ -13,10 +13,17 @@ package object gc {
   type ActorFactory[T <: Message] = (AkkaActorRef[Nothing], Token) => Behavior[T]
 
   /**
-   * A type representing any kind of ActorRef.
+   * An alias for any vanilla actor ref.
    */
-  type AnyRefOb = RefOb[Nothing]
   type AnyName = AkkaActorRef[Nothing]
 
+  /**
+   * An alias for the GC actor ref to help differentiate it from Akka's.
+   */
+  type RefOb[T] = ActorRef[T]
 
+  /**
+   * A type representing any kind of ActorRef.
+   */
+  type AnyRefOb = ActorRef[Nothing]
 }

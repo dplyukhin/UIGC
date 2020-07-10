@@ -5,10 +5,10 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import akka.actor.typed.{Behavior => AkkaBehavior}
 
 sealed trait ReleaseSpecMsg extends Message
-case class SendRefs(x: RefOb[ReleaseSpecMsg], y: RefOb[ReleaseSpecMsg]) extends ReleaseSpecMsg with Message {
+case class SendRefs(x: ActorRef[ReleaseSpecMsg], y: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with Message {
   override def refs: Iterable[AnyRefOb] = Seq(x, y)
 }
-case class RefInfo(ref: RefOb[ReleaseSpecMsg]) extends ReleaseSpecMsg with NoRefsMessage
+case class RefInfo(ref: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with NoRefsMessage
 case object Create extends ReleaseSpecMsg with NoRefsMessage
 case class State(snapshot: Option[ActorSnapshot]) extends ReleaseSpecMsg with NoRefsMessage
 
@@ -37,8 +37,8 @@ class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     def apply(): AkkaBehavior[ReleaseSpecMsg] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
   class ActorA(context: ActorContext[ReleaseSpecMsg]) extends AbstractBehavior[ReleaseSpecMsg](context) {
-    val B: RefOb[ReleaseSpecMsg] = context.spawn(ActorB(), "B")
-    val C: RefOb[ReleaseSpecMsg] = context.spawn(ActorO(), "C")
+    val B: ActorRef[ReleaseSpecMsg] = context.spawn(ActorB(), "B")
+    val C: ActorRef[ReleaseSpecMsg] = context.spawn(ActorO(), "C")
     probe.ref ! RefInfo(B)
     override def onMessage(msg: ReleaseSpecMsg): Behavior[ReleaseSpecMsg] = {
       msg match {
@@ -59,9 +59,9 @@ class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[ReleaseSpecMsg]) extends AbstractBehavior[ReleaseSpecMsg](context) {
-    var D: RefOb[ReleaseSpecMsg] = _
-    var x: RefOb[ReleaseSpecMsg] = _ // points to C
-    var y: RefOb[ReleaseSpecMsg] = _ // points to C
+    var D: ActorRef[ReleaseSpecMsg] = _
+    var x: ActorRef[ReleaseSpecMsg] = _ // points to C
+    var y: ActorRef[ReleaseSpecMsg] = _ // points to C
     override def onMessage(msg: ReleaseSpecMsg): Behavior[ReleaseSpecMsg] = {
       msg match {
         case SendRefs(x, y) =>

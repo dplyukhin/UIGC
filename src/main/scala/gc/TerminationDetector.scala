@@ -1,13 +1,11 @@
 package gc
 
-import akka.actor.typed.{ActorRef => AkkaActorRef}
-
 import scala.collection.mutable
 
 
 object TerminationDetector {
   /** Actor names that were expected to be found in the set of snapshots  */
-  private var missingOwners: Set[AkkaActorRef[Nothing]] = Set()
+  private var missingOwners: Set[AnyName] = Set()
 
   def addSnapshot(): Unit = {}
 
@@ -29,19 +27,20 @@ object TerminationDetector {
   /**
    * Given an actor name, it will recursively move all of the actors reachable through the given actor's unreleased
    * refobs from the unreleased map to a set.
-   * @param A An actor name.
-   * @param S A set for containing all the actors reachable from A.
-   * @param U A map from names to their unreleased refobs.
+   * @param actor An actor name.
+   * @param nonterminated A set for containing all the actors reachable from A.
+   * @param unreleasedRefs A map from names to their unreleased refobs.
    */
-  private def collectReachable(A: AnyName, S: mutable.Set[AnyName], U: mutable.Map[AnyName, mutable.Set[AnyRefOb]]): Unit = {
-    S += A // add this to the set
-    val neighbors = U(A)
-    U -= A // remove it from the map
-    for (refob <- neighbors) {
+  private def collectReachable(actor: AnyName, nonterminated: mutable.Set[AnyName], unreleasedRefs: mutable.Map[AnyName, mutable.Set[AnyRefOb]]): Unit = {
+    nonterminated += actor // add this to the set
+    val refobs = unreleasedRefs(actor)
+    unreleasedRefs -= actor // remove it from the map
+    for (refob <- refobs) {
       // for each outgoing unreleased refob
       val B = refob.target
-      if (!S.contains(B)) {
-        collectReachable(B, S, U) // explore the neighbors
+      // if we haven't seen it already
+      if (!nonterminated.contains(B) && unreleasedRefs.contains(B)) {
+        collectReachable(B, nonterminated, unreleasedRefs) // explore the refobs
       }
     }
   }
