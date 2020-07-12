@@ -66,7 +66,8 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
       )
 
       val terminated = TerminationDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
-      terminated should contain only(B)
+//      terminated should contain only(B)
+      terminated shouldBe empty
     }
   }
   // TODO: tests for more complex configurations, such as

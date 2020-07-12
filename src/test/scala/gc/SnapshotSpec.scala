@@ -20,7 +20,7 @@ case class TellB(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with No
 case class TellC(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
 // a message containing a single reference, used in above scenario
 case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
-  override def refs: Iterable[AnyRefOb] = Iterable(ref)
+  override def refs: Iterable[AnyActorRef] = Iterable(ref)
 }
 // sent by tester to tell A to release C
 case object ForgetC extends KnowledgeTestMessage with NoRefsMessage

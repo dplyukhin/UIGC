@@ -6,7 +6,7 @@ import akka.actor.typed.{Behavior => AkkaBehavior}
 
 sealed trait ReleaseSpecMsg extends Message
 case class SendRefs(x: ActorRef[ReleaseSpecMsg], y: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with Message {
-  override def refs: Iterable[AnyRefOb] = Seq(x, y)
+  override def refs: Iterable[AnyActorRef] = Seq(x, y)
 }
 case class RefInfo(ref: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with NoRefsMessage
 case object Create extends ReleaseSpecMsg with NoRefsMessage

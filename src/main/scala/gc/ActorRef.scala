@@ -59,9 +59,9 @@ case class ActorRef[-T <: Message](token: Option[Token],
  * @param sentCounts [[ActorContext.sentCounts]]
  * @param recvCounts [[ActorContext.receivedCounts]]
  */
-case class ActorSnapshot(refs: Set[AnyRefOb],
-                         owners: Set[AnyRefOb],
-                         created: Seq[AnyRefOb],
-                         releasedRefs: Set[AnyRefOb],
+case class ActorSnapshot(refs: Set[AnyActorRef],
+                         owners: Set[AnyActorRef],
+                         created: Seq[AnyActorRef],
+                         releasedRefs: Set[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
