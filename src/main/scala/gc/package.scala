@@ -16,5 +16,4 @@ package object gc {
    * A type representing any kind of ActorRef.
    */
   type AnyActorRef = ActorRef[Nothing]
-
 }

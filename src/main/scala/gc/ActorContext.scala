@@ -47,6 +47,7 @@ class ActorContext[T <: Message](
 
   /**
    * Spawns a new actor into the GC system and adds it to [[refs]].
+   *
    * @param factory The behavior factory for the spawned actor.
    * @param name The name of the spawned actor.
    * @tparam S The type of application-level messages to be handled by this actor.
@@ -140,8 +141,9 @@ class ActorContext[T <: Message](
   /**
    * Creates a reference to an actor to be sent to another actor and adds it to the created collection.
    * e.g. A has x: A->B and y: A->C. A could create z: B->C using y and send it to B along x.
+ *
    * @param target The [[ActorRef]] the created reference points to.
-   * @param owner The [[ActorRef]] that will receive the created reference.
+   * @param owner  The [[ActorRef]] that will receive the created reference.
    * @tparam S The type that the actor handles.
    * @return The created reference.
    */
@@ -231,6 +233,7 @@ class ActorContext[T <: Message](
 
   /**
    * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
+   *
    * @return The new token.
    */
   private def newToken(): Token = {
