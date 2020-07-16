@@ -2,6 +2,7 @@ package gc
 
 import akka.actor.typed.{ActorRef => AkkaActorRef}
 
+
 /**
  * An opaque and globally unique token.
  *
@@ -25,28 +26,19 @@ case class ActorRef[-T <: Message](token: Option[Token],
                                    owner: Option[AkkaActorRef[Nothing]],
                                    target: AkkaActorRef[GCMessage[T]],
                                    ) {
-  private var context: Option[ActorContext[_ <: Message]] = None
+  private var state: Option[ActorState[T, ActorName]] = None
 
-  def initialize[S <: Message](_context: ActorContext[S]): Unit = {
-    context = Some(_context)
+  def initialize[S <: Message](_state: ActorState[T, ActorName]): Unit = {
+    state = Some(_state)
   }
   def !(msg: T): Unit = {
-    target.tell(AppMsg(msg, token))
-    context.get.incSentCount(token)
+    target ! AppMsg(msg, token)
+    state.get.incSentCount(token)
   }
 
   override def toString: String = {
     f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
   }
-
-//  override def equals(obj: Any): Boolean = {
-//    obj match {
-//      case ActorRef(token, owner, target) => (
-//        this.token == token && this.owner == owner && this.target == target
-//        )
-//      case _ => false
-//    }
-//  }
 }
 
 
