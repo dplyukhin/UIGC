@@ -1,14 +1,12 @@
 package gc.executions
 
-import gc.Token
-
-case class DummyRef(token: Option[DummyToken], owner: Option[DummyName], target: DummyName)
+import gc.{ActorRef, AnyActorRef}
 
 object DummyRef {
-  def apply(owner: DummyName, target: DummyName): DummyRef = new DummyRef(Some(DummyToken()), Some(owner), target)
+  def apply(owner: DummyName, target: DummyName): AnyActorRef = new ActorRef(Some(DummyToken()), Some(owner), target)
 }
 
-case class DummyToken(n: Int) extends Token
+case class DummyToken(n: Int)
 
 object DummyToken {
   private var count = 0
