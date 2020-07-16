@@ -4,13 +4,13 @@ package gc.executions
  * A unique address to an actor.
  * @param n Discriminator value.
  */
-case class Address(n: Int)
+case class DummyName(n: Int)
 
-object Address {
+object DummyName {
   // just use an internal counter to make unique addresses
   private var count: Int = 0
-  def apply(): Address = {
-    val name = new Address(count)
+  def apply(): DummyName = {
+    val name = new DummyName(count)
     count += 1
     name
   }

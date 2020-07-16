@@ -1,17 +1,19 @@
 package gc.executions
 
-case class Ref(token: Option[Token], owner: Option[Address], target: Address)
+import gc.Token
 
-object Ref {
-  def apply(owner: Address, target: Address): Ref = new Ref(Some(Token()), Some(owner), target)
+case class DummyRef(token: Option[DummyToken], owner: Option[DummyName], target: DummyName)
+
+object DummyRef {
+  def apply(owner: DummyName, target: DummyName): DummyRef = new DummyRef(Some(DummyToken()), Some(owner), target)
 }
 
-case class Token(n: Int)
+case class DummyToken(n: Int) extends Token
 
-object Token {
+object DummyToken {
   private var count = 0
-  def apply(): Token = {
-    val t = new Token(count)
+  def apply(): DummyToken = {
+    val t = new DummyToken(count)
     count += 1
     t
   }

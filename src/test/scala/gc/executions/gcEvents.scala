@@ -2,7 +2,7 @@ package gc.executions
 
 sealed trait Event
 
-case class Spawn(parent: Address, child: Address) extends Event
+case class Spawn(parent: DummyName, child: DummyName) extends Event
 case class Send() extends Event
 case class Receive() extends Event
 case class Idle() extends Event

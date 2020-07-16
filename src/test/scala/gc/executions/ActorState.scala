@@ -2,11 +2,12 @@ package gc.executions
 
 // TODO: write a better method for creating an ActorState from an existing ActorState
 
+@deprecated
 case class ActorState(busy: Boolean = true,
-                      activeRefs: Set[Ref] = Set(),
-                      createdRefs: Set[Ref] = Set(),
-                      owners: Set[Ref] = Set(),
-                      released: Set[Ref] = Set(),
+                      activeRefs: Set[DummyRef] = Set(),
+                      createdRefs: Set[DummyRef] = Set(),
+                      owners: Set[DummyRef] = Set(),
+                      released: Set[DummyRef] = Set(),
                       sent: Map[Token, Int] = Map(),
                       recv: Map[Token, Int] = Map()) {
   /**

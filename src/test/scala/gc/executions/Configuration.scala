@@ -9,27 +9,27 @@ import gc.Message
  * @param receptionists Actors that can receive messages from external actors.
  * @param externals Actors that are external to this GC configuration.
  */
-case class Configuration(states: Map[Address, ActorState],
-                         msgs: Map[Address, Set[Message]],
-                         receptionists: Set[Address],
-                         externals: Set[Address])
+case class Configuration(states: Map[DummyName, ActorState],
+                         msgs: Map[DummyName, Set[Message]],
+                         receptionists: Set[DummyName],
+                         externals: Set[DummyName])
 
 // TODO: write a better method for creating a Configuration from an existing Configuration
 
 object Configuration {
-  def apply(states: Map[Address, ActorState],
-            msgs: Map[Address, Set[Message]],
-            receptionists: Set[Address],
-            externals: Set[Address]): Configuration = new Configuration(states, msgs, receptionists, externals)
+  def apply(states: Map[DummyName, ActorState],
+            msgs: Map[DummyName, Set[Message]],
+            receptionists: Set[DummyName],
+            externals: Set[DummyName]): Configuration = new Configuration(states, msgs, receptionists, externals)
   /**
    * Default constructor.
    * @return The initial configuration.
    */
   def apply(): Configuration = {
-    val A = Address()
-    val E = Address()
-    val x = Ref(A, E)
-    val y = Ref(A, A)
+    val A = DummyName()
+    val E = DummyName()
+    val x = DummyRef(A, E)
+    val y = DummyRef(A, A)
     val aState = ActorState(activeRefs = Set(x, y), owners = Set(y))
     new Configuration(
       states = Map(A -> aState),
@@ -39,7 +39,7 @@ object Configuration {
     )
   }
 
-  def isBusy(c: Configuration, a: Address): Boolean = {
+  def isBusy(c: Configuration, a: DummyName): Boolean = {
     c.states(a).busy
   }
 
@@ -47,8 +47,8 @@ object Configuration {
     e match {
       case Spawn(parent, child) => {
         // create new references
-        val x = Ref(parent, child) // parent's ref to child
-        val y = Ref(child, child) // child's self-ref
+        val x = DummyRef(parent, child) // parent's ref to child
+        val y = DummyRef(child, child) // child's self-ref
         // create child's state
         val childState = ActorState(activeRefs = Set(y), owners = Set(x, y))
         // add the new active ref to the parent's state
