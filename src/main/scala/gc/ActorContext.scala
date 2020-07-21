@@ -46,17 +46,35 @@ class ActorContext[T <: Message](
   private var tokenCount: Int = 0
 
   /**
-   * Spawns a new actor into the GC system and adds it to [[refs]].
+   * Spawn a new named actor into the GC system.
    *
    * @param factory The behavior factory for the spawned actor.
    * @param name The name of the spawned actor.
-   * @tparam S The type of application-level messages to be handled by this actor.
-   * @return The [[ActorRef]] of the spawned actor.
+   * @tparam S The type of application-level messages to be handled by the new actor.
+   * @return An [[ActorRef]] for the spawned actor.
    */
   def spawn[S <: Message](factory: ActorFactory[S], name: String): ActorRef[S] = {
+    spawnImpl[S](factory, Some(name))
+  }
+
+  /**
+   * Spawn a new anonymous actor into the GC system.
+   *
+   * @param factory The behavior factory for the spawned actor.
+   * @tparam S The type of application-level messages to be handled by the new actor.
+   * @return An [[ActorRef]] for the spawned actor.
+   */
+  def spawnAnonymous[S <: Message](factory: ActorFactory[S]): ActorRef[S] = {
+    spawnImpl[S](factory, None)
+  }
+
+  private def spawnImpl[S <: Message](factory: ActorFactory[S], name: Option[String]): ActorRef[S] = {
     val x = newToken()
     val self = context.self
-    val child = context.spawn(factory(self, x), name)
+    val child = name match {
+      case Some(name) => context.spawn(factory(self, x), name)
+      case None       => context.spawnAnonymous(factory(self, x))
+    }
     val ref = new ActorRef[S](Some(x), Some(self), child)
     ref.initialize(this)
     refs += ref
