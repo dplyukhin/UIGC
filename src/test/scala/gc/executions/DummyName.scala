@@ -1,12 +1,10 @@
 package gc.executions
 
-import gc.Name
-
 /**
  * A unique address to an actor.
  * @param n Discriminator value.
  */
-case class DummyName(n: Int) extends Name
+case class DummyName(n: Int)
 
 object DummyName {
   // just use an internal counter to make unique addresses
