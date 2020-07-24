@@ -30,12 +30,11 @@ class Configuration(var states: Map[DummyName, DummyState],
         // update the configuration
         states += (child -> childState)
 
-      case CreateRef(actor: DummyName, refToOwner: DummyRef, refToTarget: DummyRef, newToken: DummyToken) =>
+      case CreateRef(actor, refToOwner, refToTarget, newToken) =>
         val state = states(actor)
         state.createRef(refToTarget, refToOwner)
 
-
-      case Send(sender: DummyName, recipient: DummyName, message: AppMessage) =>
+      case Send(sender, recipient, message) =>
         // get the sender's state
         val senderState = states(sender)
         // increment its send count
@@ -44,8 +43,7 @@ class Configuration(var states: Map[DummyName, DummyState],
         val mailbox = msgs(recipient)
         mailbox.enqueue(message)
 
-
-      case Receive(recipient: DummyName) =>
+      case Receive(recipient) =>
         // take the next message out from the queue, going idle if empty
           val message = msgs(recipient).dequeue
           message match {
@@ -54,6 +52,7 @@ class Configuration(var states: Map[DummyName, DummyState],
               val recipientState = states(recipient)
               recipientState.incReceivedCount(travelToken)
               recipientState.handleMessage(refs)
+              // become busy as actor does some nonspecified sequence of actions
               busy(recipient)
             case ReleaseMessage(releasing, created) =>
               // if it's a release message, handle that in its own case
@@ -64,7 +63,7 @@ class Configuration(var states: Map[DummyName, DummyState],
       case Idle(actor) =>
         busy += (actor -> false)
 
-      case SendRelease(actor: DummyName, refs: Iterable[DummyRef]) =>
+      case SendRelease(actor, refs) =>
         val actorState = states(actor)
         // have actor release the refs and update its state
         val targets = actorState.release(refs)
@@ -97,8 +96,8 @@ class Configuration(var states: Map[DummyName, DummyState],
 
       case Send(sender, recipient, message) =>
         // sender has the reference that the message is to be sent on
-        // sender is not sending any refs that have been sent already
         states(sender).activeRefs.contains(DummyRef(message.travelToken, Some(sender), recipient)) && (
+          // sender is not sending any refs that have been sent already
           message.refs forall { ref =>
               !sentRefs.contains(ref.token.get)
               // NOTE: what about case where token/owner is null?
@@ -117,9 +116,6 @@ class Configuration(var states: Map[DummyName, DummyState],
         // the actor has to have all the refs being released active
         val active = states(actor).activeRefs
         refs forall(ref => active contains ref)
-
-      case Release(actor, releasing, created) =>
-        states contains actor
 
       case Snapshot(actor) =>
         // actor is idle

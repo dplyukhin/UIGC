@@ -14,18 +14,16 @@ case class Send(sender: DummyName,
 case class Receive(recipient: DummyName) extends Event
 
 /** An actor creates a reference to the actor targeted by [[refToTarget]] for the actor targeted by [[refToOwner]]. */
-case class CreateRef(actor: DummyName, refToOwner: DummyRef, refToTarget: DummyRef, newToken: DummyToken)
+case class CreateRef(actor: DummyName,
+                     refToOwner: DummyRef,
+                     refToTarget: DummyRef,
+                     newToken: DummyToken) extends Event
 
 /** An actor goes idle. */
 case class Idle(actor: DummyName) extends Event
 
 /** An actor deactivates references and sends a release message. */
 case class SendRelease(actor: DummyName, refs: Iterable[DummyRef]) extends Event
-
-/** An actor receives and handles a release message. */
-case class Release(actor: DummyName,
-                   releasing: Iterable[DummyRef],
-                   created: Iterable[DummyRef]) extends Event
 
 /** An actor takes a snapshot. */
 case class Snapshot(actor: DummyName) extends Event
