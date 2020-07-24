@@ -9,7 +9,7 @@ case class DummyState(self: DummyName,
                       var released: Set[DummyRef] = Set(),
                       var sent: mutable.Map[DummyToken, Int] = mutable.Map(),
                       var recv: mutable.Map[DummyToken, Int] = mutable.Map()) {
-  def spawn(r: DummyRef): Unit = {
+  def addRef(r: DummyRef): Unit = {
     activeRefs += r
   }
 
@@ -86,5 +86,21 @@ case class DummyState(self: DummyName,
     }
   }
 
-  def snapshot(): Unit = {}
+  def snapshot(): DummySnapshot = {
+    DummySnapshot(
+      activeRefs,
+      createdRefs.values.toSet.flatten,
+      owners,
+      released,
+      sent.toMap,
+      recv.toMap
+    )
+  }
 }
+
+case class DummySnapshot(activeRefs: Set[DummyRef],
+                    createdRefs: Set[DummyRef],
+                    owners: Set[DummyRef],
+                    released: Set[DummyRef],
+                    sent: Map[DummyToken, Int],
+                    recv: Map[DummyToken, Int])
