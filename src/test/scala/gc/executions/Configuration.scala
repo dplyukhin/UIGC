@@ -10,9 +10,9 @@ import scala.collection.mutable
  * @param receptionists Actors that can receive messages from external actors.
  */
 class Configuration(var states: Map[DummyName, DummyState],
-                         var busy: Map[DummyName, Boolean],
-                         var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
-                         var receptionists: Set[DummyName]) {
+                    var busy: Map[DummyName, Boolean],
+                    var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
+                    var receptionists: Set[DummyName]) {
   /** This set tracks what references have been sent in messages throughout this configuration. */
   val sentRefs: mutable.Set[DummyToken] = mutable.Set()
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
@@ -63,7 +63,7 @@ class Configuration(var states: Map[DummyName, DummyState],
       case Idle(actor) =>
         busy += (actor -> false)
 
-      case SendRelease(actor, refs) =>
+      case Deactivate(actor, refs) =>
         val actorState = states(actor)
         // have actor release the refs and update its state
         val targets = actorState.release(refs)
@@ -91,10 +91,16 @@ class Configuration(var states: Map[DummyName, DummyState],
         !states.contains(child) && states.contains(parent) && busy (parent)
 
       case CreateRef(actor, refToOwner, refToTarget, newToken) =>
+        if (!states.contains(actor)) {
+          return false
+        }
         val state = states(actor)
         state.activeRefs.contains(refToOwner) && state.activeRefs.contains(refToTarget)
 
       case Send(sender, recipient, message) =>
+        if (!states.contains(sender) || !states.contains(recipient)) {
+          return false
+        }
         // sender has the reference that the message is to be sent on
         states(sender).activeRefs.contains(DummyRef(message.travelToken, Some(sender), recipient)) && (
           // sender is not sending any refs that have been sent already
@@ -106,20 +112,23 @@ class Configuration(var states: Map[DummyName, DummyState],
 
       case Receive(recipient) =>
         // legal when mailbox isn't empty and the actor is idle
-        msgs(recipient).nonEmpty && !busy(recipient)
+        states.contains(recipient) && msgs(recipient).nonEmpty && !busy(recipient)
 
       case Idle(actor) =>
         // an actor must be busy and have an empty mailbox to go idle
-        busy(actor) && msgs(actor).isEmpty
+        states.contains(actor) && busy(actor) && msgs(actor).isEmpty
 
-      case SendRelease(actor, refs) =>
+      case Deactivate(actor, refs) =>
+        if (!states.contains(actor)) {
+          return false
+        }
         // the actor has to have all the refs being released active
         val active = states(actor).activeRefs
         refs forall(ref => active contains ref)
 
       case Snapshot(actor) =>
         // actor is idle
-        !busy(actor)
+        states.contains(actor) && !busy(actor)
     }
   }
 }
