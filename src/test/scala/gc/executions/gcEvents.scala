@@ -23,7 +23,7 @@ case class CreateRef(actor: DummyName,
 case class Idle(actor: DummyName) extends Event
 
 /** An actor deactivates references and sends a release message. */
-case class Deactivate(actor: DummyName, refs: Iterable[DummyRef]) extends Event
+case class Deactivate(actor: DummyName, ref: DummyRef) extends Event
 
 /** An actor takes a snapshot. */
 case class Snapshot(actor: DummyName) extends Event

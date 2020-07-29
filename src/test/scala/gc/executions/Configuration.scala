@@ -63,10 +63,10 @@ class Configuration(var states: Map[DummyName, DummyState],
       case Idle(actor) =>
         busy += (actor -> false)
 
-      case Deactivate(actor, refs) =>
+      case Deactivate(actor, ref) =>
         val actorState = states(actor)
         // have actor release the refs and update its state
-        val targets = actorState.release(refs)
+        val targets = actorState.release(Iterable(ref))
         // set up messages for each target being released
         for ((target, (targetedRefs, createdRefs)) <- targets) {
           val mailbox = msgs(target)
@@ -118,13 +118,13 @@ class Configuration(var states: Map[DummyName, DummyState],
         // an actor must be busy and have an empty mailbox to go idle
         states.contains(actor) && busy(actor) && msgs(actor).isEmpty
 
-      case Deactivate(actor, refs) =>
+      case Deactivate(actor, ref) =>
         if (!states.contains(actor)) {
           return false
         }
-        // the actor has to have all the refs being released active
+        // the actor has to have the ref being deactivated
         val active = states(actor).activeRefs
-        refs forall(ref => active contains ref)
+        active.contains(ref)
 
       case Snapshot(actor) =>
         // actor is idle
@@ -158,7 +158,7 @@ object Configuration {
     new Configuration(
       states = Map(A -> aState),
       busy = Map(A -> true),
-      msgs = Map(),
+      msgs = Map(A -> mutable.Queue()),
       receptionists = Set(A),
     )
   }
