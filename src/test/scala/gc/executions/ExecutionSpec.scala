@@ -49,7 +49,6 @@ object ExecutionSpec {
     // pick random actor with nonempty mailbox
     for {
       a <- choose(0, c.names)
-//      recipient <- oneOf(c.msgs.keySet) suchThat {name => c.msgs(name).isEmpty}
     } yield (Receive(DummyName(a)), c)
   }
 
@@ -92,8 +91,22 @@ object ExecutionSpec {
     } yield (Snapshot(DummyName(name)), c)
   }
 
-//
+  def chain(c: Counters, i: Int): Gen[Execution] = {
+    if (i == 0) {
+      for {
+        (e, _) <- genEvent(c)
+      } yield Seq(e)
+    }
+    else {
+      for {
+        (e, c2) <- genEvent(c)
+        e2 <- chain(c2, i - 1)
+      } yield Seq(e) ++ e2
+    }
+  }
+
   def genExecution(): Gen[Execution] = Gen.sized { size =>
-    ???
+    val c = Counters()
+    chain(c, size)
   }
 }
