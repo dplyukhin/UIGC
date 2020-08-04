@@ -3,110 +3,148 @@ package gc.executions
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-object ExecutionSpec {
+object ExecutionSpec{
 
-  case class Counters(names: Int = 0, tokens: Int = 0)
-
-  def genRef(owner: DummyName, c: Counters): Gen[DummyRef] = {
-    for {
-      token <- choose(0, c.tokens)
-      target <- choose(0, c.names)
-    } yield DummyRef(Some(DummyToken(token)), Some(owner), DummyName(target))
-  }
-
-  def genEvent(c: Counters): Gen[(Event, Counters)] = {
-    oneOf(
-      genSpawn(c),
-      genSend(c),
-      genCreateRef(c),
-      genReceive(c),
-      genIdle(c),
-      genSnapshot(c),
-      genDeactivate(c)
+  def genEvent(c: Configuration): Gen[Event] = {
+    frequency(
+      (10, genSpawn(c)),
+      (10, genSend(c)),
+      (10, genCreateRef(c)),
+      (10, genReceive(c)),
+      (1, genIdle(c)),
+      (10, genSnapshot(c)),
+      (5, genDeactivate(c))
     )
   }
 
-  def genSpawn(c: Counters): Gen[(Spawn, Counters)] = {
+  def genSpawn(c: Configuration): Gen[Spawn] = {
+    val child = DummyName(DummyName.count + 1) // unique new name
     for {
-      a <- choose(0, c.names)
-      b <- choose(0, c.names + 1)
-    } yield (Spawn(DummyName(a), DummyName(b)), c)
+      parent <- oneOf(c.states.keySet)
+    } yield Spawn(parent, child)
   }
 
-  def genSend(c: Counters): Gen[(Send, Counters)] = {
+  def genSend(c: Configuration): Gen[Send] = {
     for {
-      sender <- choose(0, c.names)
-      recipient <- choose(0, c.names)
+      sender <- oneOf(c.states.keySet)
+      senderState = c.states(sender)
+      recipientRef <- oneOf(senderState.activeRefs)
+      recipient = recipientRef.target
       // pick some references created by this sender
-      refs <- containerOf[List, DummyRef](genRef(DummyName(sender), c))
-      // generate some token for the hypothetical ref that this message would travel on
-      token <- choose(0, c.tokens)
-      msg = AppMessage(refs, Some(DummyToken(token)))
-    } yield (Send(DummyName(sender), DummyName(recipient), msg), c)
+      createdRefs <- someOf(senderState.createdRefs.values.flatten.filter { ref => ref.owner.get == recipient })
+      msg = AppMessage(createdRefs, recipientRef.token)
+    } yield Send(sender, recipient, msg)
   }
 
-  def genReceive(c: Counters): Gen[(Receive, Counters)] = {
+  def genReceive(c: Configuration): Gen[Receive] = {
     // pick random actor with nonempty mailbox
     for {
-      a <- choose(0, c.names)
-    } yield (Receive(DummyName(a)), c)
+      recipient <- oneOf(c.msgs.keySet) suchThat {name => c.msgs(name).nonEmpty}
+    } yield Receive(recipient)
   }
 
-  def genCreateRef(c: Counters): Gen[(CreateRef, Counters)] = {
+  def genCreateRef(c: Configuration): Gen[CreateRef] = {
     for {
-      // pick random names
-      creator <- choose(0, c.names)
-      owner <- choose(0, c.names)
-      target <- choose(0, c.names)
-      // pick random tokens for the creator's refs
-      ownerToken <- choose(0, c.tokens)
-      targetToken <- choose(0, c.tokens)
-      // pick new token for the created ref
-      newToken <- choose(0, c.tokens + 1)
-      // assemble the refs
-      ownerRef = DummyRef(Some(DummyToken(ownerToken)), Some(DummyName(creator)), DummyName(owner))
-      targetRef = DummyRef(Some(DummyToken(targetToken)), Some(DummyName(creator)), DummyName(target))
-    } yield (
-      CreateRef(DummyName(creator), ownerRef, targetRef, DummyToken(newToken)),
-      c.copy(tokens = c.tokens + 1)
-    )
+      creator <- oneOf(c.states.keySet) // pick random creator
+      owner <- oneOf(c.states(creator).activeRefs) // pick random ref to new owner
+      target <- oneOf(c.states(creator).activeRefs) // pick random ref to target
+      token = DummyToken(DummyToken.count + 1) // unique token
+    } yield CreateRef(creator, owner, target, token)
   }
 
-  def genIdle(c: Counters): Gen[(Idle, Counters)] = {
-    for {
-      name <- choose(0, c.names)
-    } yield (Idle(DummyName(name)), c)
-  }
-
-  def genDeactivate(c: Counters): Gen[(Deactivate, Counters)] = {
-    for {
-      name <- choose(0, c.names)
-      ref <- genRef(DummyName(name), c)
-    } yield (Deactivate(DummyName(name), ref), c)
-  }
-
-  def genSnapshot(c: Counters): Gen[(Snapshot, Counters)] = {
-    for {
-      name <- choose(0, c.names)
-    } yield (Snapshot(DummyName(name)), c)
-  }
-
-  def chain(c: Counters, i: Int): Gen[Execution] = {
-    if (i == 0) {
+  def genIdle(c: Configuration): Gen[Idle] = {
+    val busyActors = c.busy.filter{case (_, busy) => busy}.keySet // get actors that are busy
+    val emptyMailboxActors = c.msgs.filter{case (_, mailbox) => mailbox.isEmpty}.keySet // get actors with no msgs
+    val boredActors = busyActors.intersect(emptyMailboxActors).toSeq
+    if (boredActors.nonEmpty) {
       for {
-        (e, _) <- genEvent(c)
-      } yield Seq(e)
+        bored <- oneOf(boredActors)
+      } yield Idle(bored)
+    }
+    else {
+      Idle(DummyName(0))
+    }
+  }
+
+  def genDeactivate(c: Configuration): Gen[Deactivate] = {
+    for {
+      actor <- oneOf(c.states.keySet) // pick random actor
+      refs <- oneOf(c.states(actor).activeRefs) // pick reference to deactivate
+    } yield Deactivate(actor, refs)
+  }
+
+  def genSnapshot(c: Configuration): Gen[Snapshot] = {
+    for {
+      idleActor <- oneOf(c.busy.keySet) suchThat(name => !c.busy(name)) // pick random idle actor
+    } yield Snapshot(idleActor)
+  }
+
+
+  def genExecution(c: Configuration, size: Int): Gen[Execution] = {
+    chain(c, size)
+  }
+
+  def genLegalEvent(c: Configuration): Gen[Event] = {
+    genEvent(c) suchThat {e => c.isLegal(e)}
+  }
+
+  def chain(c: Configuration, i: Int): Gen[Execution] = {
+    if (i <= 1) {
+      for {
+        e <- genLegalEvent(c)
+      } yield {
+        c.transition(e)
+        Seq(e)
+      }
     }
     else {
       for {
-        (e, c2) <- genEvent(c)
-        e2 <- chain(c2, i - 1)
-      } yield Seq(e) ++ e2
+        e <- genLegalEvent(c)
+        e2 <- chain(c, i - 1)
+      } yield {
+        c.transition(e)
+        Seq(e) ++ e2
+      }
     }
   }
 
-  def genExecution(): Gen[Execution] = Gen.sized { size =>
-    val c = Counters()
-    chain(c, size)
+  def main(args: Array[String]): Unit = {
+    val c = Configuration()
+    var execution: Execution = Seq()
+
+    var g = ExecutionSpec.genEvent(c) suchThat {e => c.isLegal(e)}
+
+    for (n <- 1 to 10) {
+//      println(s"Attempt $n")
+      val sample = g.sample
+      if (sample.isDefined) {
+        val event = sample.get
+//        println("Event: " + event)
+        c.transition(event)
+        execution :+= event
+        g = ExecutionSpec.genEvent(c) retryUntil { e => c.isLegal(e) }
+      }
+      else {
+        "Ran out of legal moves."
+      }
+    }
+    println("Execution:")
+    execution foreach {e => println(e)}
+    println("Configuration dump:\n" +
+      s"Sent refs: ${c.sentRefs}\n" +
+      s"Snapshots: ${c.snapshots}\n")
+    println("Configuration dump:")
+    println("States:")
+    for ((name, state) <- c.states) {
+      println(name)
+      println(s"\tActive: ${state.activeRefs}")
+      println(s"\tCreated: ${state.createdRefs}")
+      println(s"\tOwners: ${state.owners}")
+      println(s"\tReleased: ${state.released}")
+      println(s"\tSent: ${state.sent}")
+      println(s"\tRecv: ${state.recv}")
+      println(s"\tBusy?: ${c.busy(name)}")
+      println(s"\tMessages: ${c.msgs(name)}")
+    }
   }
 }

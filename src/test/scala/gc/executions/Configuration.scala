@@ -17,6 +17,7 @@ class Configuration(var states: Map[DummyName, DummyState],
   val sentRefs: mutable.Set[DummyToken] = mutable.Set()
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
   val snapshots: mutable.Seq[(DummyName, DummySnapshot)] = mutable.Seq()
+
   def transition(e: Event): Unit = {
     e match {
       case Spawn(parent, child) =>
@@ -29,6 +30,9 @@ class Configuration(var states: Map[DummyName, DummyState],
         states(parent).addRef(x)
         // update the configuration
         states += (child -> childState)
+        busy += (child -> true)
+        msgs += (child -> mutable.Queue())
+        DummyName.count += 1
 
       case CreateRef(actor, refToOwner, refToTarget, newToken) =>
         val state = states(actor)
@@ -88,7 +92,7 @@ class Configuration(var states: Map[DummyName, DummyState],
     e match {
       case Spawn(parent, child) =>
         // child doesn't already exist, parent is busy and exists
-        !states.contains(child) && states.contains(parent) && busy (parent)
+        !states.contains(child) && states.contains(parent) && busy(parent)
 
       case CreateRef(actor, refToOwner, refToTarget, newToken) =>
         if (!states.contains(actor)) {
@@ -148,7 +152,7 @@ object Configuration {
     // the initial actor
     val A = DummyName()
     // an "external" actor that does not do anything
-    val E = DummyName()
+    val E = DummyName(-1)
     // reference from that external actor to A
     val x = DummyRef(E, A)
     // reference from A to itself
