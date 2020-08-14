@@ -3,27 +3,54 @@ package gc.executions
 import scala.collection.mutable
 
 /**
+ * This class represents a simulated Actor System for the purpose of property-based testing.
+ * An [[Event]] can be used to transition the configuration from one global state to another
+ * if that event is legal in the current global state. For example, an actor cannot send a
+ * message to another actor that it does not have a reference to.
  *
- * @param states A map from actor addresses to their states.
- * @param busy A map from actor addresses to a boolean for whether they're busy or not (idle).
- * @param msgs A map from actor addresses to bags of messages.
- * @param receptionists Actors that can receive messages from external actors.
+ * In the initial configuration, there is just one actor that acts as a receptionist, i.e.
+ * it never terminates.
  */
-class Configuration(var states: Map[DummyName, DummyState],
-                    var busy: Map[DummyName, Boolean],
-                    var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
-                    var receptionists: Set[DummyName]) {
-  /** This set tracks what references have been sent in messages throughout this configuration. */
-  val sentRefs: mutable.Set[DummyToken] = mutable.Set()
+class Configuration(
+    var states: Map[DummyName, DummyState],
+    var busy: Map[DummyName, Boolean],
+    private var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
+    private var receptionists: Set[DummyName]
+) {
+
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
-  val snapshots: mutable.Seq[(DummyName, DummySnapshot)] = mutable.Seq()
+  var snapshots: Set[(DummyName, DummySnapshot)] = Set()
+
+
+  /**** Accessor methods ****/
+
+  def actors: Iterable[DummyName] = states.keys
+
+  def idle(actor: DummyName): Boolean = !busy(actor)
+
+  def pendingMessages(name: DummyName): Iterable[ExecMessage] = msgs(name)
+
+  def busyActors: Iterable[DummyName] = actors.filter { busy(_) }
+
+  def idleActors: Iterable[DummyName] = actors.filter { idle }
+
+  /** Returns the actors that are busy or have pending messages */
+  def unblockedActors: Iterable[DummyName] = actors.filter {
+    actor => busy(actor) || pendingMessages(actor).nonEmpty
+  }
+
+  /** Returns the actors that are idle and have pending messages */
+  def readyActors: Iterable[DummyName] = actors.filter {
+    actor => idle(actor) && pendingMessages(actor).nonEmpty
+  }
+
 
   def transition(e: Event): Unit = {
     e match {
       case Spawn(parent, child) =>
         // create new references
-        val x = DummyRef(parent, child) // parent's ref to child
-        val y = DummyRef(child, child) // child's self-ref
+        val x = DummyRef(Some(parent), child) // parent's ref to child
+        val y = DummyRef(Some(child), child) // child's self-ref
         // create child's state
         val childState = DummyState(self = child, activeRefs = Set(y), owners = Set(x, y))
         // add the new active ref to the parent's state
@@ -32,11 +59,6 @@ class Configuration(var states: Map[DummyName, DummyState],
         states += (child -> childState)
         busy += (child -> true)
         msgs += (child -> mutable.Queue())
-        DummyName.count += 1
-
-      case CreateRef(actor, refToOwner, refToTarget, newToken) =>
-        val state = states(actor)
-        state.createRef(refToTarget, refToOwner)
 
       case Send(sender, recipient, message) =>
         // get the sender's state
@@ -79,91 +101,23 @@ class Configuration(var states: Map[DummyName, DummyState],
 
       case Snapshot(actor) =>
         val snapshot = states(actor).snapshot()
-        snapshots :+ (actor, snapshot)
-    }
-  }
-
-  /**
-   * Returns whether applying a given event to the configuration is valid.
-   * @param e
-   * @return
-   */
-  def isLegal(e: Event): Boolean = {
-    e match {
-      case Spawn(parent, child) =>
-        // child doesn't already exist, parent is busy and exists
-        !states.contains(child) && states.contains(parent) && busy(parent)
-
-      case CreateRef(actor, refToOwner, refToTarget, newToken) =>
-        if (!states.contains(actor)) {
-          return false
-        }
-        val state = states(actor)
-        state.activeRefs.contains(refToOwner) && state.activeRefs.contains(refToTarget)
-
-      case Send(sender, recipient, message) =>
-        if (!states.contains(sender) || !states.contains(recipient)) {
-          return false
-        }
-        // sender has the reference that the message is to be sent on
-        states(sender).activeRefs.contains(DummyRef(message.travelToken, Some(sender), recipient)) && (
-          // sender is not sending any refs that have been sent already
-          message.refs forall { ref =>
-              !sentRefs.contains(ref.token.get)
-              // NOTE: what about case where token/owner is null?
-          }
-        )
-
-      case Receive(recipient) =>
-        // legal when mailbox isn't empty and the actor is idle
-        states.contains(recipient) && msgs(recipient).nonEmpty && !busy(recipient)
-
-      case Idle(actor) =>
-        // an actor must be busy and have an empty mailbox to go idle
-        states.contains(actor) && busy(actor) && msgs(actor).isEmpty
-
-      case Deactivate(actor, ref) =>
-        if (!states.contains(actor)) {
-          return false
-        }
-        // the actor has to have the ref being deactivated
-        val active = states(actor).activeRefs
-        active.contains(ref)
-
-      case Snapshot(actor) =>
-        // actor is idle
-        states.contains(actor) && !busy(actor)
+        snapshots += ((actor, snapshot))
     }
   }
 }
 
 object Configuration {
-  def apply(states: Map[DummyName, DummyState],
-            busy: Map[DummyName, Boolean],
-            msgs: Map[DummyName, mutable.Queue[ExecMessage]],
-            receptionists: Set[DummyName]
-           ): Configuration = new Configuration(states, busy, msgs, receptionists)
-  /**
-   * Default constructor.
-   * @return The initial configuration. An actor A is created as a receptionist (to provide an anchor for the entire
-   *         configuration so it's not just totally garbage collected).
-   */
   def apply(): Configuration = {
+
     // the initial actor
     val A = DummyName()
-    // an "external" actor that does not do anything
-    val E = DummyName(-1)
-    // reference from that external actor to A
-    val x = DummyRef(E, A)
+    // dummy reference for the receptionist A
+    val x = DummyRef(None, A)
     // reference from A to itself
-    val y = DummyRef(A, A)
-    // A starts knowing itself and that an external actor has a reference to it
+    val y = DummyRef(Some(A), A)
+    // A starts knowing itself and that it is a receptionist
     val aState = DummyState(self = A, activeRefs = Set(y), owners = Set(x, y))
-    new Configuration(
-      states = Map(A -> aState),
-      busy = Map(A -> true),
-      msgs = Map(A -> mutable.Queue()),
-      receptionists = Set(A),
-    )
+
+    new Configuration(Map(A -> aState), Map(A -> true), Map(A -> mutable.Queue()), Set(A))
   }
 }

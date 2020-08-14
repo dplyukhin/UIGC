@@ -3,135 +3,110 @@ package gc.executions
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-object ExecutionSpec{
+object ExecutionSpec {
+
+  def tryOneOf[A](items: Iterable[A]): Gen[A] = {
+    if (items.isEmpty) fail
+    else oneOf(items)
+  }
 
   def genEvent(c: Configuration): Gen[Event] = {
+    // These generators use `tryOneOf`, which fails when given an empty sequence.
+    // We want to keep trying to generate executions even when it fails, so it's
+    // wrapped in `retryUntil` with a maximum of 100 attempts.
     frequency(
       (10, genSpawn(c)),
       (10, genSend(c)),
-      (10, genCreateRef(c)),
       (10, genReceive(c)),
       (1, genIdle(c)),
       (10, genSnapshot(c)),
       (5, genDeactivate(c))
-    )
+    ).retryUntil(_ => true, 100)
   }
 
   def genSpawn(c: Configuration): Gen[Spawn] = {
-    val child = DummyName(DummyName.count + 1) // unique new name
     for {
-      parent <- oneOf(c.states.keySet)
+      parent <- tryOneOf(c.busyActors)
+      child = DummyName()
     } yield Spawn(parent, child)
   }
 
   def genSend(c: Configuration): Gen[Send] = {
     for {
-      sender <- oneOf(c.states.keySet)
+      sender <- tryOneOf(c.busyActors)
       senderState = c.states(sender)
-      recipientRef <- oneOf(senderState.activeRefs)
+
+      recipientRef <- tryOneOf(senderState.activeRefs)
       recipient = recipientRef.target
-      // pick some references created by this sender
-      createdRefs <- someOf(senderState.createdRefs.values.flatten.filter { ref => ref.owner.get == recipient })
+
+      createdRefs <- containerOf[List, DummyRef](genRef(senderState))
       msg = AppMessage(createdRefs, recipientRef.token)
+
     } yield Send(sender, recipient, msg)
   }
 
-  def genReceive(c: Configuration): Gen[Receive] = {
-    // pick random actor with nonempty mailbox
+  def genRef(actorState: DummyState): Gen[DummyRef] = {
     for {
-      recipient <- oneOf(c.msgs.keySet) suchThat {name => c.msgs(name).nonEmpty}
+      owner <- tryOneOf(actorState.activeRefs)
+      target <- tryOneOf(actorState.activeRefs)
+    } yield DummyRef(Some(DummyToken()), Some(owner.target), target.target)
+  }
+
+  def genReceive(c: Configuration): Gen[Receive] = {
+    for {
+      recipient <- tryOneOf(c.readyActors)
     } yield Receive(recipient)
   }
 
-  def genCreateRef(c: Configuration): Gen[CreateRef] = {
-    for {
-      creator <- oneOf(c.states.keySet) // pick random creator
-      owner <- oneOf(c.states(creator).activeRefs) // pick random ref to new owner
-      target <- oneOf(c.states(creator).activeRefs) // pick random ref to target
-      token = DummyToken(DummyToken.count + 1) // unique token
-    } yield CreateRef(creator, owner, target, token)
-  }
-
   def genIdle(c: Configuration): Gen[Idle] = {
-    val busyActors = c.busy.filter{case (_, busy) => busy}.keySet // get actors that are busy
-    val emptyMailboxActors = c.msgs.filter{case (_, mailbox) => mailbox.isEmpty}.keySet // get actors with no msgs
-    val boredActors = busyActors.intersect(emptyMailboxActors).toSeq
-    if (boredActors.nonEmpty) {
-      for {
-        bored <- oneOf(boredActors)
-      } yield Idle(bored)
-    }
-    else {
-      Idle(DummyName(0))
-    }
+    for {
+      actor <- tryOneOf(c.busyActors)
+    } yield Idle(actor)
   }
 
   def genDeactivate(c: Configuration): Gen[Deactivate] = {
     for {
-      actor <- oneOf(c.states.keySet) // pick random actor
-      refs <- oneOf(c.states(actor).activeRefs) // pick reference to deactivate
+      actor <- tryOneOf(c.busyActors)
+      refs <- tryOneOf(c.states(actor).activeRefs) // pick reference to deactivate
     } yield Deactivate(actor, refs)
   }
 
   def genSnapshot(c: Configuration): Gen[Snapshot] = {
     for {
-      idleActor <- oneOf(c.busy.keySet) suchThat(name => !c.busy(name)) // pick random idle actor
+      idleActor <- tryOneOf(c.idleActors)
     } yield Snapshot(idleActor)
   }
 
-
   def genExecution(c: Configuration, size: Int): Gen[Execution] = {
-    chain(c, size)
-  }
+    if (size <= 0)
+      return const(Seq())
 
-  def genLegalEvent(c: Configuration): Gen[Event] = {
-    genEvent(c) suchThat {e => c.isLegal(e)}
-  }
-
-  def chain(c: Configuration, i: Int): Gen[Execution] = {
-    if (i <= 1) {
-      for {
-        e <- genLegalEvent(c)
-      } yield {
-        c.transition(e)
-        Seq(e)
-      }
-    }
-    else {
-      for {
-        e <- genLegalEvent(c)
-        e2 <- chain(c, i - 1)
-      } yield {
-        c.transition(e)
-        Seq(e) ++ e2
-      }
+    // This expression tries generating an event and, if it succeeded,
+    // advances the configuration and generates subsequent events.
+    // TODO The mutability of Configuration looks fishy inside this `for` comprehension. Make it immutable?
+    for {
+      event <- genEvent(c)
+      _ = c.transition(event)
+      events <- genExecution(c, size - 1)
+    } yield {
+      Seq(event) ++ events
     }
   }
 
   def main(args: Array[String]): Unit = {
-    val c = Configuration()
-    var execution: Execution = Seq()
 
-    var g = ExecutionSpec.genEvent(c) suchThat {e => c.isLegal(e)}
+    val c: Configuration = Configuration()
+    val mExecution: Option[Execution] = genExecution(c, 10).sample
 
-    for (n <- 1 to 10) {
-//      println(s"Attempt $n")
-      val sample = g.sample
-      if (sample.isDefined) {
-        val event = sample.get
-//        println("Event: " + event)
-        c.transition(event)
-        execution :+= event
-        g = ExecutionSpec.genEvent(c) retryUntil { e => c.isLegal(e) }
-      }
-      else {
-        "Ran out of legal moves."
-      }
+    if (mExecution.isEmpty) {
+      println("Failed to generate a legal execution.")
+      return
     }
+    val execution = mExecution.get
+
     println("Execution:")
-    execution foreach {e => println(e)}
+    execution foreach println
     println("Configuration dump:\n" +
-      s"Sent refs: ${c.sentRefs}\n" +
       s"Snapshots: ${c.snapshots}\n")
     println("Configuration dump:")
     println("States:")
@@ -144,7 +119,7 @@ object ExecutionSpec{
       println(s"\tSent: ${state.sent}")
       println(s"\tRecv: ${state.recv}")
       println(s"\tBusy?: ${c.busy(name)}")
-      println(s"\tMessages: ${c.msgs(name)}")
+      println(s"\tMessages: ${c.actors.map(c.pendingMessages)}")
     }
   }
 }

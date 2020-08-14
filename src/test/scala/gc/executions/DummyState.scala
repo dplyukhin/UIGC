@@ -19,7 +19,7 @@ case class DummyState(self: DummyName,
 
   def createRef(target: DummyRef, newOwner: DummyRef): DummyRef = {
     // e.g. target: A->C, newOwner: A->B
-    val newRef = DummyRef(newOwner.target, target.target) // B->C
+    val newRef = DummyRef(Some(newOwner.target), target.target) // B->C
     if (createdRefs contains target) {
       createdRefs(target) += newRef // A->C has been used to make (B->C,)
     } else {

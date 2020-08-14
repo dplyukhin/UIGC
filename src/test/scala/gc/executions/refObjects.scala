@@ -10,9 +10,13 @@ case class DummyRef(token: Option[DummyToken], owner: Option[DummyName], target:
 }
 
 object DummyRef {
-  def apply(owner: DummyName, target: DummyName): DummyRef =
-    new DummyRef(Some(DummyToken()), Some(owner), target)
+  def apply(owner: Option[DummyName], target: DummyName): DummyRef =
+    if (owner.isDefined)
+      new DummyRef(Some(DummyToken()), owner, target)
+    else
+      new DummyRef(None, None, target)
 }
+
 
 case class DummyToken(n: Int)
 

@@ -23,14 +23,6 @@ case class Receive(recipient: DummyName) extends Event {
   override def toString: String = s"RECV: $recipient receives a message"
 }
 
-/** An actor creates a reference to the actor targeted by [[refToTarget]] for the actor targeted by [[refToOwner]]. */
-case class CreateRef(actor: DummyName,
-                     refToOwner: DummyRef,
-                     refToTarget: DummyRef,
-                     newToken: DummyToken) extends Event {
-  override def toString: String = s"CREATEREF: $actor creates a ref for $refToOwner pointing to $refToOwner with token $newToken"
-}
-
 /** An actor goes idle. */
 case class Idle(actor: DummyName) extends Event {
   override def toString: String = s"IDLE: $actor goes idle"
