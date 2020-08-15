@@ -1,5 +1,7 @@
 package gc.executions
 
+import gc.AbstractSnapshot
+
 import scala.collection.mutable
 
 case class DummyState(self: DummyName,
@@ -102,9 +104,10 @@ case class DummyState(self: DummyName,
   }
 }
 
-case class DummySnapshot(activeRefs: Set[DummyRef],
-                    createdRefs: Set[DummyRef],
-                    owners: Set[DummyRef],
-                    released: Set[DummyRef],
-                    sent: Map[DummyToken, Int],
-                    recv: Map[DummyToken, Int])
+case class DummySnapshot(refs: Set[DummyRef],
+                         created: Set[DummyRef],
+                         owners: Set[DummyRef],
+                         releasedRefs: Set[DummyRef],
+                         sentCounts: Map[DummyToken, Int],
+                         recvCounts: Map[DummyToken, Int])
+  extends AbstractSnapshot[DummyName, DummyToken, DummyRef]

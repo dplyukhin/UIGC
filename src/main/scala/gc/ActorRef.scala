@@ -10,7 +10,6 @@ import akka.actor.typed.{ActorRef => AkkaActorRef}
  */
 case class Token(ref: AkkaActorRef[Nothing], n: Int)
 
-
 /**
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
  * should only be used by the *owner* to send messages to the *target.
@@ -24,7 +23,7 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
 case class ActorRef[-T <: Message](token: Option[Token],
                                    owner: Option[AkkaActorRef[Nothing]],
                                    target: AkkaActorRef[GCMessage[T]],
-                                   ) {
+                                   ) extends AbstractRef[AkkaActorRef[Nothing], Token] {
   private var context: Option[ActorContext[_ <: Message]] = None
 
   def initialize[S <: Message](_context: ActorContext[S]): Unit = {
@@ -65,3 +64,4 @@ case class ActorSnapshot(refs: Set[AnyActorRef],
                          releasedRefs: Set[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
+  extends AbstractSnapshot[AkkaActorRef[Nothing], Token, AnyActorRef]
