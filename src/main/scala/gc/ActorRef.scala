@@ -38,26 +38,8 @@ case class ActorRef[-T <: Message](token: Option[Token],
     f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
   }
 
-//  override def equals(obj: Any): Boolean = {
-//    obj match {
-//      case ActorRef(token, owner, target) => (
-//        this.token == token && this.owner == owner && this.target == target
-//        )
-//      case _ => false
-//    }
-//  }
 }
 
-
-/**
- * An instance of an actor's state.
- * @param refs [[ActorContext.refs]]
- * @param owners [[ActorContext.owners]]
- * @param created [[ActorContext.createdUsing]]'s values, flattened
- * @param releasedRefs [[ActorContext.released_owners]]
- * @param sentCounts [[ActorContext.sentCounts]]
- * @param recvCounts [[ActorContext.receivedCounts]]
- */
 case class ActorSnapshot(refs: Set[AnyActorRef],
                          owners: Set[AnyActorRef],
                          created: Seq[AnyActorRef],

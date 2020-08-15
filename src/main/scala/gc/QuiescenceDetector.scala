@@ -70,24 +70,28 @@ class QuiescenceDetector [
   /**
    * Rearranges a map of actors and their snapshots into a map of actors and their unreleased refs.
    * @param snapshots A map of names to snapshots.
-   * @return A map of names to unreleased refobs.
+   * @return A mapping from actor names to the set of unreleased refobs that they own.
    */
   private def mapSnapshots(snapshots: Map[Name, Snapshot]): mutable.Map[Name, mutable.Set[Ref]] = {
+    // this maps actors to the set of refobs that we *think* are unreleased
     val unreleased_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
+    // this maps actors to the set of refobs that have already been released
     val released_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
+
     for ((name, snap) <- snapshots) {
-      // gather the active refs held by this actor
       val unreleased = unreleased_map getOrElseUpdate(name, mutable.Set())
       unreleased ++= snap.refs
-      // update the actors with refs that this
-      for (ref <- snap.created) {
+
+      for (ref <- snap.created ++ snap.owners) {
         val other_unreleased = unreleased_map getOrElseUpdate(ref.owner.get, mutable.Set())
         other_unreleased += ref
       }
+
       val released = released_map getOrElseUpdate(name, mutable.Set())
       released ++= snap.releasedRefs
     }
-    // remove the references we've learned are released
+
+    // kemove the references we've learned are released
     for ((name, unreleased) <- unreleased_map) {
       unreleased --= released_map(name)
     }
