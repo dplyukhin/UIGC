@@ -1,5 +1,7 @@
 package gc.executions
 
+import gc.ActorState
+
 import scala.collection.mutable
 
 /**
@@ -15,7 +17,6 @@ class Configuration(
     var states: Map[DummyName, DummyState],
     var busy: Map[DummyName, Boolean],
     private var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
-    private var receptionists: Set[DummyName]
 ) {
 
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
@@ -76,7 +77,6 @@ class Configuration(
             case AppMessage(refs, travelToken) =>
               // if it's an app message, update the recv count and handle any refs
               val recipientState = states(recipient)
-              recipientState.incReceivedCount(travelToken)
               recipientState.handleMessage(refs, travelToken)
               // become busy as actor does some nonspecified sequence of actions
               busy(recipient)
@@ -118,6 +118,6 @@ object Configuration {
     // A starts knowing itself and that it is a receptionist
     val aState = new DummyState(y, x)
 
-    new Configuration(Map(A -> aState), Map(A -> true), Map(A -> mutable.Queue()), Set(A))
+    new Configuration(Map(A -> aState), Map(A -> true), Map(A -> mutable.Queue()))
   }
 }
