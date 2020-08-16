@@ -26,9 +26,6 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
-    "this test fails" in {
-      throw new Exception("Ah!")
-    }
     "be able to spawn actors" in {
       actorA ! Init
       probe.expectMessage(Spawned)
