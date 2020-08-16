@@ -52,7 +52,7 @@ class Configuration(
         val x = DummyRef(Some(parent), child) // parent's ref to child
         val y = DummyRef(Some(child), child) // child's self-ref
         // create child's state
-        val childState = DummyState(self = child, activeRefs = Set(y), owners = Set(x, y))
+        val childState = new DummyState(y, x)
         // add the new active ref to the parent's state
         states(parent).addRef(x)
         // update the configuration
@@ -77,7 +77,7 @@ class Configuration(
               // if it's an app message, update the recv count and handle any refs
               val recipientState = states(recipient)
               recipientState.incReceivedCount(travelToken)
-              recipientState.handleMessage(refs)
+              recipientState.handleMessage(refs, travelToken)
               // become busy as actor does some nonspecified sequence of actions
               busy(recipient)
             case ReleaseMessage(releasing, created) =>
@@ -116,7 +116,7 @@ object Configuration {
     // reference from A to itself
     val y = DummyRef(Some(A), A)
     // A starts knowing itself and that it is a receptionist
-    val aState = DummyState(self = A, activeRefs = Set(y), owners = Set(x, y))
+    val aState = new DummyState(y, x)
 
     new Configuration(Map(A -> aState), Map(A -> true), Map(A -> mutable.Queue()), Set(A))
   }

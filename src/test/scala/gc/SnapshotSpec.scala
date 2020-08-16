@@ -45,20 +45,20 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       // check that the knowledge set has only gained that reference
       actorA ! RequestKnowledge
       var newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
-      newKnowledge.refs shouldEqual aKnowledge.refs + gcRefAToB
+      newKnowledge.refs.toSet shouldEqual aKnowledge.refs.toSet + gcRefAToB
       newKnowledge.owners shouldEqual aKnowledge.owners
       newKnowledge.releasedRefs shouldEqual aKnowledge.releasedRefs
       newKnowledge.sentCounts shouldEqual aKnowledge.sentCounts
       newKnowledge.recvCounts shouldEqual aKnowledge.recvCounts
       // update knowledge for later tests
-      aKnowledge = newKnowledge;
+      aKnowledge = newKnowledge
 
       // same for C
       actorA ! InitC
       gcRefAToC = probe.expectMessageType[Ref].ref
       actorA ! RequestKnowledge
       newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
-      newKnowledge.refs shouldEqual aKnowledge.refs + gcRefAToC
+      newKnowledge.refs.toSet shouldEqual aKnowledge.refs.toSet + gcRefAToC
       newKnowledge.owners shouldEqual aKnowledge.owners
       newKnowledge.releasedRefs shouldEqual aKnowledge.releasedRefs
       newKnowledge.sentCounts shouldEqual aKnowledge.sentCounts

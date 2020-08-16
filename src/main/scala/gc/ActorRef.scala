@@ -40,10 +40,10 @@ case class ActorRef[-T <: Message](token: Option[Token],
 
 }
 
-case class ActorSnapshot(refs: Set[AnyActorRef],
-                         owners: Set[AnyActorRef],
-                         created: Seq[AnyActorRef],
-                         releasedRefs: Set[AnyActorRef],
+case class ActorSnapshot(refs: Iterable[AnyActorRef],
+                         owners: Iterable[AnyActorRef],
+                         created: Iterable[AnyActorRef],
+                         releasedRefs: Iterable[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
   extends AbstractSnapshot[AkkaActorRef[Nothing], Token, AnyActorRef]

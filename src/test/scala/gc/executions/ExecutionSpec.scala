@@ -113,11 +113,11 @@ object ExecutionSpec {
     for ((name, state) <- c.states) {
       println(name)
       println(s"\tActive: ${state.activeRefs}")
-      println(s"\tCreated: ${state.createdRefs}")
+      println(s"\tCreated: ${state.createdUsing}")
       println(s"\tOwners: ${state.owners}")
-      println(s"\tReleased: ${state.released}")
-      println(s"\tSent: ${state.sent}")
-      println(s"\tRecv: ${state.recv}")
+      println(s"\tReleased: ${state.releasedOwners}")
+      println(s"\tSent: ${state.sentCount}")
+      println(s"\tRecv: ${state.recvCount}")
       println(s"\tBusy?: ${c.busy(name)}")
       println(s"\tMessages: ${c.actors.map(c.pendingMessages)}")
     }
