@@ -11,10 +11,11 @@ case class Spawn(parent: DummyName, child: DummyName) extends Event {
 
 /** An actor sends an application-level message. */
 case class Send(sender: DummyName,
-                recipient: DummyName,
-                message: AppMessage) extends Event {
+                recipientRef: DummyRef,
+                createdRefs: Iterable[DummyRef],
+                createdUsingRefs: Iterable[DummyRef]) extends Event {
   override def toString: String = {
-    s"SEND: $sender sends $recipient a message along token ${message.travelToken} with refs ${message.refs}"
+    s"SEND: $sender sends a message along ref $recipientRef, containing refs $createdRefs, created using $createdUsingRefs, respectively"
   }
 }
 

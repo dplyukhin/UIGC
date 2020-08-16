@@ -33,23 +33,32 @@ object ExecutionSpec {
 
   def genSend(c: Configuration): Gen[Send] = {
     for {
+      // pick a busy actor to send the message
       sender <- tryOneOf(c.busyActors)
       senderState = c.states(sender)
 
+      // pick a recipient from its active refs
       recipientRef <- tryOneOf(senderState.activeRefs)
       recipient = recipientRef.target
 
-      createdRefs <- containerOf[List, DummyRef](genRef(senderState))
-      msg = AppMessage(createdRefs, recipientRef.token)
+      // generate a collection of refs that will be owned by the recipient
+      newAcquaintances <- containerOf[List, (DummyRef, DummyRef)](genRef(senderState, recipient))
+      (createdRefs, createdUsingRefs) = newAcquaintances.unzip
 
-    } yield Send(sender, recipient, msg)
+    } yield Send(sender, recipientRef, createdRefs, createdUsingRefs)
   }
 
-  def genRef(actorState: DummyState): Gen[DummyRef] = {
+  /**
+   * Generates a new ref owned by `owner`.
+   * @return Generator for a pair. The first element is the new ref, and the second element
+   *         is the ref that was used to create it. That is, the second element is one of
+   *         the creator's active refs pointing to the target of the new ref.
+   */
+  def genRef(actorState: DummyState, owner: DummyName): Gen[(DummyRef, DummyRef)] = {
     for {
-      owner <- tryOneOf(actorState.activeRefs)
-      target <- tryOneOf(actorState.activeRefs)
-    } yield DummyRef(Some(DummyToken()), Some(owner.target), target.target)
+      createdUsingRef <- tryOneOf(actorState.activeRefs)
+      newRef = DummyRef(Some(DummyToken()), Some(owner), createdUsingRef.target)
+    } yield (newRef, createdUsingRef)
   }
 
   def genReceive(c: Configuration): Gen[Receive] = {

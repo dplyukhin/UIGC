@@ -118,7 +118,15 @@ class ActorState[
     (activeRefs - selfRef).nonEmpty
   }
 
+  /**
+   * Updates this actor's state to indicate that the new ref `newRef` was created using `target`.
+   * The target of `target` should be the same as the target of `newRef`.
+   * @param target An existing ref to the target
+   * @param newRef The new ref that has been created using `target`
+   */
   def handleCreatedRef(target: Ref, newRef: Ref): Unit = {
+    require(target.target == newRef.target)
+    require(activeRefs contains target)
     val seq = createdUsing getOrElse(target, Seq())
     createdUsing(target) = seq :+ newRef
   }

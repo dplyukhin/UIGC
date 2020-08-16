@@ -20,7 +20,7 @@ class Configuration(
 ) {
 
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
-  var snapshots: Set[(DummyName, DummySnapshot)] = Set()
+  var snapshots: Seq[(DummyName, DummySnapshot)] = Seq()
 
 
   /**** Accessor methods ****/
@@ -45,63 +45,79 @@ class Configuration(
     actor => idle(actor) && pendingMessages(actor).nonEmpty
   }
 
+  private def deactivate(actor: DummyName, refs: Iterable[DummyRef]): Unit = {
+    val actorState = states(actor)
+    // have actor release the refs and update its state
+    val targets = actorState.release(refs)
+    // set up messages for each target being released
+    for ((target, (targetedRefs, createdRefs)) <- targets) {
+      val mailbox = msgs(target)
+      mailbox.enqueue(ReleaseMessage(releasing = targetedRefs, created = createdRefs))
+    }
+  }
+
+  private def tryTerminating(actor: DummyName, actorState: DummyState): Unit = {
+    actorState.tryTerminate() match {
+      case ActorState.NotTerminated =>
+      case ActorState.RemindMeLater =>
+        msgs(actor).enqueue(SelfCheck)
+      case ActorState.Terminated =>
+        deactivate(actor, actorState.nontrivialRefs)
+    }
+  }
 
   def transition(e: Event): Unit = {
     e match {
       case Spawn(parent, child) =>
         // create new references
-        val x = DummyRef(Some(parent), child) // parent's ref to child
-        val y = DummyRef(Some(child), child) // child's self-ref
+        val creatorRef = DummyRef(Some(parent), child) // parent's ref to child
+        val selfRef = DummyRef(Some(child), child) // child's self-ref
         // create child's state
-        val childState = new DummyState(y, x)
+        val childState = new DummyState(selfRef, creatorRef)
         // add the new active ref to the parent's state
-        states(parent).addRef(x)
+        states(parent).addRef(creatorRef)
         // update the configuration
         states += (child -> childState)
         busy += (child -> true)
         msgs += (child -> mutable.Queue())
 
-      case Send(sender, recipient, message) =>
+      case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
         // get the sender's state
         val senderState = states(sender)
-        // increment its send count
-        senderState.incSentCount(message.travelToken)
+        // Add createdRefs to sender's state
+        for ((targetRef, newRef) <- createdUsingRefs zip createdRefs)
+          senderState.handleCreatedRef(targetRef, newRef)
+        // increment sender's send count
+        senderState.incSentCount(recipientRef.token)
         // add the message to the recipient's "mailbox"
-        val mailbox = msgs(recipient)
-        mailbox.enqueue(message)
+        val mailbox = msgs(recipientRef.target)
+        mailbox.enqueue(AppMessage(createdRefs, recipientRef.token))
 
       case Receive(recipient) =>
-        // take the next message out from the queue, going idle if empty
-          val message = msgs(recipient).dequeue
-          message match {
+        // take the next message out from the queue;
+        // this should mimic the behavior of [[gc.AbstractBehavior]]
+        val message = msgs(recipient).dequeue
+        val actorState = states(recipient)
+        message match {
             case AppMessage(refs, travelToken) =>
-              // if it's an app message, update the recv count and handle any refs
-              val recipientState = states(recipient)
-              recipientState.handleMessage(refs, travelToken)
-              // become busy as actor does some nonspecified sequence of actions
-              busy(recipient)
+              actorState.handleMessage(refs, travelToken)
+              busy += (recipient -> true)
             case ReleaseMessage(releasing, created) =>
-              // if it's a release message, handle that in its own case
-              val actorState = states(recipient)
               actorState.handleRelease(releasing, created)
+              tryTerminating(recipient, actorState)
+            case SelfCheck =>
+              tryTerminating(recipient, actorState)
           }
 
       case Idle(actor) =>
         busy += (actor -> false)
 
       case Deactivate(actor, ref) =>
-        val actorState = states(actor)
-        // have actor release the refs and update its state
-        val targets = actorState.release(Iterable(ref))
-        // set up messages for each target being released
-        for ((target, (targetedRefs, createdRefs)) <- targets) {
-          val mailbox = msgs(target)
-          mailbox.enqueue(ReleaseMessage(releasing = targetedRefs, created = createdRefs))
-        }
+        deactivate(actor, Seq(ref))
 
       case Snapshot(actor) =>
         val snapshot = states(actor).snapshot()
-        snapshots += ((actor, snapshot))
+        snapshots :+= ((actor, snapshot))
     }
   }
 }
