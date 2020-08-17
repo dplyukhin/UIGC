@@ -27,9 +27,9 @@ class ActorState[
   /** References to this actor discovered when they've been released. */
   var releasedOwners: Set[Ref] = Set()
   /** Tracks how many messages are sent using each reference. */
-  val sentCount: mutable.Map[Token, Int] = mutable.Map()
+  val sentCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
-  val recvCount: mutable.Map[Token, Int] = mutable.Map()
+  val recvCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
 
   /** The set of refs that this actor owns that do not point to itself */
   def nontrivialRefs: Iterable[Ref] = activeRefs - selfRef
