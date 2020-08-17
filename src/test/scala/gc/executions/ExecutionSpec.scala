@@ -35,7 +35,7 @@ object ExecutionSpec {
     for {
       // pick a busy actor to send the message
       sender <- tryOneOf(c.busyActors)
-      senderState = c.states(sender)
+      senderState = c.state(sender)
 
       // pick a recipient from its active refs
       recipientRef <- tryOneOf(senderState.activeRefs)
@@ -67,16 +67,16 @@ object ExecutionSpec {
     } yield Receive(recipient)
   }
 
-  def genIdle(c: Configuration): Gen[Idle] = {
+  def genIdle(c: Configuration): Gen[BecomeIdle] = {
     for {
       actor <- tryOneOf(c.busyActors)
-    } yield Idle(actor)
+    } yield BecomeIdle(actor)
   }
 
   def genDeactivate(c: Configuration): Gen[Deactivate] = {
     for {
       actor <- tryOneOf(c.busyActors)
-      refs <- tryOneOf(c.states(actor).activeRefs) // pick reference to deactivate
+      refs <- tryOneOf(c.state(actor).activeRefs) // pick reference to deactivate
     } yield Deactivate(actor, refs)
   }
 
@@ -119,7 +119,7 @@ object ExecutionSpec {
       s"Snapshots: ${c.snapshots}\n")
     println("Configuration dump:")
     println("States:")
-    for ((name, state) <- c.states) {
+    for ((name, state) <- c.state) {
       println(name)
       println(s"\tActive: ${state.activeRefs}")
       println(s"\tCreated: ${state.createdUsing}")
@@ -127,8 +127,8 @@ object ExecutionSpec {
       println(s"\tReleased: ${state.releasedOwners}")
       println(s"\tSent: ${state.sentCount}")
       println(s"\tRecv: ${state.recvCount}")
-      println(s"\tBusy?: ${c.busy(name)}")
-      println(s"\tMessages: ${c.actors.map(c.pendingMessages)}")
+      println(s"\tBusy?: ${c.status(name)}")
+      println(s"\tMessages: ${c.pendingMessages(name)}")
     }
   }
 }

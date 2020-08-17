@@ -25,7 +25,7 @@ case class Receive(recipient: DummyName) extends Event {
 }
 
 /** An actor goes idle. */
-case class Idle(actor: DummyName) extends Event {
+case class BecomeIdle(actor: DummyName) extends Event {
   override def toString: String = s"IDLE: $actor goes idle"
 }
 

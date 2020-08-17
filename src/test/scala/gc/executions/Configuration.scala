@@ -14,45 +14,55 @@ import scala.collection.mutable
  * it never terminates.
  */
 class Configuration(
-    var states: Map[DummyName, DummyState],
-    var busy: Map[DummyName, Boolean],
-    private var msgs: Map[DummyName, mutable.Queue[ExecMessage]],
+                     var state: Map[DummyName, DummyState],
+                     var status: Map[DummyName, Configuration.ActorStatus],
+                     private var mailbox: Map[DummyName, mutable.Queue[ExecMessage]],
 ) {
+  import Configuration._
 
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
   var snapshots: Seq[(DummyName, DummySnapshot)] = Seq()
 
 
-  /**** Accessor methods ****/
+  //// Accessor methods
 
-  def actors: Iterable[DummyName] = states.keys
+  def idle(actor: DummyName): Boolean = status(actor) == Idle
 
-  def idle(actor: DummyName): Boolean = !busy(actor)
+  def busy(actor: DummyName): Boolean = status(actor) == Busy
 
-  def pendingMessages(name: DummyName): Iterable[ExecMessage] = msgs(name)
+  def stopped(actor: DummyName): Boolean = status(actor) == Stopped
 
-  def busyActors: Iterable[DummyName] = actors.filter { busy(_) }
+  def pendingMessages(name: DummyName): Iterable[ExecMessage] = mailbox(name)
 
-  def idleActors: Iterable[DummyName] = actors.filter { idle }
+  def liveActors: Iterable[DummyName] = state.keys.filter { !stopped(_) }
 
-  /** Returns the actors that are busy or have pending messages */
-  def unblockedActors: Iterable[DummyName] = actors.filter {
-    actor => busy(actor) || pendingMessages(actor).nonEmpty
+  def stoppedActors: Iterable[DummyName] = state.keys.filter { stopped }
+
+  def busyActors: Iterable[DummyName] = state.keys.filter { busy }
+
+  def idleActors: Iterable[DummyName] = state.keys.filter { idle }
+
+  /** Returns the actors that are busy or are idle with pending messages */
+  def unblockedActors: Iterable[DummyName] = state.keys.filter {
+    actor => busy(actor) || (idle(actor) && pendingMessages(actor).nonEmpty)
   }
 
   /** Returns the actors that are idle and have pending messages */
-  def readyActors: Iterable[DummyName] = actors.filter {
+  def readyActors: Iterable[DummyName] = state.keys.filter {
     actor => idle(actor) && pendingMessages(actor).nonEmpty
   }
 
+
+  //// Helper methods
+
   private def deactivate(actor: DummyName, refs: Iterable[DummyRef]): Unit = {
-    val actorState = states(actor)
+    val actorState = state(actor)
     // have actor release the refs and update its state
     val targets = actorState.release(refs)
     // set up messages for each target being released
     for ((target, (targetedRefs, createdRefs)) <- targets) {
-      val mailbox = msgs(target)
-      mailbox.enqueue(ReleaseMessage(releasing = targetedRefs, created = createdRefs))
+      val m = mailbox(target)
+      m.enqueue(ReleaseMessage(releasing = targetedRefs, created = createdRefs))
     }
   }
 
@@ -60,9 +70,10 @@ class Configuration(
     actorState.tryTerminate() match {
       case ActorState.NotTerminated =>
       case ActorState.RemindMeLater =>
-        msgs(actor).enqueue(SelfCheck)
+        mailbox(actor).enqueue(SelfCheck)
       case ActorState.Terminated =>
         deactivate(actor, actorState.nontrivialRefs)
+        status += (actor -> Stopped)
     }
   }
 
@@ -75,33 +86,33 @@ class Configuration(
         // create child's state
         val childState = new DummyState(selfRef, creatorRef)
         // add the new active ref to the parent's state
-        states(parent).addRef(creatorRef)
+        state(parent).addRef(creatorRef)
         // update the configuration
-        states += (child -> childState)
-        busy += (child -> true)
-        msgs += (child -> mutable.Queue())
+        state += (child -> childState)
+        status += (child -> Busy)
+        mailbox += (child -> mutable.Queue())
 
       case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
-        // get the sender's state
-        val senderState = states(sender)
+        val senderState = state(sender)
         // Add createdRefs to sender's state
         for ((targetRef, newRef) <- createdUsingRefs zip createdRefs)
           senderState.handleCreatedRef(targetRef, newRef)
         // increment sender's send count
         senderState.incSentCount(recipientRef.token)
         // add the message to the recipient's "mailbox"
-        val mailbox = msgs(recipientRef.target)
-        mailbox.enqueue(AppMessage(createdRefs, recipientRef.token))
+        val m = mailbox(recipientRef.target)
+        m.enqueue(AppMessage(createdRefs, recipientRef.token))
 
       case Receive(recipient) =>
+        require(!stopped(recipient))
         // take the next message out from the queue;
         // this should mimic the behavior of [[gc.AbstractBehavior]]
-        val message = msgs(recipient).dequeue
-        val actorState = states(recipient)
+        val message = mailbox(recipient).dequeue
+        val actorState = state(recipient)
         message match {
             case AppMessage(refs, travelToken) =>
               actorState.handleMessage(refs, travelToken)
-              busy += (recipient -> true)
+              status += (recipient -> Busy)
             case ReleaseMessage(releasing, created) =>
               actorState.handleRelease(releasing, created)
               tryTerminating(recipient, actorState)
@@ -109,20 +120,26 @@ class Configuration(
               tryTerminating(recipient, actorState)
           }
 
-      case Idle(actor) =>
-        busy += (actor -> false)
+      case BecomeIdle(actor) =>
+        status += (actor -> Idle)
 
       case Deactivate(actor, ref) =>
         deactivate(actor, Seq(ref))
 
       case Snapshot(actor) =>
-        val snapshot = states(actor).snapshot()
+        val snapshot = state(actor).snapshot()
         snapshots :+= ((actor, snapshot))
     }
   }
 }
 
 object Configuration {
+
+  sealed trait ActorStatus
+  case object Idle extends ActorStatus
+  case object Busy extends ActorStatus
+  case object Stopped extends ActorStatus
+
   def apply(): Configuration = {
 
     // the initial actor
@@ -134,6 +151,6 @@ object Configuration {
     // A starts knowing itself and that it is a receptionist
     val aState = new DummyState(y, x)
 
-    new Configuration(Map(A -> aState), Map(A -> true), Map(A -> mutable.Queue()))
+    new Configuration(Map(A -> aState), Map(A -> Busy), Map(A -> mutable.Queue()))
   }
 }
