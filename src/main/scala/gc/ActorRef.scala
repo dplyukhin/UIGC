@@ -10,7 +10,6 @@ import akka.actor.typed.{ActorRef => AkkaActorRef}
  */
 case class Token(ref: AkkaActorRef[Nothing], n: Int)
 
-
 /**
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
  * should only be used by the *owner* to send messages to the *target.
@@ -24,7 +23,7 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
 case class ActorRef[-T <: Message](token: Option[Token],
                                    owner: Option[AkkaActorRef[Nothing]],
                                    target: AkkaActorRef[GCMessage[T]],
-                                   ) {
+                                   ) extends AbstractRef[AkkaActorRef[Nothing], Token] {
   private var context: Option[ActorContext[_ <: Message]] = None
 
   def initialize[S <: Message](_context: ActorContext[S]): Unit = {
@@ -39,29 +38,12 @@ case class ActorRef[-T <: Message](token: Option[Token],
     f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
   }
 
-//  override def equals(obj: Any): Boolean = {
-//    obj match {
-//      case ActorRef(token, owner, target) => (
-//        this.token == token && this.owner == owner && this.target == target
-//        )
-//      case _ => false
-//    }
-//  }
 }
 
-
-/**
- * An instance of an actor's state.
- * @param refs [[ActorContext.refs]]
- * @param owners [[ActorContext.owners]]
- * @param created [[ActorContext.createdUsing]]'s values, flattened
- * @param releasedRefs [[ActorContext.released_owners]]
- * @param sentCounts [[ActorContext.sentCounts]]
- * @param recvCounts [[ActorContext.receivedCounts]]
- */
-case class ActorSnapshot(refs: Set[AnyActorRef],
-                         owners: Set[AnyActorRef],
-                         created: Seq[AnyActorRef],
-                         releasedRefs: Set[AnyActorRef],
+case class ActorSnapshot(refs: Iterable[AnyActorRef],
+                         owners: Iterable[AnyActorRef],
+                         created: Iterable[AnyActorRef],
+                         releasedRefs: Iterable[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
+  extends AbstractSnapshot[AkkaActorRef[Nothing], Token, AnyActorRef]

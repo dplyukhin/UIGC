@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+class QuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val dummyActor: AkkaBehavior[Any] = Behaviors.receive { (_, _) => Behaviors.same }
   // starring...
   val A: AkkaActorRef[Any] = testKit.spawn(dummyActor, "A")
@@ -17,6 +17,8 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
   val cToken: Token = Token(C, 0)
   val selfA: ActorRef[Message] = ActorRef(Some(aToken), Some(A), A)
   val selfB: ActorRef[Message] = ActorRef(Some(bToken), Some(B), B)
+
+  val quiescenceDetector = new QuiescenceDetector[AkkaActorRef[Nothing], gc.Token, gc.ActorRef[Nothing], gc.ActorSnapshot]
 
   "Basic cycles" should {
     // A has ref x:A->B and B has ref y:B->A.
@@ -43,11 +45,11 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
         recvCounts = Map(bToken -> 0, xToken -> 1)
       )
 
-      val terminated = TerminationDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
-      terminated should contain only(A, B)
+      val quiescent = quiescenceDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
+      quiescent should contain only(A, B)
     }
     "be ignored when they don't appear blocked" in {
-      // A has sent 1 message along x and B has sent 2 along y. A has yet to receive one of those two, so it should not be terminated.
+      // A has sent 1 message along x and B has sent 2 along y. A has yet to receive one of those two, so it should not be quiescent.
       val dummyA: ActorSnapshot = ActorSnapshot(
         refs = Set(selfA, x),
         owners = Set(selfA, y),
@@ -65,9 +67,8 @@ class TerminationDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpe
         recvCounts = Map(bToken -> 0, xToken -> 1)
       )
 
-      val terminated = TerminationDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
-//      terminated should contain only(B)
-      terminated shouldBe empty
+      val quiescent = quiescenceDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
+      quiescent shouldBe empty
     }
   }
   // TODO: tests for more complex configurations, such as
