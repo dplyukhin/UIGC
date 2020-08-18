@@ -30,10 +30,13 @@ class ActorContext[T <: Message](
   val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
 
+  /** The set of refs that this actor owns */
+  private var activeRefs: Set[AnyActorRef] = Set(self)
+
   /** Nontrivial references that this actor owns. */
-  private var refs: Set[AnyActorRef] = Set()
+  private def nontrivialRefs: Set[AnyActorRef] = activeRefs filter { _.target != self.target }
   /** References that this actor has to itself. */
-  private var selfRefs: Set[AnyActorRef] = Set(self)
+  private def selfRefs: Set[AnyActorRef] = activeRefs filter { _.target == self.target }
 
   /**
    * References this actor has created for other actors.
@@ -81,7 +84,7 @@ class ActorContext[T <: Message](
     }
     val ref = new ActorRef[S](Some(x), Some(self), child)
     ref.initialize(this)
-    refs += ref
+    activeRefs += ref
     ref
   }
 
@@ -93,12 +96,7 @@ class ActorContext[T <: Message](
    */
   def handleMessage(messageRefs: Iterable[AnyActorRef], token: Option[Token]): Unit = {
     for (ref <- messageRefs) {
-      if (ref.target == context.self) {
-        selfRefs += ref
-      }
-      else {
-        refs += ref
-      }
+      activeRefs += ref
     }
     messageRefs.foreach(ref => ref.initialize(this))
     incReceivedCount(token)
@@ -180,7 +178,7 @@ class ActorContext[T <: Message](
     // Therefore it should begin the termination process.
     // Check if this actor still holds any references.
     else {
-      if (refs.nonEmpty) {
+      if (nontrivialRefs.nonEmpty) {
         // Release all the nontrivial references held by this actor.
         releaseEverything()
       }
@@ -225,7 +223,7 @@ class ActorContext[T <: Message](
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
     val targets: mutable.Map[AkkaActorRef[GCMessage[Nothing]], (Seq[AnyActorRef], Seq[AnyActorRef])] = mutable.Map()
     // process the references that are actually in the refs set
-    for (ref <- releasing if refs contains ref) {
+    for (ref <- releasing if nontrivialRefs contains ref) {
       // remove each released reference's sent count
       sentCounts remove ref.token.get
       // get the reference's target for grouping
@@ -239,7 +237,7 @@ class ActorContext[T <: Message](
       targets(key) = (targetRefs :+ ref, targetCreated :++ created)
       // remove this ref's created info and remove it from the refs set
       createdUsing remove ref
-      refs -= ref
+      activeRefs -= ref
     }
     // send the release message for each target actor
     for ((target, (targetedRefs, createdRefs)) <- targets) {
@@ -252,7 +250,7 @@ class ActorContext[T <: Message](
     var refsToSelf: Set[AnyActorRef] = Set()
     for (ref <- releasing if (selfRefs contains ref) && (ref != self)) {
       sentCounts remove ref.token.get
-      selfRefs -= ref
+      activeRefs -= ref
       refsToSelf += ref
     }
     // Note that the `createdUsing` entry for self refs is always empty:
@@ -270,7 +268,7 @@ class ActorContext[T <: Message](
   /**
    * Release all nontrivial references owned by this actor.
    */
-  def releaseEverything(): Unit = release(refs)
+  def releaseEverything(): Unit = release(nontrivialRefs)
 
   /**
    * Gets the current [[ActorSnapshot]].
@@ -281,7 +279,7 @@ class ActorContext[T <: Message](
     val sent: Map[Token, Int] = sentCounts.toMap
     val recv: Map[Token, Int] = receivedCounts.toMap
     val created: Seq[AnyActorRef] = createdUsing.values.toSeq.flatten
-    ActorSnapshot(refs ++ selfRefs, owners, created, releasedOwners, sent, recv)
+    ActorSnapshot(activeRefs, owners, created, releasedOwners, sent, recv)
   }
 
   /**
