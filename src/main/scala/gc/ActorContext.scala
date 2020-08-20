@@ -23,8 +23,10 @@ class ActorContext[T <: Message](
   val token: Option[Token]
 ) {
 
-  /** Used for token generation */
-
+  // DO NOT MOVE THIS DECLARATION DOWN:
+  // The token count must be initialized first because `newToken()` gets invoked
+  // by other parts of the constructor.
+  // If this is moved down, Scala will silently treat it as null and cause bugs at runtime.
   private var tokenCount: Int = 0
 
   /** This actor's self reference. */
@@ -161,7 +163,7 @@ class ActorContext[T <: Message](
   /**
    * Release all references owned by this actor.
    */
-  def releaseEverything(): Unit = release(state.nontrivialRefs)
+  def releaseEverything(): Unit = release(state.nontrivialActiveRefs)
 
   /**
    * Gets the current [[ActorSnapshot]].

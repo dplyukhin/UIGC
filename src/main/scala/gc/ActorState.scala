@@ -16,6 +16,8 @@ class ActorState[
 ) {
   import ActorState._
 
+  val self: Name = selfRef.target
+
   /** References this actor owns. Starts with its self reference. */
   var activeRefs: Set[Ref] = Set(selfRef)
   /**
@@ -31,8 +33,10 @@ class ActorState[
   /** Tracks how many messages are received using each reference. */
   val recvCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
 
+  /** The set of refs that this actor owns that point to this actor itself */
+  def trivialActiveRefs: Set[Ref] = activeRefs filter { _.target == self }
   /** The set of refs that this actor owns that do not point to itself */
-  def nontrivialRefs: Iterable[Ref] = activeRefs - selfRef
+  def nontrivialActiveRefs: Set[Ref] = activeRefs filter { _.target != self }
 
   /**
    * Adds the given ref to this actor's collection of active refs
@@ -85,37 +89,78 @@ class ActorState[
     })
   }
 
+  /** An actor can receive a reference to itself and then deactivate it, placing a Release
+   * message in its queue. We don't want to terminate actors if their message queue is nonempty.
+   * This variable indicates whether any such messages exist. */
+  // TODO increment this count when sending self a release message
+  // TODO decrement this count upon receiving a release message from self
+  // TODO increment the send/receive count for `selfRef` when sending a SelfCheck message
+  private var numPendingReleaseMessagesToSelf = 0
+
+  /** Assuming this actor has no inverse acquaintances besides itself, this function
+   * determines whether the actor has any undelivered messages to itself.
+   */
+  // TODO Can we test that this is accurate with Scalacheck?
+  private def anyPendingSelfMessages: Boolean = {
+    // Actors can send themselves three kinds of messages:
+    // - App messages
+    // - Release messages
+    // - SelfCheck messages
+
+    // If an actor has deactivated a reference to itself, the send count is deleted and its receive
+    // count may or may not have been initialized. First we check if any such messages exist.
+    if (numPendingReleaseMessagesToSelf > 0) return true
+
+    // At this point we know that the actor has no pending release messages to itself.
+    // It is possible that the actor sent itself messages that have not
+    // yet been delivered, in which case the received count has not yet
+    // been initialized.
+    for (ref <- trivialActiveRefs) {
+      // The token is guaranteed to be defined because a token is only null when the reference
+      // is from an *external actor* to an internal actor. Clearly, this actor is an internal actor.
+      val token = ref.token.get
+
+      // If the sent count is uninitialized, then no messages were sent using this ref.
+      if (sentCount.contains(token)) {
+        // If the receive count is uninitialized, then at least one message hasn't been received.
+        if (!recvCount.contains(token))
+          return true
+
+        // Similarly if the send count is greater than the receive count.
+        assert(sentCount(token) >= recvCount(token))
+        if (sentCount(token) > recvCount(token))
+          return true
+      }
+    }
+    false
+  }
+
+  /** Whether this actor has any nontrivial inverse acquaintances, i.e. any other actors with unreleased
+   * references to this one. */
+  def anyInverseAcquaintances: Boolean = {
+    // By the Chain Lemma, this check is sufficient: an actor has nontrivial inverse acquaintances iff
+    // the `owners` set contains a refob owned by an actor other than itself.
+    // TODO Can we test this invariant with Scalacheck?
+    owners exists { _.owner != self }
+  }
+
+  /** Check whether this actor is ready to self-terminate due to having no inverse acquaintances and no
+   * pending messages; such an actor will never again receive a message. */
   def tryTerminate(): TerminationStatus = {
-    // Check if there are any unreleased references to this actor.
-    if (owners != Set(selfRef) || releasedOwners.nonEmpty) {
+    if (anyInverseAcquaintances) {
       NotTerminated
     }
-    // There are no references to this actor remaining.
+    // No other actor has a reference to this one.
     // Check if there are any pending messages from this actor to itself.
-    else if (recvCount(selfRef.token.get) != sentCount(selfRef.token.get)) {
+    else if (anyPendingSelfMessages) {
       // Remind this actor to try and terminate after all those messages have been delivered.
       RemindMeLater
     }
-    // There are no application messages to this actor remaining.
-    // Therefore it should begin the termination process.
-    // Check if this actor still holds any references.
+    // There are no messages to this actor remaining.
+    // Therefore it should begin the termination process; if it has any references, they should be deactivated.
     else {
-      // There are no application messages to this actor remaining, and it doesn't hold any references.
-      // There are no references to this actor and all of its references should be released.
       Terminated
     }
-  }
-
-  def hasUnreleasedRef: Boolean = {
-    releasedOwners.nonEmpty || owners != Set(selfRef)
-  }
-
-  def hasPendingSelfMessage: Boolean = {
-    recvCount(selfRef.token.get) != sentCount(selfRef.token.get)
-  }
-
-  def hasActiveRef: Boolean = {
-    (activeRefs - selfRef).nonEmpty
   }
 
   /**
@@ -127,8 +172,18 @@ class ActorState[
   def handleCreatedRef(target: Ref, newRef: Ref): Unit = {
     require(target.target == newRef.target)
     require(activeRefs contains target)
-    val seq = createdUsing getOrElse(target, Seq())
-    createdUsing(target) = seq :+ newRef
+
+    // If I am creating a reference to myself...
+    if (target.target == self) {
+      owners += newRef
+    }
+    // If I am creating a reference pointing to another actor...
+    else {
+      // Note that this code doesn't work when `target.target == self` because the `self`
+      // ref never gets released; the `createdUsing` field would increase in size without bound.
+      val seq = createdUsing getOrElse(target, Seq())
+      createdUsing(target) = seq :+ newRef
+    }
   }
 
   /**
@@ -140,7 +195,7 @@ class ActorState[
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
     val targets: mutable.Map[Name, (Seq[Ref], Seq[Ref])] = mutable.Map()
     // process the references that are actually in the refs set
-    for (ref <- releasing if activeRefs contains ref) {
+    for (ref <- releasing if nontrivialActiveRefs contains ref) {
       // remove each released reference's sent count
       sentCount remove ref.token.get
       // get the reference's target for grouping
@@ -156,6 +211,24 @@ class ActorState[
       createdUsing remove ref
       activeRefs -= ref
     }
+
+
+    // Similarly, process the "trivial" references from this actor to itself.
+    // But do not deactivate the `self` ref, because it is always accessible from
+    // the ActorContext.
+    var refsToSelf: Seq[Ref] = Seq()
+    for (ref <- releasing if (trivialActiveRefs contains ref) && (ref != self)) {
+      sentCount remove ref.token.get
+      activeRefs -= ref
+      refsToSelf :+= ref
+    }
+    // Note that the `createdUsing` entry for self refs is always empty:
+    // If an actor creates a reference to itself, it immediately adds it
+    // to the `owners` set instead of placing it in the `createdUsing` set.
+    // TODO Test that this is the case!
+    targets(self) = (refsToSelf, Seq())
+
+
     // send the release message for each target actor
     // TODO: just leave this mutable?
     targets.toMap
