@@ -4,15 +4,22 @@ import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import org.scalatest.wordspec.AnyWordSpecLike
 import akka.actor.typed.{Behavior => AkkaBehavior}
 
-sealed trait ReleaseSpecMsg extends Message
-case class SendRefs(x: ActorRef[ReleaseSpecMsg], y: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with Message {
-  override def refs: Iterable[AnyActorRef] = Seq(x, y)
-}
-case class RefInfo(ref: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with NoRefsMessage
-case object Create extends ReleaseSpecMsg with NoRefsMessage
-case class State(snapshot: Option[ActorSnapshot]) extends ReleaseSpecMsg with NoRefsMessage
 
 class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+
+
+  trait NoRefsMessage extends Message {
+    override def refs: Iterable[AnyActorRef] = Seq()
+  }
+
+  sealed trait ReleaseSpecMsg extends Message
+  case class SendRefs(x: ActorRef[ReleaseSpecMsg], y: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with Message {
+    override def refs: Iterable[AnyActorRef] = Seq(x, y)
+  }
+  case class RefInfo(ref: ActorRef[ReleaseSpecMsg]) extends ReleaseSpecMsg with NoRefsMessage
+  case object Create extends ReleaseSpecMsg with NoRefsMessage
+  case class State(snapshot: Option[ActorSnapshot]) extends ReleaseSpecMsg with NoRefsMessage
+
   val probe: TestProbe[ReleaseSpecMsg] = testKit.createTestProbe[ReleaseSpecMsg]()
 
   "Release protocol" must {
@@ -72,7 +79,7 @@ class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           D = context.spawn(ActorO(), "D")
           val w = context.createRef(x, D)
           probe.ref ! RefInfo(w)
-          val z = context.createRef(y, D)
+          context.createRef(y, D)
           context.release(x)
           this
         case State(_) =>

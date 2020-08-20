@@ -4,25 +4,29 @@ import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
-trait NoRefsMessage extends Message {
-  override def refs: Iterable[AnyActorRef] = Seq()
-}
-
-sealed trait testMessage extends Message
-case object Init extends testMessage with NoRefsMessage
-case class SendC(msg: testMessage) extends testMessage with NoRefsMessage
-case class SendB(msg: testMessage) extends testMessage with NoRefsMessage
-case object TellBAboutC extends testMessage with NoRefsMessage
-case object ReleaseC extends testMessage with NoRefsMessage
-case object ReleaseB extends testMessage with NoRefsMessage
-case object Hello extends testMessage with NoRefsMessage
-case object Spawned extends testMessage with NoRefsMessage
-case object Terminated extends testMessage with NoRefsMessage
-case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-  override def refs: Iterable[AnyActorRef] = Iterable(ref)
-}
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+
+
+  trait NoRefsMessage extends Message {
+    override def refs: Iterable[AnyActorRef] = Seq()
+  }
+
+  sealed trait testMessage extends Message
+  case object Init extends testMessage with NoRefsMessage
+  case class SendC(msg: testMessage) extends testMessage with NoRefsMessage
+  case class SendB(msg: testMessage) extends testMessage with NoRefsMessage
+  case object TellBAboutC extends testMessage with NoRefsMessage
+  case object ReleaseC extends testMessage with NoRefsMessage
+  case object ReleaseB extends testMessage with NoRefsMessage
+  case object Hello extends testMessage with NoRefsMessage
+  case object Spawned extends testMessage with NoRefsMessage
+  case object Terminated extends testMessage with NoRefsMessage
+  case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
+    override def refs: Iterable[AnyActorRef] = Iterable(ref)
+  }
+
+
   val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")

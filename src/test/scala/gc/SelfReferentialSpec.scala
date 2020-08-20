@@ -5,67 +5,80 @@ import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 
-
-sealed trait SelfRefMsg extends Message
-
-final case class Countdown(n: Int) extends SelfRefMsg with NoRefsMessage
-final case class SelfRefTestInit(n: Int) extends SelfRefMsg with NoRefsMessage
-final case class SelfRefTerminated(n: Int) extends SelfRefMsg with NoRefsMessage
-
 class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-  val probe: TestProbe[SelfRefMsg] = testKit.createTestProbe[SelfRefMsg]()
 
-  "Isolated actors" must {
-    val actorA = testKit.spawn(ActorA(), "actorA")
-    "not self-terminate when self-messages are in transit" in {
-      val n = 10000
-      actorA ! SelfRefTestInit(n)
-      probe.expectMessage(SelfRefTerminated(n))
-    }
+  trait NoRefsMessage extends Message {
+    override def refs: Iterable[AnyActorRef] = Seq()
   }
 
+  sealed trait ActorMessage extends Message
+  case object Init extends ActorMessage with NoRefsMessage
+  case class GetRef(ref: ActorRef[ActorMessage]) extends ActorMessage with Message {
+    override def refs: Iterable[AnyActorRef] = Iterable(ref)
+  }
+
+  sealed trait ProbeMessage extends Message with NoRefsMessage
+  case class SnapshotMessage(snapshot: ActorSnapshot) extends ProbeMessage
+  case class CreatedRef(ref: AnyActorRef) extends ProbeMessage
+
+
+  val probe: TestProbe[ProbeMessage] = testKit.createTestProbe[ProbeMessage]()
+
+  // In this test, an actor A gives actor B a reference to itself. We check
+  // that A correctly recorded the existence of that reference in its state.
+
+  "Actors" must {
+    val actorA = testKit.spawn(ActorA(), "actorA")
+    "remember the references to themselves that they give to others" in {
+      actorA ! Init
+      val snapshot1 = probe.expectMessageType[SnapshotMessage].snapshot
+      val createdRef = probe.expectMessageType[CreatedRef].ref
+      val snapshot2 = probe.expectMessageType[SnapshotMessage].snapshot
+
+      snapshot2.owners.toSet shouldEqual (snapshot1.owners.toSet + createdRef)
+    }
+  }
 
   object ActorA {
-    def apply(): AkkaBehavior[SelfRefMsg] = Behaviors.setupReceptionist(context => new ActorA(context))
-  }
-  class ActorA(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
-    val actorB: ActorRef[SelfRefMsg] = context.spawn(ActorB(), "actorB")
-
-    override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
-      msg match {
-        case SelfRefTestInit(n) =>
-          actorB ! Countdown(n)
-          context.release(actorB)
-          this
-        case _ =>
-          this
-      }
-    }
+    def apply(): AkkaBehavior[ActorMessage] = Behaviors.setupReceptionist(context => new ActorA(context))
   }
 
   object ActorB {
-    def apply(): ActorFactory[SelfRefMsg] = {
+    def apply(): ActorFactory[ActorMessage] = {
       Behaviors.setup(context => new ActorB(context))
     }
   }
-  class ActorB(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
-    private var count = 0
-    override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
+
+  class ActorA(context: ActorContext[ActorMessage]) extends AbstractBehavior[ActorMessage](context) {
+    var actorB: ActorRef[ActorMessage] = _
+
+    override def onMessage(msg: ActorMessage): Behavior[ActorMessage] = {
       msg match {
-        case Countdown(n) =>
-          if (n > 0) {
-            context.self ! Countdown(n - 1)
-            count += 1
-          }
+        case Init =>
+          actorB = context.spawn(ActorB(), "actorB")
+          probe.ref ! SnapshotMessage(context.snapshot())
+          val ref = context.createRef(context.self, actorB)
+          actorB ! GetRef(ref)
+          probe.ref ! CreatedRef(ref)
+          probe.ref ! SnapshotMessage(context.snapshot())
           this
-        case _ =>
-          this
+
+        case _ => this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[SelfRefMsg]]] = {
-      case PostStop =>
-        probe.ref ! SelfRefTerminated(count)
-        this
+  }
+
+  class ActorB(context: ActorContext[ActorMessage]) extends AbstractBehavior[ActorMessage](context) {
+    var actorA: ActorRef[ActorMessage] = _
+
+    override def onMessage(msg: ActorMessage): Behavior[ActorMessage] = {
+      msg match {
+        case GetRef(ref) =>
+          actorA = ref
+          this
+        case _ => this
+      }
     }
   }
+
 }
