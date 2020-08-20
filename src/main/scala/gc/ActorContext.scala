@@ -104,6 +104,13 @@ class ActorContext[T <: Message](
   }
 
   /**
+   * Updates internal state to handle [[gc.SelfCheck]] messages.
+   */
+  def handleSelfCheck(): Unit = {
+    state.handleSelfCheck()
+  }
+
+  /**
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
@@ -113,7 +120,7 @@ class ActorContext[T <: Message](
         AkkaBehaviors.same
 
       case ActorState.RemindMeLater =>
-        self.target ! SelfCheck() // TODO: should this change message counts?
+        self.target ! SelfCheck()
         AkkaBehaviors.same
 
       case ActorState.Terminated =>

@@ -21,6 +21,7 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
         context.handleMessage(payload.refs, token)
         onMessage(payload)
       case SelfCheck() =>
+        context.handleSelfCheck()
         context.tryTerminate()
     }
 }

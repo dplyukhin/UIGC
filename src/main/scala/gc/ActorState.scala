@@ -96,10 +96,13 @@ class ActorState[
     })
   }
 
+  def handleSelfCheck(): Unit = {
+    incReceivedCount(selfRef.token)
+  }
+
   /** An actor can receive a reference to itself and then deactivate it, placing a Release
    * message in its queue. We don't want to terminate actors if their message queue is nonempty.
    * This variable indicates whether any such messages exist. */
-  // TODO increment the send/receive count for `selfRef` when sending a SelfCheck message
   private var numPendingReleaseMessagesToSelf = 0
 
   /** Assuming this actor has no inverse acquaintances besides itself, this function
@@ -159,6 +162,8 @@ class ActorState[
     // Check if there are any pending messages from this actor to itself.
     else if (anyPendingSelfMessages) {
       // Remind this actor to try and terminate after all those messages have been delivered.
+      // This is done by sending self a SelfCheck message, so we increment the message send count.
+      incSentCount(selfRef.token)
       RemindMeLater
     }
     // There are no messages to this actor remaining.

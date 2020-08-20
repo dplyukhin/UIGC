@@ -117,6 +117,7 @@ class Configuration(
               actorState.handleRelease(releasing, created)
               tryTerminating(recipient, actorState)
             case SelfCheck =>
+              actorState.handleSelfCheck()
               tryTerminating(recipient, actorState)
           }
 
