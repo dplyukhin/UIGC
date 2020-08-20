@@ -2,7 +2,6 @@ package gc
 
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
-import scala.collection.mutable
 
 /**
  * A version of [[AkkaActorContext]] used by garbage-collected actors. Provides

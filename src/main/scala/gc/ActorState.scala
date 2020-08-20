@@ -64,6 +64,13 @@ class ActorState[
    * @return True if this actor's behavior should stop.
    */
   def handleRelease(releasing: Iterable[Ref], created: Iterable[Ref]): Unit = {
+    require(releasing.nonEmpty)
+    val sender = releasing.head.owner
+
+    if (sender == self) {
+      numPendingReleaseMessagesToSelf -= 1
+    }
+
     releasing.foreach(ref => {
       // delete receive count for this refob
       recvCount remove ref.token.get
@@ -92,8 +99,6 @@ class ActorState[
   /** An actor can receive a reference to itself and then deactivate it, placing a Release
    * message in its queue. We don't want to terminate actors if their message queue is nonempty.
    * This variable indicates whether any such messages exist. */
-  // TODO increment this count when sending self a release message
-  // TODO decrement this count upon receiving a release message from self
   // TODO increment the send/receive count for `selfRef` when sending a SelfCheck message
   private var numPendingReleaseMessagesToSelf = 0
 
@@ -141,7 +146,7 @@ class ActorState[
     // By the Chain Lemma, this check is sufficient: an actor has nontrivial inverse acquaintances iff
     // the `owners` set contains a refob owned by an actor other than itself.
     // TODO Can we test this invariant with Scalacheck?
-    owners exists { _.owner != self }
+    owners exists { _.owner.get != self }
   }
 
   /** Check whether this actor is ready to self-terminate due to having no inverse acquaintances and no
@@ -222,11 +227,14 @@ class ActorState[
       activeRefs -= ref
       refsToSelf :+= ref
     }
-    // Note that the `createdUsing` entry for self refs is always empty:
-    // If an actor creates a reference to itself, it immediately adds it
-    // to the `owners` set instead of placing it in the `createdUsing` set.
-    // TODO Test that this is the case!
-    targets(self) = (refsToSelf, Seq())
+    if (refsToSelf.nonEmpty) {
+      // Note that the `createdUsing` entry for self refs is always empty:
+      // If an actor creates a reference to itself, it immediately adds it
+      // to the `owners` set instead of placing it in the `createdUsing` set.
+      // TODO Test that this is the case!
+      targets(self) = (refsToSelf, Seq())
+      numPendingReleaseMessagesToSelf += 1
+    }
 
 
     // send the release message for each target actor
