@@ -5,27 +5,34 @@ import akka.actor.typed.{Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 
-sealed trait KnowledgeTestMessage extends Message
+class SnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
-// sent by tester to an actor to get Knowledge from
-case object RequestKnowledge extends KnowledgeTestMessage with NoRefsMessage
-// response message with an actor's knowledge set
-case class Knowledge(actorSnapshot: ActorSnapshot) extends KnowledgeTestMessage with NoRefsMessage
-// sent by tester to tell actor A to create B and C respectively
-case object InitB extends KnowledgeTestMessage with NoRefsMessage
-case object InitC extends KnowledgeTestMessage with NoRefsMessage
-// sent by tester to have A share a reference to C with B
-case object ShareCWithB extends KnowledgeTestMessage with NoRefsMessage
-case class TellB(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
-case class TellC(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
-// a message containing a single reference, used in above scenario
-case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
-  override def refs: Iterable[AnyActorRef] = Iterable(ref)
-}
-// sent by tester to tell A to release C
-case object ForgetC extends KnowledgeTestMessage with NoRefsMessage
 
-class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+  trait NoRefsMessage extends Message {
+    override def refs: Iterable[AnyActorRef] = Seq()
+  }
+
+  sealed trait KnowledgeTestMessage extends Message
+
+  // sent by tester to an actor to get Knowledge from
+  case object RequestKnowledge extends KnowledgeTestMessage with NoRefsMessage
+  // response message with an actor's knowledge set
+  case class Knowledge(actorSnapshot: ActorSnapshot) extends KnowledgeTestMessage with NoRefsMessage
+  // sent by tester to tell actor A to create B and C respectively
+  case object InitB extends KnowledgeTestMessage with NoRefsMessage
+  case object InitC extends KnowledgeTestMessage with NoRefsMessage
+  // sent by tester to have A share a reference to C with B
+  case object ShareCWithB extends KnowledgeTestMessage with NoRefsMessage
+  case class TellB(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
+  case class TellC(msg: KnowledgeTestMessage) extends KnowledgeTestMessage with NoRefsMessage
+  // a message containing a single reference, used in above scenario
+  case class Ref(ref: ActorRef[KnowledgeTestMessage]) extends KnowledgeTestMessage with Message {
+    override def refs: Iterable[AnyActorRef] = Iterable(ref)
+  }
+  // sent by tester to tell A to release C
+  case object ForgetC extends KnowledgeTestMessage with NoRefsMessage
+
+
   val probe: TestProbe[KnowledgeTestMessage] = testKit.createTestProbe[KnowledgeTestMessage]()
   var aKnowledge: ActorSnapshot = _ // A's knowledge set, gets updated as the test progresses
   var gcRefAToC: ActorRef[KnowledgeTestMessage] = _ // A's reference to C
@@ -121,7 +128,7 @@ class ActorSnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       actorA ! ForgetC
       actorA ! RequestKnowledge
 
-      var newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
+      val newKnowledge = probe.expectMessageType[Knowledge].actorSnapshot
       newKnowledge.refs shouldNot contain (gcRefAToC)
       newKnowledge.owners shouldEqual aKnowledge.owners
       // A's sent message count to C should be removed

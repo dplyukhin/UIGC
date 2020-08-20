@@ -2,7 +2,6 @@ package gc
 
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
-import scala.collection.mutable
 
 /**
  * A version of [[AkkaActorContext]] used by garbage-collected actors. Provides
@@ -22,10 +21,6 @@ class ActorContext[T <: Message](
   val creator: Option[AkkaActorRef[Nothing]],
   val token: Option[Token]
 ) {
-
-  /** Used for token generation */
-
-  private var tokenCount: Int = 0
 
   /** This actor's self reference. */
   val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
@@ -103,6 +98,13 @@ class ActorContext[T <: Message](
   }
 
   /**
+   * Updates internal state to handle [[gc.SelfCheck]] messages.
+   */
+  def handleSelfCheck(): Unit = {
+    state.handleSelfCheck()
+  }
+
+  /**
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
@@ -112,7 +114,7 @@ class ActorContext[T <: Message](
         AkkaBehaviors.same
 
       case ActorState.RemindMeLater =>
-        self.target ! SelfCheck() // TODO: should this change message counts?
+        self.target ! SelfCheck()
         AkkaBehaviors.same
 
       case ActorState.Terminated =>
@@ -161,7 +163,7 @@ class ActorContext[T <: Message](
   /**
    * Release all references owned by this actor.
    */
-  def releaseEverything(): Unit = release(state.nontrivialRefs)
+  def releaseEverything(): Unit = release(state.nontrivialActiveRefs)
 
   /**
    * Gets the current [[ActorSnapshot]].
@@ -187,14 +189,12 @@ class ActorContext[T <: Message](
     state.incSentCount(optoken)
   }
 
-  /**
-   * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
-   *
-   * @return The new token.
-   */
-  private def newToken(): Token = {
-    val token = Token(context.self, tokenCount)
-    tokenCount += 1
-    token
+  object newToken {
+    private var count: Int = 0
+    def apply(): Token = {
+      val token = Token(context.self, count)
+      count += 1
+      token
+    }
   }
 }

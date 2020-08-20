@@ -72,7 +72,7 @@ class Configuration(
       case ActorState.RemindMeLater =>
         mailbox(actor).enqueue(SelfCheck)
       case ActorState.Terminated =>
-        deactivate(actor, actorState.nontrivialRefs)
+        deactivate(actor, actorState.nontrivialActiveRefs)
         status += (actor -> Stopped)
     }
   }
@@ -117,6 +117,7 @@ class Configuration(
               actorState.handleRelease(releasing, created)
               tryTerminating(recipient, actorState)
             case SelfCheck =>
+              actorState.handleSelfCheck()
               tryTerminating(recipient, actorState)
           }
 

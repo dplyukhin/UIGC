@@ -6,6 +6,10 @@ import org.scalatest.wordspec.AnyWordSpecLike
 
 class BehaviorsSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
+  trait NoRefsMessage extends Message {
+    override def refs: Iterable[AnyActorRef] = Seq()
+  }
+
   sealed trait BehaviorMsg extends Message
   case object SayHello extends BehaviorMsg with NoRefsMessage
   case object Stop extends BehaviorMsg with NoRefsMessage
@@ -17,7 +21,6 @@ class BehaviorsSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   private val target = testKit.createTestProbe[GCMessage[Nothing]]()
 
   // Create a couple of tokens for the references we create
-  private val token0 = Token(probe.ref, 0)
   private val token1 = Token(probe.ref, 1)
   private val token2 = Token(probe.ref, 2)
 
