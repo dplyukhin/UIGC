@@ -22,12 +22,6 @@ class ActorContext[T <: Message](
   val token: Option[Token]
 ) {
 
-  // DO NOT MOVE THIS DECLARATION DOWN:
-  // The token count must be initialized first because `newToken()` gets invoked
-  // by other parts of the constructor.
-  // If this is moved down, Scala will silently treat it as null and cause bugs at runtime.
-  private var tokenCount: Int = 0
-
   /** This actor's self reference. */
   val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
@@ -195,14 +189,12 @@ class ActorContext[T <: Message](
     state.incSentCount(optoken)
   }
 
-  /**
-   * Creates a new [[Token]] for use in an [[ActorRef]]. Increments the internal token count of the actor.
-   *
-   * @return The new token.
-   */
-  private def newToken(): Token = {
-    val token = Token(context.self, tokenCount)
-    tokenCount += 1
-    token
+  object newToken {
+    private var count: Int = 0
+    def apply(): Token = {
+      val token = Token(context.self, count)
+      count += 1
+      token
+    }
   }
 }
