@@ -52,6 +52,81 @@ class Configuration(
     actor => idle(actor) && pendingMessages(actor).nonEmpty
   }
 
+  /** Returns the actors that are idle and have no messages left to process. */
+  def blockedActors: Iterable[DummyName] = state.keys.filter {
+    actor => idle(actor) && pendingMessages(actor).isEmpty
+  }
+
+  /** Returns whether a refob is unreleased (if it's been created but not released) */
+  def unreleased(refob: DummyRef): Boolean = {
+    (state(refob.owner.get).activeRefs contains refob) || // contained in the owner's active refs
+      (pendingMessages(refob.target) exists { // in transit to target
+        case SelfCheck => false
+        // TODO: check if travelToken is valid? (i.e. if it identifies a ref held by the owner to the target)
+        // TODO 2: I think technically this should look across ALL the mailboxes for an AppMessage with this refob
+        case AppMessage(refs, travelToken) => refs.toSet.contains(refob) // in transit in a message from owner
+        case ReleaseMessage(releasing, created) => releasing.toSet.contains(refob) // in transit in a deactivation from owner
+      })
+  }
+
+  /** Finds the potential inverse acquaintances of an actor */
+  def potentialInverseAcquaintances(actor: DummyName): Set[DummyName] = {
+    var invAcquaintances: Set[DummyName] = Set(actor)
+    // get the mailboxes of *other* actors to find any in-transit refobs pointing to the actor
+    val inTransitMsgs = for {
+      (name, mail) <- mailbox
+      msg <- mail
+      if name != actor
+    } yield msg
+    // look through the in-transit messages for created refobs pointing to the actor
+    for (msg <- inTransitMsgs) {
+      msg match {
+        case AppMessage(refs, _) =>
+          // find refobs that point to the targeted actor and select their owners
+          val owners = for {
+            ref <- refs
+            if ref.target == actor
+            owner <- ref.owner
+          } yield owner
+          invAcquaintances ++= owners
+        case _ => ()
+      }
+    }
+    // look in the actor's own mailbox for release messages with refobs to it
+    for (msg <- pendingMessages(actor)) {
+      msg match {
+        case ReleaseMessage(releasing, created) =>
+          // look at the owners of the refobs being released
+          val owners = for {
+            ref <- releasing
+            owner <- ref.owner
+          } yield owner
+          invAcquaintances ++= owners
+        case _ => ()
+      }
+    }
+    // look at all actors's active refs and select the owner of those pointing to the target
+    val owners = for {
+      (_, s) <- state
+      ref <- s.activeRefs
+      owner <- ref.owner
+      if ref.target == actor
+    } yield owner
+    invAcquaintances ++= owners
+    invAcquaintances
+  }
+
+  /** Returns the set of actors that can reach the given actor. */
+  def canPotentiallyReach(actor: DummyName, set: Set[DummyName] = Set()): Set[DummyName] = {
+    val invAcquaintances = potentialInverseAcquaintances(actor)
+    var canReach = Set(actor) ++ invAcquaintances
+    for (actor <- invAcquaintances) {
+      canReach ++= canPotentiallyReach(actor)
+    }
+    canReach
+  }
+
+
 
   //// Helper methods
 
