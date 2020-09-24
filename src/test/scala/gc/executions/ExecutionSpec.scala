@@ -1,5 +1,6 @@
 package gc.executions
 
+import gc.QuiescenceDetector
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
@@ -105,7 +106,7 @@ object ExecutionSpec {
   def main(args: Array[String]): Unit = {
 
     val c: Configuration = Configuration()
-    val mExecution: Option[Execution] = genExecution(c, 10).sample
+    val mExecution: Option[Execution] = genExecution(c, 100).sample
 
     if (mExecution.isEmpty) {
       println("Failed to generate a legal execution.")
@@ -117,7 +118,6 @@ object ExecutionSpec {
     execution foreach println
     println("Configuration dump:\n" +
       s"Snapshots: ${c.snapshots}\n")
-    println("Configuration dump:")
     println("States:")
     for ((name, state) <- c.state) {
       println(name)
@@ -130,5 +130,22 @@ object ExecutionSpec {
       println(s"\tBusy?: ${c.status(name)}")
       println(s"\tMessages: ${c.pendingMessages(name)}")
     }
+    println("Blocked:")
+    println(s"\t${c.blockedActors}")
+    println("Garbage:")
+    println(s"\t${c.garbageActors}")
+
+    println("Quiescent detection:")
+    val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] = new QuiescenceDetector()
+    var snaps: Map[DummyName, DummySnapshot] = Map()
+    for ((name, snap) <- c.snapshots) {
+      snaps += (name -> snap)
+    }
+    println("Candidate snapshots:")
+    for ((name, snap) <- snaps) {
+      println(s"\t${name} -> ${snap}")
+    }
+    println("Quiescent detection results:")
+    println(s"\t${q.findTerminated(snaps)}")
   }
 }
