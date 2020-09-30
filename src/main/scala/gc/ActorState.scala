@@ -149,7 +149,12 @@ class ActorState[
     // By the Chain Lemma, this check is sufficient: an actor has nontrivial inverse acquaintances iff
     // the `owners` set contains a refob owned by an actor other than itself.
     // TODO Can we test this invariant with Scalacheck?
-    owners exists { _.owner.get != self }
+    owners exists { ref =>
+      ref.owner match {
+        case Some(owner) => owner != self
+        case None => true // In this case, an external actor has a reference to it
+      }
+    }
   }
 
   /** Check whether this actor is ready to self-terminate due to having no inverse acquaintances and no
