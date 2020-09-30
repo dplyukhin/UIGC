@@ -19,8 +19,8 @@ object ExecutionSpec {
       (10, genSpawn(c)),
       (10, genSend(c)),
       (10, genReceive(c)),
-      (1, genIdle(c)),
-      (10, genSnapshot(c)),
+      (10, genIdle(c)),
+      (5, genSnapshot(c)),
       (5, genDeactivate(c))
     ).retryUntil(_ => true, 100)
   }
@@ -103,19 +103,34 @@ object ExecutionSpec {
     }
   }
 
+  def genConfiguration(executionLength: Int): Gen[Configuration] = {
+    val config = Configuration()
+    for {
+      _ <- genExecution(config, executionLength)
+    } yield config
+  }
+
   def main(args: Array[String]): Unit = {
 
-    val c: Configuration = Configuration()
-    val mExecution: Option[Execution] = genExecution(c, 100).sample
+    // val c: Configuration = Configuration()
+    // val mExecution: Option[Execution] = genExecution(c, 500).sample
 
-    if (mExecution.isEmpty) {
+    // if (mExecution.isEmpty) {
+    //   println("Failed to generate a legal execution.")
+    //   return
+    // }
+    // val execution = mExecution.get
+
+    // println("Execution:")
+    // execution foreach println
+
+    val mConfig = genConfiguration(500).sample
+    if (mConfig.isEmpty) {
       println("Failed to generate a legal execution.")
       return
     }
-    val execution = mExecution.get
+    val c = mConfig.get
 
-    println("Execution:")
-    execution foreach println
     println("Configuration dump:\n" +
       s"Snapshots: ${c.snapshots}\n")
     println("States:")
@@ -143,7 +158,7 @@ object ExecutionSpec {
     }
     println("Candidate snapshots:")
     for ((name, snap) <- snaps) {
-      println(s"\t${name} -> ${snap}")
+      println(s"\t$name -> $snap")
     }
     println("Quiescent detection results:")
     println(s"\t${q.findTerminated(snaps)}")
