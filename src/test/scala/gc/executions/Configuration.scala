@@ -57,73 +57,95 @@ class Configuration(
     actor => idle(actor) && pendingMessages(actor).isEmpty
   }
 
-  /** Finds the unreleased refobs pointing to an actor */
-  def unreleasedRefobs(actor: DummyName): Set[DummyRef] = {
-    var refobs: Set[DummyRef] = Set()
-    // get the mailboxes of *other* actors to analyze in-transit refobs
-    val inTransitMsgs = for {
-      (name, mail) <- mailbox
+  /**
+   * The set of all pending refobs in the configuration. A refob is pending if
+   * it is contained in an in-transit `AppMessage`.
+   */
+  def pendingRefobs: Iterable[DummyRef] =
+    for {
+      mail <- mailbox.values
       msg <- mail
-      if name != actor
-    } yield msg
-    // look through the in-transit messages for shared refobs targeting the actor
-    for (msg <- inTransitMsgs) {
-      msg match {
-        case AppMessage(refs, _) =>
-          refobs ++= refs filter (_.target == actor)
-        case _ => ()
+      ref <- msg match {
+        case AppMessage(refs, _) => refs
+        case _ => Seq()
       }
-    }
-    // look in the actor's own mailbox for pending release messages with refobs to it
-    for (msg <- pendingMessages(actor)) {
-      msg match {
-        case ReleaseMessage(releasing, _) =>
-          refobs ++= releasing
-        case _ => ()
-      }
-    }
-    // finally, look at all other actors' active refs and select those pointing to the target
-    val owners = for {
-      (_, s) <- state
-      ref <- s.activeRefs
-      if ref.target == actor
     } yield ref
-    refobs ++= owners
-    refobs
+
+  /**
+   * The set of all deactivated refobs in the configuration. A refob is deactivated
+   * if its owner has deactivated it, but the target has not yet processed the
+   * corresponding `ReleaseMessage`.
+   */
+  def deactivatedRefobs: Iterable[DummyRef] =
+    for {
+      mail <- mailbox.values
+      msg <- mail
+      ref <- msg match {
+        case ReleaseMessage(releasing, _) => releasing
+        case _ => Seq()
+      }
+    } yield ref
+
+  /**
+   * The set of all active refobs in the configuration. A refob is active if it is
+   * in an actor's `activeRefs` set.
+   */
+  def activeRefobs: Iterable[DummyRef] =
+    for {
+      actorState <- state.values
+      ref <- actorState.activeRefs
+    } yield ref
+
+  /**
+   * The set of all unreleased refobs pointing to an actor. A refob is unreleased if
+   * it is either potentially active, active, or deactivated (and not yet released).
+   */
+  def unreleasedRefobs(actor: DummyName): Iterable[DummyRef] = {
+    val potentiallyActive = pendingRefobs.filter(_.target == actor)
+    val active = activeRefobs.filter(_.target == actor)
+    val deactivated = deactivatedRefobs.filter(_.target == actor)
+
+    (potentiallyActive ++ active ++ deactivated).toSet
   }
 
-  /** Gets the owners of the unreleased refobs to an actor, i.e. the potential inverse acquaintances. */
-  def potentialInverseAcquaintances(actor: DummyName): Set[DummyName] = {
+  /** Gets the owners of the unreleased refobs to an actor, i.e. the actor's potential inverse acquaintances.
+   * Note that, since all actors have a `self` refob, this set includes the actor itself.
+   */
+  def potentialInverseAcquaintances(actor: DummyName): Iterable[DummyName] = {
     unreleasedRefobs(actor).map(_.owner.get)
   }
 
-  /** Returns the set of actors that can reach the given actor. */
-  def canPotentiallyReach(actor: DummyName, visited: Set[DummyName] = Set()): Set[DummyName] = {
-    // get the inverse acquaintances to this actor
-    val invAcquaintances = potentialInverseAcquaintances(actor)
-    // those actors and the actor itself can reach this acot
-    var canReach = Set(actor) ++ invAcquaintances
-    for (a <- invAcquaintances) {
-      // if we haven't already considered this inv. acq.
-      if (!visited.contains(a)) {
-        // find the inverse acquaintances of those inverse acquaintances and so on
-        // also include that the current actor has been visited
-        canReach ++= canPotentiallyReach(a, visited + actor)
+  /** Returns the set of actors that can potential reach the given actor. */
+  def canPotentiallyReach(actor: DummyName): Set[DummyName] = {
+
+    // Traverse the actor graph depth-first to compute the transitive closure.
+    // The `visited` set contains all the actors seen so far in the traversal.
+    def traverse(actor: DummyName, visited: Set[DummyName]): Set[DummyName] = {
+      var nowVisited = visited + actor
+
+      for (invAcq <- potentialInverseAcquaintances(actor)) {
+        // Add everything that can potentially reach `invAcq` to the `visited` set,
+        // if we haven't visited `invAcq` already.
+        if (!(nowVisited contains invAcq)) {
+          nowVisited = traverse(invAcq, nowVisited)
+        }
       }
+      nowVisited
     }
-    canReach
+
+    traverse(actor, Set())
   }
 
   /** Returns the garbage actors in a configuration. */
   def garbageActors: Set[DummyName] = {
-    // actors are garbage iff they are blocked and only reachable by blocked actors
+    // actors are garbage iff they are blocked and only potentially reachable by blocked actors
     var garbage: Set[DummyName] = Set()
     val blocked = blockedActors.toSet
     for (actor <- blocked) {
       // for every blocked actor, get the actors that can reach it
       val canReach = canPotentiallyReach(actor)
       // if all the actors that can reach this actor are also blocked, then this actor is garbage
-      if (canReach subsetOf(blocked)) {
+      if (canReach subsetOf blocked) {
         garbage += actor
       }
     }
