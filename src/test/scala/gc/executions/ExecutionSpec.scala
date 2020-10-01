@@ -87,49 +87,52 @@ object ExecutionSpec {
     } yield Snapshot(idleActor)
   }
 
-  def genExecution(c: Configuration, size: Int): Gen[Execution] = {
-    if (size <= 0)
-      return const(Seq())
+  def genExecutionAndConfiguration(executionSize: Int): Gen[(Execution, Configuration)] = {
+    val config = Configuration()
 
-    // This expression tries generating an event and, if it succeeded,
-    // advances the configuration and generates subsequent events.
-    // TODO The mutability of Configuration looks fishy inside this `for` comprehension. Make it immutable?
-    for {
-      event <- genEvent(c)
-      _ = c.transition(event)
-      events <- genExecution(c, size - 1)
-    } yield {
-      Seq(event) ++ events
+    // This function takes:
+    // (a) the execution generated so far,
+    // (b) the configuration generated so far, and
+    // (c) the remaining number of events to generate.
+    // When there is nothing left to generate, it returns Right.
+    // Otherwise, it generates one event, adds it to the execution, and returns Left.
+    def helper(triple: (Execution, Configuration, Int)): Gen[Either[(Execution, Configuration, Int), (Execution, Configuration)]] = {
+      val (e, c, size) = triple
+      if (size <= 0)
+        return const(Right(e,c))
+
+      for {
+        event <- genEvent(c)
+        _ = c.transition(event)
+      } yield Left(e :+ event, c, size - 1)
+
     }
+    tailRecM[(Execution, Configuration, Int), (Execution, Configuration)]((Seq(), config, executionSize))(helper)
   }
 
   def genConfiguration(executionLength: Int): Gen[Configuration] = {
-    val config = Configuration()
     for {
-      _ <- genExecution(config, executionLength)
+      (_, config) <- genExecutionAndConfiguration(executionLength)
     } yield config
+  }
+  def genExecution(executionLength: Int): Gen[Execution] = {
+    for {
+      (exec, _) <- genExecutionAndConfiguration(executionLength)
+    } yield exec
   }
 
   def main(args: Array[String]): Unit = {
 
-    // val c: Configuration = Configuration()
-    // val mExecution: Option[Execution] = genExecution(c, 500).sample
+    val mExecution: Option[(Execution, Configuration)] = genExecutionAndConfiguration(1000).sample
 
-    // if (mExecution.isEmpty) {
-    //   println("Failed to generate a legal execution.")
-    //   return
-    // }
-    // val execution = mExecution.get
-
-    // println("Execution:")
-    // execution foreach println
-
-    val mConfig = genConfiguration(500).sample
-    if (mConfig.isEmpty) {
+    if (mExecution.isEmpty) {
       println("Failed to generate a legal execution.")
       return
     }
-    val c = mConfig.get
+    val (execution, c) = mExecution.get
+
+    println("Execution:")
+    execution foreach println
 
     println("Configuration dump:\n" +
       s"Snapshots: ${c.snapshots}\n")
