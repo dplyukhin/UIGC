@@ -3,6 +3,8 @@ package gc.executions
 import gc.QuiescenceDetector
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
+import org.scalacheck.Prop._
+import org.scalatest.propspec.AnyPropSpecLike
 
 object ExecutionSpec {
 
@@ -121,7 +123,7 @@ object ExecutionSpec {
     } yield exec
   }
 
-  def main(args: Array[String]): Unit = {
+  def pain(args: Array[String]): Unit = {
 
     val mExecution: Option[(Execution, Configuration)] = genExecutionAndConfiguration(1000).sample
 
@@ -165,5 +167,36 @@ object ExecutionSpec {
     }
     println("Quiescent detection results:")
     println(s"\t${q.findTerminated(snaps)}")
+  }
+}
+
+class ExecutionSpec extends AnyPropSpecLike {
+  import ExecutionSpec._
+  property("garbage actors must also be blocked") {
+    val executionSize = 500
+    forAll(genConfiguration(executionSize)) { (config: Configuration) => {
+      config.garbageActors subsetOf config.blockedActors.toSet
+    }}
+  }
+
+  property("potential inverse acquaintances of garbage must also be blocked") {
+    val executionSize = 500
+    forAll(genConfiguration(executionSize)) { (config: Configuration) => {
+      val garbage = config.garbageActors
+      val blocked = config.blockedActors.toSet
+      garbage.forall(config.potentialInverseAcquaintances(_).toSet subsetOf blocked)
+    }}
+  }
+
+  property("quiescent actors must be garbage") {
+    val executionSize = 500
+    val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] = new QuiescenceDetector()
+    forAll(genConfiguration(executionSize)) { (config: Configuration) => {
+      var snaps: Map[DummyName, DummySnapshot] = Map()
+      for ((name, snap) <- config.snapshots) {
+        snaps += (name -> snap)
+      }
+      q.findTerminated(snaps) == config.garbageActors
+    }}
   }
 }
