@@ -19,10 +19,10 @@ object ExecutionSpec {
     // add each generator to the collection if its precondition is satisfied
     if (c.busyActors.nonEmpty)           generators :+= (10, genSpawn(c))
     if (c.busyActors.nonEmpty)           generators :+= (10, genSend(c))
-    if (c.busyActors.nonEmpty)           generators :+= (10, genIdle(c))
-    if (c.idleActors.nonEmpty)           generators :+= (5, genSnapshot(c))
+    if (c.busyActors.nonEmpty)           generators :+= (20, genIdle(c))
+    if (c.idleActors.nonEmpty)           generators :+= (10, genSnapshot(c))
     if (c.readyActors.nonEmpty)          generators :+= (10, genReceive(c))
-    if (c.actorsWithActiveRefs.nonEmpty) generators :+= (10, genDeactivate(c))
+    if (c.actorsWithActiveRefs.nonEmpty) generators :+= (5, genDeactivate(c))
 
     if (generators.isEmpty)
       const(None)
@@ -48,7 +48,8 @@ object ExecutionSpec {
       recipient = recipientRef.target
 
       // generate a collection of refs that will be owned by the recipient
-      newAcquaintances <- containerOf[List, (DummyRef, DummyRef)](genRef(senderState, recipient))
+      n <- choose(0,3)
+      newAcquaintances <- containerOfN[List, (DummyRef, DummyRef)](n,genRef(senderState, recipient))
       (createdRefs, createdUsingRefs) = newAcquaintances.unzip
 
     } yield Send(sender, recipientRef, createdRefs, createdUsingRefs)
@@ -133,11 +134,13 @@ object ExecutionSpec {
 object Spec extends Properties("Basic properties of executions") {
   import ExecutionSpec._
 
-  val executionSize = 100
+  val executionSize = 1000
   override def overrideParameters(p: Test.Parameters): Test.Parameters =
-    p.withMinSuccessfulTests(1000)
+    p.withMinSuccessfulTests(100)
       // This prevents Scalacheck console output from getting wrapped at 75 chars
       .withTestCallback(ConsoleReporter(1, Int.MaxValue))
+      // This prevents Scalacheck from giving up when it has to discard a lot of tests
+      .withMaxDiscardRatio(100000)
 
   property("garbage actors must also be blocked") =
     forAll(genConfiguration(executionSize)) { (config: Configuration) => {
@@ -152,7 +155,8 @@ object Spec extends Properties("Basic properties of executions") {
     }}
 
   property("quiescent actors must be garbage") =
-    forAll(genConfiguration(executionSize)) { (config: Configuration) => {
+    forAll(genConfiguration(executionSize).suchThat(_.garbageActors.size > 10))
+    { (config: Configuration) => {
       val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] =
         new QuiescenceDetector()
 
