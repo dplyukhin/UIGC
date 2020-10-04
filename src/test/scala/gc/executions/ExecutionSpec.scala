@@ -1,35 +1,38 @@
 package gc.executions
 
 import gc.QuiescenceDetector
-import org.scalacheck.Gen
+import org.scalacheck.{Gen, Properties, Test}
 import org.scalacheck.Gen._
 import org.scalacheck.Prop._
-import org.scalatest.propspec.AnyPropSpecLike
+import org.scalacheck.util.ConsoleReporter
 
 object ExecutionSpec {
 
-  def tryOneOf[A](items: Iterable[A]): Gen[A] = {
-    if (items.isEmpty) fail
-    else oneOf(items)
-  }
+  /**
+   * Generates an event that can legally be executed in the given configuration.
+   * Generates `None` if no more events are possible.
+   */
+  def genEvent(c: Configuration): Gen[Option[Event]] = {
 
-  def genEvent(c: Configuration): Gen[Event] = {
-    // These generators use `tryOneOf`, which fails when given an empty sequence.
-    // We want to keep trying to generate executions even when it fails, so it's
-    // wrapped in `retryUntil` with a maximum of 100 attempts.
-    frequency(
-      (10, genSpawn(c)),
-      (10, genSend(c)),
-      (10, genReceive(c)),
-      (10, genIdle(c)),
-      (5, genSnapshot(c)),
-      (5, genDeactivate(c))
-    ).retryUntil(_ => true, 100)
+    var generators: Seq[(Int, Gen[Event])] = Seq()
+
+    // add each generator to the collection if its precondition is satisfied
+    if (c.busyActors.nonEmpty)           generators :+= (10, genSpawn(c))
+    if (c.busyActors.nonEmpty)           generators :+= (10, genSend(c))
+    if (c.busyActors.nonEmpty)           generators :+= (10, genIdle(c))
+    if (c.idleActors.nonEmpty)           generators :+= (5, genSnapshot(c))
+    if (c.readyActors.nonEmpty)          generators :+= (10, genReceive(c))
+    if (c.actorsWithActiveRefs.nonEmpty) generators :+= (10, genDeactivate(c))
+
+    if (generators.isEmpty)
+      const(None)
+    else
+      some(frequency(generators:_*))
   }
 
   def genSpawn(c: Configuration): Gen[Spawn] = {
     for {
-      parent <- tryOneOf(c.busyActors)
+      parent <- oneOf(c.busyActors)
       child = DummyName()
     } yield Spawn(parent, child)
   }
@@ -37,11 +40,11 @@ object ExecutionSpec {
   def genSend(c: Configuration): Gen[Send] = {
     for {
       // pick a busy actor to send the message
-      sender <- tryOneOf(c.busyActors)
+      sender <- oneOf(c.busyActors)
       senderState = c.state(sender)
 
       // pick a recipient from its active refs
-      recipientRef <- tryOneOf(senderState.activeRefs)
+      recipientRef <- oneOf(senderState.activeRefs)
       recipient = recipientRef.target
 
       // generate a collection of refs that will be owned by the recipient
@@ -59,33 +62,34 @@ object ExecutionSpec {
    */
   def genRef(actorState: DummyState, owner: DummyName): Gen[(DummyRef, DummyRef)] = {
     for {
-      createdUsingRef <- tryOneOf(actorState.activeRefs)
+      createdUsingRef <- oneOf(actorState.activeRefs)
       newRef = DummyRef(Some(DummyToken()), Some(owner), createdUsingRef.target)
     } yield (newRef, createdUsingRef)
   }
 
   def genReceive(c: Configuration): Gen[Receive] = {
     for {
-      recipient <- tryOneOf(c.readyActors)
+      recipient <- oneOf(c.readyActors)
     } yield Receive(recipient)
   }
 
   def genIdle(c: Configuration): Gen[BecomeIdle] = {
     for {
-      actor <- tryOneOf(c.busyActors)
+      actor <- oneOf(c.busyActors)
     } yield BecomeIdle(actor)
   }
 
   def genDeactivate(c: Configuration): Gen[Deactivate] = {
     for {
-      actor <- tryOneOf(c.busyActors)
-      refs <- tryOneOf(c.state(actor).activeRefs) // pick reference to deactivate
+      actor <- oneOf(c.actorsWithActiveRefs)
+      state = c.state(actor)
+      refs <- oneOf(state.activeRefs - state.selfRef) // pick a reference to deactivate
     } yield Deactivate(actor, refs)
   }
 
   def genSnapshot(c: Configuration): Gen[Snapshot] = {
     for {
-      idleActor <- tryOneOf(c.idleActors)
+      idleActor <- oneOf(c.idleActors)
     } yield Snapshot(idleActor)
   }
 
@@ -103,11 +107,13 @@ object ExecutionSpec {
       if (size <= 0)
         return const(Right(e,c))
 
-      for {
-        event <- genEvent(c)
-        _ = c.transition(event)
-      } yield Left(e :+ event, c, size - 1)
-
+      genEvent(c).flatMap {
+        case None =>
+          const(Right(e,c))
+        case Some(event) =>
+          c.transition(event)
+          Left(e :+ event, c, size - 1)
+      }
     }
     tailRecM[(Execution, Configuration, Int), (Execution, Configuration)]((Seq(), config, executionSize))(helper)
   }
@@ -124,7 +130,6 @@ object ExecutionSpec {
   }
 
   def pain(args: Array[String]): Unit = {
-
     val mExecution: Option[(Execution, Configuration)] = genExecutionAndConfiguration(1000).sample
 
     if (mExecution.isEmpty) {
@@ -170,33 +175,32 @@ object ExecutionSpec {
   }
 }
 
-class ExecutionSpec extends AnyPropSpecLike {
+object Spec extends Properties("Basic properties of executions") {
   import ExecutionSpec._
-  property("garbage actors must also be blocked") {
-    val executionSize = 500
+
+  val executionSize = 100
+  override def overrideParameters(p: Test.Parameters): Test.Parameters =
+    p.withMinSuccessfulTests(100)
+      // This prevents Scalacheck console output from getting wrapped at 75 chars
+      .withTestCallback(ConsoleReporter(1, Int.MaxValue))
+
+  property("garbage actors must also be blocked") =
     forAll(genConfiguration(executionSize)) { (config: Configuration) => {
       config.garbageActors subsetOf config.blockedActors.toSet
     }}
-  }
 
-  property("potential inverse acquaintances of garbage must also be blocked") {
-    val executionSize = 500
+  property("potential inverse acquaintances of garbage must also be blocked") =
     forAll(genConfiguration(executionSize)) { (config: Configuration) => {
       val garbage = config.garbageActors
       val blocked = config.blockedActors.toSet
       garbage.forall(config.potentialInverseAcquaintances(_).toSet subsetOf blocked)
     }}
-  }
 
-  property("quiescent actors must be garbage") {
-    val executionSize = 500
-    val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] = new QuiescenceDetector()
+  property("quiescent actors must be garbage") =
     forAll(genConfiguration(executionSize)) { (config: Configuration) => {
-      var snaps: Map[DummyName, DummySnapshot] = Map()
-      for ((name, snap) <- config.snapshots) {
-        snaps += (name -> snap)
-      }
-      q.findTerminated(snaps) == config.garbageActors
+      val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] =
+        new QuiescenceDetector()
+
+      q.findTerminated(config.snapshots.toMap) == config.garbageActors
     }}
-  }
 }

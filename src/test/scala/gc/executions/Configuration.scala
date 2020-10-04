@@ -42,6 +42,13 @@ class Configuration(
 
   def idleActors: Iterable[DummyName] = state.keys.filter { idle }
 
+  /** Returns the actors that have active refs, excluding the unreleasable `self` ref */
+  def actorsWithActiveRefs: Iterable[DummyName] = for {
+    actor <- busyActors
+    s = state(actor)
+    if (s.activeRefs - s.selfRef).nonEmpty
+  } yield actor
+
   /** Returns the actors that are busy or are idle with pending messages */
   def unblockedActors: Iterable[DummyName] = state.keys.filter {
     actor => busy(actor) || (idle(actor) && pendingMessages(actor).nonEmpty)
