@@ -1,12 +1,9 @@
-package gc.executions
+package gc.properties.model
 
-import gc.QuiescenceDetector
-import org.scalacheck.{Gen, Properties, Test}
+import org.scalacheck.Gen
 import org.scalacheck.Gen._
-import org.scalacheck.Prop._
-import org.scalacheck.util.ConsoleReporter
 
-object ExecutionSpec {
+object Generators {
 
   /**
    * Generates an event that can legally be executed in the given configuration.
@@ -142,61 +139,3 @@ object ExecutionSpec {
   }
 }
 
-object Spec extends Properties("Basic properties of executions") {
-  import ExecutionSpec._
-
-  val executionSize = 1000
-  override def overrideParameters(p: Test.Parameters): Test.Parameters =
-    p.withMinSuccessfulTests(100)
-      // This prevents Scalacheck console output from getting wrapped at 75 chars
-      .withTestCallback(ConsoleReporter(1, Int.MaxValue))
-      // This prevents Scalacheck from giving up when it has to discard a lot of tests
-      .withMaxDiscardRatio(100000)
-
-  property(" Blocked actors are idle") =
-    forAll(genConfiguration(executionSize)) { config =>
-      config.blockedActors.forall(config.idle)
-    }
-
-  property(" Blocked actors have no undelivered messages") =
-    forAll(genConfiguration(executionSize)) { config =>
-      config.blockedActors.forall(config.pendingMessages(_).isEmpty)
-    }
-
-  property(" Garbage actors must also be blocked") =
-    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config =>
-      config.garbageActors subsetOf config.blockedActors.toSet
-    }
-
-  property(" Potential inverse acquaintances of garbage must also be blocked") =
-    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
-      val garbage = config.garbageActors
-      val blocked = config.blockedActors.toSet
-      garbage.forall(config.potentialInverseAcquaintances(_).toSet subsetOf blocked)
-    }}
-
-  // By the preceding tests, this implies that garbage actors remain idle
-  // and their mailbox stays empty
-  property(" Garbage actors remain garbage") =
-    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
-      // Compute the set of garbage actors in `config`, run the system for a
-      // few more steps, and then check that those actors have remained garbage.
-      // Note that `laterConfig` is the same object as `config`, but mutated.
-      val garbage = config.garbageActors
-
-      forAll(genConfiguration(executionSize, initialConfig = config)) { laterConfig => {
-        garbage subsetOf laterConfig.garbageActors
-      }}
-    }}
-
-  property(" Quiescence detector has no false positives") =
-    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
-      val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] =
-        new QuiescenceDetector()
-
-      val detectedGarbage = q.findTerminated(config.snapshots.toMap)
-      collect(detectedGarbage.size + " garbage actors detected") {
-        detectedGarbage subsetOf config.garbageActors
-      }
-    }}
-}

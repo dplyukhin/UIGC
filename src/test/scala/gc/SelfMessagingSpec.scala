@@ -5,10 +5,7 @@ import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 
-
-
-class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-
+object SelfMessagingSpec {
   trait NoRefsMessage extends Message {
     override def refs: Iterable[AnyActorRef] = Seq()
   }
@@ -18,7 +15,10 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   final case class Countdown(n: Int) extends SelfRefMsg with NoRefsMessage
   final case class SelfRefTestInit(n: Int) extends SelfRefMsg with NoRefsMessage
   final case class SelfRefTerminated(n: Int) extends SelfRefMsg with NoRefsMessage
+}
 
+class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+  import SelfMessagingSpec._
 
   val probe: TestProbe[SelfRefMsg] = testKit.createTestProbe[SelfRefMsg]()
 

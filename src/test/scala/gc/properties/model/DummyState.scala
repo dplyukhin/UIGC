@@ -1,4 +1,4 @@
-package gc.executions
+package gc.properties.model
 
 import gc.{AbstractSnapshot, ActorState}
 
