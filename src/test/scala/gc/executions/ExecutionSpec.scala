@@ -128,51 +128,6 @@ object ExecutionSpec {
       (exec, _) <- genExecutionAndConfiguration(executionLength)
     } yield exec
   }
-
-  def pain(args: Array[String]): Unit = {
-    val mExecution: Option[(Execution, Configuration)] = genExecutionAndConfiguration(1000).sample
-
-    if (mExecution.isEmpty) {
-      println("Failed to generate a legal execution.")
-      return
-    }
-    val (execution, c) = mExecution.get
-
-    println("Execution:")
-    execution foreach println
-
-    println("Configuration dump:\n" +
-      s"Snapshots: ${c.snapshots}\n")
-    println("States:")
-    for ((name, state) <- c.state) {
-      println(name)
-      println(s"\tActive: ${state.activeRefs}")
-      println(s"\tCreated: ${state.createdUsing}")
-      println(s"\tOwners: ${state.owners}")
-      println(s"\tReleased: ${state.releasedOwners}")
-      println(s"\tSent: ${state.sentCount}")
-      println(s"\tRecv: ${state.recvCount}")
-      println(s"\tBusy?: ${c.status(name)}")
-      println(s"\tMessages: ${c.pendingMessages(name)}")
-    }
-    println("Blocked:")
-    println(s"\t${c.blockedActors}")
-    println("Garbage:")
-    println(s"\t${c.garbageActors}")
-
-    println("Quiescent detection:")
-    val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] = new QuiescenceDetector()
-    var snaps: Map[DummyName, DummySnapshot] = Map()
-    for ((name, snap) <- c.snapshots) {
-      snaps += (name -> snap)
-    }
-    println("Candidate snapshots:")
-    for ((name, snap) <- snaps) {
-      println(s"\t$name -> $snap")
-    }
-    println("Quiescent detection results:")
-    println(s"\t${q.findTerminated(snaps)}")
-  }
 }
 
 object Spec extends Properties("Basic properties of executions") {
@@ -180,7 +135,7 @@ object Spec extends Properties("Basic properties of executions") {
 
   val executionSize = 100
   override def overrideParameters(p: Test.Parameters): Test.Parameters =
-    p.withMinSuccessfulTests(100)
+    p.withMinSuccessfulTests(1000)
       // This prevents Scalacheck console output from getting wrapped at 75 chars
       .withTestCallback(ConsoleReporter(1, Int.MaxValue))
 
@@ -201,6 +156,9 @@ object Spec extends Properties("Basic properties of executions") {
       val q: QuiescenceDetector[DummyName, DummyToken, DummyRef, DummySnapshot] =
         new QuiescenceDetector()
 
-      q.findTerminated(config.snapshots.toMap) == config.garbageActors
+      val detectedGarbage = q.findTerminated(config.snapshots.toMap)
+      collect(detectedGarbage.size + " garbage actors detected") {
+        detectedGarbage subsetOf config.garbageActors
+      }
     }}
 }

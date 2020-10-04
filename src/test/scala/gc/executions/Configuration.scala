@@ -239,6 +239,33 @@ class Configuration(
         snapshots :+= ((actor, snapshot))
     }
   }
+
+  def stateToString(name: DummyName, state: DummyState): String =
+    s"""    $name:
+       |      Active:  ${state.activeRefs}
+       |      Created: ${state.createdUsing}
+       |      Owners:  ${state.owners}
+       |      Released: ${state.releasedOwners}
+       |      Sent:     ${state.sentCount}
+       |      Received: ${state.recvCount}
+       |      Status:   ${status(name)}
+       |      Mailbox:  ${pendingMessages(name)}
+       |      Unreleased refobs: ${unreleasedRefobs(name)}
+       |""".stripMargin
+
+  override def toString: String = {
+    s"""Configuration:
+       |  Snapshots:
+       |    $snapshots
+       |  States:
+       |${state.keys.map(name => stateToString(name, state(name))).mkString("\n")}
+       |  Blocked:
+       |    $blockedActors
+       |  Garbage:
+       |    $garbageActors
+       |""".stripMargin
+  }
+
 }
 
 object Configuration {
