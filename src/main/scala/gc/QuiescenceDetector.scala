@@ -57,52 +57,66 @@ class QuiescenceDetector [
                                nonterminated: mutable.Set[Name],
                                unreleasedRefs: mutable.Map[Name, mutable.Set[Ref]]
                               ): Unit = {
-    // TODO: use a map from names to bools representing whether something is in the non terminated set
+
     if (!nonterminated.contains(actor)) {
-      nonterminated += actor // add this to the set
-      val refs = unreleasedRefs(actor)
-      for (ref <- refs) {
-        // for each outgoing unreleased refob
-        val B = ref.target
-        // if we haven't seen it already
-        if (!nonterminated.contains(B) && unreleasedRefs.contains(B)) {
-          collectReachable(B, nonterminated, unreleasedRefs) // explore the refobs
+      nonterminated += actor
+
+      // add all of this actor's potential acquaintances to `nonterminated` as well;
+      // this set might not be initialized if the actor hasn't taken a snapshot yet
+      if (unreleasedRefs contains actor) {
+        for (ref <- unreleasedRefs(actor)) {
+          collectReachable(ref.target, nonterminated, unreleasedRefs)
         }
       }
     }
   }
 
   /**
-   * Rearranges a map of actors and their snapshots into a map of actors and their unreleased refs.
-   * @param snapshots A map of names to snapshots.
-   * @return A mapping from actor names to the set of unreleased refobs that they own.
+   * Returns a pair:
+   * 1. A map that associates each actor to the set of unreleased refobs it owns.
+   * 2. The set of actors in `snapshots` that are owned by external actors.
    */
-  private def mapSnapshots(snapshots: Map[Name, Snapshot]): mutable.Map[Name, mutable.Set[Ref]] = {
-    // this maps actors to the set of refobs they own that we *think* are unreleased
-    val unreleased_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
+  private def mapSnapshots(snapshots: Map[Name, Snapshot]): (mutable.Map[Name, mutable.Set[Ref]], mutable.Set[Name]) = {
+    // this maps actors to the set of refobs they own that have been *created* -- but may have been released
+    val createdRefs: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
     // this maps actors to the set of refobs they own that have already been released
-    val released_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
+    val releasedRefs: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
+    // the set of actors that have external actors as potential inverse acquaintances
+    val receptionists: mutable.Set[Name] = mutable.Set()
 
-    for ((name, snap) <- snapshots) {
-      val unreleased = unreleased_map getOrElseUpdate(name, mutable.Set())
-      unreleased ++= snap.refs
+    for ((actor, snapshot) <- snapshots) {
+      // each refob (x: B -o C) created by this actor must be added to createdRefs(B)
+      // each unreleased refob (x: B -o A) pointing to this actor must be added to createdRefs(B)
+      for (ref <- snapshot.created ++ snapshot.owners) {
+        ref.owner match {
+          case Some(owner) =>
+            val created = createdRefs getOrElseUpdate(owner, mutable.Set())
+            created += ref
 
-      for (ref <- snap.created ++ snap.owners if ref.owner.isDefined) {
-        val other_unreleased = unreleased_map getOrElseUpdate(ref.owner.get, mutable.Set())
-        other_unreleased += ref
+          // ref.owner is None when it is owned by an external actor.
+          // This means the target is a "receptionist", i.e. it can never be garbage collected.
+          case None =>
+            receptionists += ref.target
+        }
       }
 
-      for (ref <- snap.releasedRefs) {
-        val released = released_map getOrElseUpdate(ref.owner.get, mutable.Set())
+      // each released refob (x: B -o A) pointing to this actor must be added to releasedRefs(B)
+      for (ref <- snapshot.releasedRefs) {
+        val released = releasedRefs getOrElseUpdate(ref.owner.get, mutable.Set())
         released += ref
       }
+
+      // each active refob (x: A -o B) in the snapshot must be added to createdRefs(A);
+      val created = createdRefs getOrElseUpdate(actor, mutable.Set())
+      created ++= snapshot.refs
     }
 
     // remove the references we've learned are released
-    for ((name, unreleased) <- unreleased_map) {
-      unreleased --= released_map.getOrElse(name, Set())
+    for ((name, unreleased) <- createdRefs) {
+      unreleased --= releasedRefs.getOrElse(name, Set())
     }
-    unreleased_map
+
+    (createdRefs, receptionists)
   }
 
   /**
@@ -112,16 +126,29 @@ class QuiescenceDetector [
    */
   def findTerminated(snapshots: Map[Name, Snapshot]): Set[Name] = {
     // strategy: identify all the inconsistent actors and return the set without them
-    val unreleased_map = mapSnapshots(snapshots)
-    val reachable: mutable.Set[Name] = mutable.Set()
-    // TODO: use a map from names to bools representing whether something is in the non terminated set
-    // explore the unreleased graph and collect all the neighbors
+    val (outgoingRefs, receptionists) = mapSnapshots(snapshots)
+    val inconsistentActors: mutable.Set[Name] = mutable.Set()
+
+    // An actor's snapshot is "inconsistent" if:
+    // (1) it is a "receptionist", i.e. it is owned by an external actor; or
+    // (2) any of its incoming unreleased *refs* are inconsistent; or
+    // (3) the actor is reachable (via a sequence of unreleased refobs) from an "inconsistent" actor
+
+    // This loop finds all the actors satisfying property (1) and adds all reachable actors to the
+    // inconsistent set.
+    for (actor <- receptionists)
+      collectReachable(actor, inconsistentActors, outgoingRefs)
+
+    // This loop finds all the actors satisfying property (2) and adds all reachable actors to the
+    // inconsistent set.
     for {
-      (actor, refs) <- unreleased_map
-      if refs.exists(r => !isConsistent(r, snapshots))
-    } collectReachable(actor, reachable, unreleased_map)
-    // the actors remaining after removing every reachable inconsistent actor are terminated
-    snapshots.keySet &~ reachable
+      refs <- outgoingRefs.values
+      ref <- refs
+      if !isConsistent(ref, snapshots)
+    } collectReachable(ref.target, inconsistentActors, outgoingRefs)
+
+    // An actor is terminated if its snapshot is not inconsistent
+    snapshots.keySet &~ inconsistentActors
   }
 
 }
