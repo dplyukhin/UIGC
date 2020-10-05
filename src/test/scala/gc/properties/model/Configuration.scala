@@ -13,12 +13,27 @@ import scala.collection.mutable
  * In the initial configuration, there is just one actor that acts as a receptionist, i.e.
  * it never terminates.
  */
-class Configuration(
-                     var state: Map[DummyName, DummyState],
-                     var status: Map[DummyName, Configuration.ActorStatus],
-                     private var mailbox: Map[DummyName, mutable.Queue[ExecMessage]],
-) {
+class Configuration() {
   import Configuration._
+
+  private val initialActor = DummyName()
+
+  /** A mapping from all actors in the configuration to their states */
+  var state: Map[DummyName, DummyState] = Map(
+    initialActor -> new DummyState(
+      self = DummyRef(Some(initialActor), initialActor),
+      creator = DummyRef(None, initialActor)
+    )
+  )
+
+  /** An indicator of whether an actor is idle, blocked, or stopped */
+  var status: Map[DummyName, Configuration.ActorStatus] = Map(
+    initialActor -> Busy
+  )
+
+  private var mailbox: Map[DummyName, mutable.Queue[ExecMessage]] = Map(
+    initialActor -> mutable.Queue()
+  )
 
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
   var snapshots: Seq[(DummyName, DummySnapshot)] = Seq()
@@ -275,7 +290,7 @@ class Configuration(
 
   object DummyName {
     // just use an internal counter to make unique addresses
-    var count: Int = 1
+    var count: Int = 0
     def apply(): DummyName = {
       val name = new DummyName(count)
       count += 1
@@ -292,7 +307,7 @@ class Configuration(
   }
 
   object DummyToken {
-    var count = 1
+    var count = 0
     def apply(): DummyToken = {
       val t = new DummyToken(count)
       count += 1
@@ -309,22 +324,8 @@ object Configuration {
   case object Busy extends ActorStatus
   case object Stopped extends ActorStatus
 
-  def apply(): Configuration = {
-
-    // the initial actor
-    val A = DummyName(0)
-    // dummy reference for the receptionist A
-    val x = DummyRef(None, None, A)
-    // reference from A to itself
-    val y = DummyRef(Some(DummyToken(0)), Some(A), A)
-    // A starts knowing itself and that it is a receptionist
-    val aState = new DummyState(y, x)
-
-    new Configuration(Map(A -> aState), Map(A -> Busy), Map(A -> mutable.Queue()))
-  }
-
   def fromExecution(execution: Execution): Configuration = {
-    val config = Configuration()
+    val config = new Configuration()
     for (event <- execution) config.transition(event)
     config
   }

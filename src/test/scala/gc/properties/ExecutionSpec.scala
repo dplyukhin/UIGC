@@ -19,7 +19,8 @@ object ExecutionSpec extends Properties("Properties of executions") {
 
   property(" Executions should be reproducible") =
     forAllNoShrink(genExecution(executionSize)) { execution =>
-      val c = Configuration()
+      val c = new Configuration()
+      // This throws an exception if the execution is invalid, failing the test
       for (event <- execution) c.transition(event)
       true
     }

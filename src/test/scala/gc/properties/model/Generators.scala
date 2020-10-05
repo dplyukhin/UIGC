@@ -96,7 +96,7 @@ object Generators {
 
   private def genExecutionAndConfiguration(
     executionSize: Int,
-    initialConfig: Configuration = Configuration(),
+    initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0,
   ): Gen[(Execution, Configuration)] = {
     // This function takes:
@@ -124,7 +124,7 @@ object Generators {
 
   def genConfiguration(
     executionLength: Int,
-    initialConfig: Configuration = Configuration(),
+    initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0,
   ): Gen[Configuration] = {
     for {
@@ -133,7 +133,7 @@ object Generators {
   }
   def genExecution(
     executionLength: Int,
-    initialConfig: Configuration = Configuration(),
+    initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0
   ): Gen[Execution] = {
     for {
@@ -192,7 +192,7 @@ object Generators {
 
   private def isLegal(execution: Execution): Boolean = {
     try {
-      val c = Configuration()
+      val c = new Configuration()
       for (event <- execution) {
         c.transition(event)
       }
