@@ -67,4 +67,12 @@ object ExecutionSpec extends Properties("Properties of executions") {
         garbage subsetOf laterConfig.garbageActors
       }}
     }}
+
+  property(s" Garbage statistics (execution size ${executionSize})") =
+    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
+      val approxGarbage = (config.garbageActors.size / 5.0).round * 5
+      collect(s"~${approxGarbage} garbage actors generated") {
+        true
+      }
+    }}
 }

@@ -2,8 +2,6 @@ package gc.properties.model
 
 import gc.ActorState
 
-import scala.collection.mutable
-
 /**
  * This class represents a simulated Actor System for the purpose of property-based testing.
  * An [[Event]] can be used to transition the configuration from one global state to another
@@ -31,8 +29,9 @@ class Configuration() {
     initialActor -> Busy
   )
 
-  private var mailbox: Map[DummyName, mutable.Queue[ExecMessage]] = Map(
-    initialActor -> mutable.Queue()
+  /** Associates each actor to the collection of undelivered messages that have been sent to them */
+  var pendingMessages: Map[DummyName, PendingMessages] = Map(
+    initialActor -> new PendingMessages()
   )
 
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
@@ -48,8 +47,6 @@ class Configuration() {
   def busy(actor: DummyName): Boolean = status(actor) == Busy
 
   def stopped(actor: DummyName): Boolean = status(actor) == Stopped
-
-  def pendingMessages(name: DummyName): Iterable[ExecMessage] = mailbox(name)
 
   def liveActors: Iterable[DummyName] = state.keys.filter { !stopped(_) }
 
@@ -87,8 +84,8 @@ class Configuration() {
    */
   def pendingRefobs: Iterable[DummyRef] =
     for {
-      mail <- mailbox.values
-      msg <- mail
+      msgs <- pendingMessages.values
+      msg <- msgs.toIterable
       ref <- msg match {
         case AppMessage(refs, _) => refs
         case _ => Seq()
@@ -102,8 +99,8 @@ class Configuration() {
    */
   def deactivatedRefobs: Iterable[DummyRef] =
     for {
-      mail <- mailbox.values
-      msg <- mail
+      msgs <- pendingMessages.values
+      msg <- msgs.toIterable
       ref <- msg match {
         case ReleaseMessage(releasing, _) => releasing
         case _ => Seq()
@@ -185,8 +182,10 @@ class Configuration() {
     val targets = actorState.release(refs)
     // set up messages for each target being released
     for ((target, (targetedRefs, createdRefs)) <- targets) {
-      val m = mailbox(target)
-      m.enqueue(ReleaseMessage(releasing = targetedRefs, created = createdRefs))
+      pendingMessages(target).add(
+        ReleaseMessage(releasing = targetedRefs, created = createdRefs),
+        sender = actor
+      )
     }
   }
 
@@ -194,7 +193,7 @@ class Configuration() {
     actorState.tryTerminate() match {
       case ActorState.NotTerminated =>
       case ActorState.RemindMeLater =>
-        mailbox(actor).enqueue(SelfCheck)
+        pendingMessages(actor).add(SelfCheck, sender = actor)
       case ActorState.Terminated =>
         deactivate(actor, actorState.nontrivialActiveRefs)
         status += (actor -> Stopped)
@@ -212,7 +211,7 @@ class Configuration() {
         // update the configuration
         state += (child -> childState)
         status += (child -> Busy)
-        mailbox += (child -> mutable.Queue())
+        pendingMessages += (child -> new PendingMessages())
 
       case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
         val senderState = state(sender)
@@ -222,14 +221,16 @@ class Configuration() {
         // increment sender's send count
         senderState.incSentCount(recipientRef.token)
         // add the message to the recipient's "mailbox"
-        val m = mailbox(recipientRef.target)
-        m.enqueue(AppMessage(createdRefs, recipientRef.token))
+        pendingMessages(recipientRef.target).add(
+          AppMessage(createdRefs, recipientRef.token),
+          sender
+        )
 
-      case Receive(recipient) =>
+      case Receive(recipient, sender) =>
         require(idle(recipient))
-        // take the next message out from the queue;
+        // take the next message from this sender out of the queue;
         // this should mimic the behavior of [[gc.AbstractBehavior]]
-        val message = mailbox(recipient).dequeue
+        val message = pendingMessages(recipient).deliverFrom(sender)
         val actorState = state(recipient)
         message match {
             case AppMessage(refs, travelToken) =>

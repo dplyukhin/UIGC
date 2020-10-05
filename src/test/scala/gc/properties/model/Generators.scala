@@ -71,7 +71,8 @@ object Generators {
   def genReceive(c: Configuration): Gen[Receive] = {
     for {
       recipient <- oneOf(c.readyActors)
-    } yield Receive(recipient)
+      sender <- oneOf(c.pendingMessages(recipient).senders)
+    } yield Receive(recipient, sender)
   }
 
   def genIdle(c: Configuration): Gen[BecomeIdle] = {

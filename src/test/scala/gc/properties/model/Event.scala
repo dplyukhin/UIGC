@@ -20,8 +20,8 @@ case class Send(sender: DummyName,
 }
 
 /** An actor receives an application-level message */
-case class Receive(recipient: DummyName) extends Event {
-  override def toString: String = s"RECV: $recipient receives a message"
+case class Receive(recipient: DummyName, sender: DummyName) extends Event {
+  override def toString: String = s"RECV: $recipient receives a message from $sender"
 }
 
 /** An actor goes idle. */
