@@ -1,7 +1,7 @@
 package gc.properties
 
 import gc.properties.model.Configuration
-import org.scalacheck.Prop.{collect, forAll, forAllNoShrink}
+import org.scalacheck.Prop.{collect, forAll, forAllNoShrink, propBoolean}
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Properties, Test}
 
@@ -30,6 +30,33 @@ object ExecutionSpec extends Properties("Properties of executions") {
   // property(" Test") =
   //   forAll(genExecution(executionSize)) { execution =>
   //     false
+  //   }
+
+  // Uncomment below to check that non-causal executions are possible; the test should fail on some executions
+
+  // import gc.properties.model.{Receive, Send}
+  // import org.scalacheck.Gen.oneOf
+  //
+  // property(" Message delivery is not causal; this test should fail") =
+  //   forAll(genExecution(100)) { execution =>
+  //     val actors = Configuration.fromExecution(execution).actors
+  //
+  //     forAll(oneOf(actors)) { actor =>
+  //       // The sequence of actors that have sent messages to `actor`
+  //       val sends = execution.flatMap {
+  //         case Send(sender, ref, _, _) if ref.target == actor => Seq(sender)
+  //         case _ => Seq()
+  //       }
+  //       // The sequence of actors from which `actor` has received a message
+  //       val receives = execution.flatMap {
+  //         case Receive(recipient, sender) if recipient == actor => Seq(sender)
+  //         case _ => Seq()
+  //       }
+  //       // In causal delivery, actors receive messages in the same order they are sent;
+  //       // hence `sends` is a prefix of `receives`.
+  //       sends.zip(receives).forall{ case (sender1, sender2) => sender1 == sender2 } :|
+  //       s"Messages sent to actor ${actor} in this order: ${sends}\nbut received in this order: ${receives}"
+  //     }
   //   }
 
   property(" Blocked actors are idle") =
@@ -68,10 +95,11 @@ object ExecutionSpec extends Properties("Properties of executions") {
       }}
     }}
 
-  property(s" Garbage statistics (execution size ${executionSize})") =
+  // For debugging purposes, log how many garbage actors are typically generated
+  property(s" Garbage statistics (execution size $executionSize)") =
     forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
       val approxGarbage = (config.garbageActors.size / 5.0).round * 5
-      collect(s"~${approxGarbage} garbage actors generated") {
+      collect(s"~$approxGarbage garbage actors generated") {
         true
       }
     }}

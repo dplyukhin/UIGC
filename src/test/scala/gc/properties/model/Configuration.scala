@@ -48,6 +48,8 @@ class Configuration() {
 
   def stopped(actor: DummyName): Boolean = status(actor) == Stopped
 
+  def actors: Iterable[DummyName] = state.keys
+
   def liveActors: Iterable[DummyName] = state.keys.filter { !stopped(_) }
 
   def stoppedActors: Iterable[DummyName] = state.keys.filter { stopped }
