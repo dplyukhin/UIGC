@@ -1,6 +1,7 @@
 package gc.properties
 
-import org.scalacheck.Prop.{collect, forAll}
+import gc.properties.model.Configuration
+import org.scalacheck.Prop.{collect, forAll, forAllNoShrink}
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Properties, Test}
 
@@ -15,6 +16,20 @@ object ExecutionSpec extends Properties("Properties of executions") {
       .withTestCallback(ConsoleReporter(1, Int.MaxValue))
       // This prevents Scalacheck from giving up when it has to discard a lot of tests
       .withMaxDiscardRatio(100000)
+
+  property(" Executions should be reproducible") =
+    forAllNoShrink(genExecution(executionSize)) { execution =>
+      val c = Configuration()
+      for (event <- execution) c.transition(event)
+      true
+    }
+
+  // Uncomment below to test the testcase shrinker; should produce an empty execution
+
+  // property(" Test") =
+  //   forAll(genExecution(executionSize)) { execution =>
+  //     false
+  //   }
 
   property(" Blocked actors are idle") =
     forAll(genConfiguration(executionSize)) { config =>

@@ -1,4 +1,4 @@
-package gc.executions
+package gc.properties.model
 
 import gc.ActorState
 
@@ -23,6 +23,8 @@ class Configuration(
   /** This sequence is the list of snapshots taken by actors throughout this configuration. */
   var snapshots: Seq[(DummyName, DummySnapshot)] = Seq()
 
+  /** The execution that produced this configuration. */
+  var execution: Execution = Seq()
 
   //// Accessor methods
 
@@ -186,10 +188,8 @@ class Configuration(
 
   def transition(e: Event): Unit = {
     e match {
-      case Spawn(parent, child) =>
-        // create new references
-        val creatorRef = DummyRef(Some(parent), child) // parent's ref to child
-        val selfRef = DummyRef(Some(child), child) // child's self-ref
+      case Spawn(parent, child, creatorRef, selfRef) =>
+        require(!(state contains child))
         // create child's state
         val childState = new DummyState(selfRef, creatorRef)
         // add the new active ref to the parent's state
@@ -211,7 +211,7 @@ class Configuration(
         m.enqueue(AppMessage(createdRefs, recipientRef.token))
 
       case Receive(recipient) =>
-        require(!stopped(recipient))
+        require(idle(recipient))
         // take the next message out from the queue;
         // this should mimic the behavior of [[gc.AbstractBehavior]]
         val message = mailbox(recipient).dequeue
@@ -229,15 +229,20 @@ class Configuration(
           }
 
       case BecomeIdle(actor) =>
+        require(busy(actor))
         status += (actor -> Idle)
 
       case Deactivate(actor, ref) =>
+        require(busy(actor))
         deactivate(actor, Seq(ref))
 
       case Snapshot(actor) =>
+        require(idle(actor))
         val snapshot = state(actor).snapshot()
         snapshots :+= ((actor, snapshot))
     }
+    // Once successful, add the event to the execution so far
+    execution = execution :+ e
   }
 
   def stateToString(name: DummyName, state: DummyState): String =
@@ -255,6 +260,8 @@ class Configuration(
 
   override def toString: String = {
     s"""Configuration:
+       |  Execution:
+       |    $execution
        |  Snapshots:
        |    $snapshots
        |  States:
@@ -264,6 +271,33 @@ class Configuration(
        |  Garbage:
        |    $garbageActors
        |""".stripMargin
+  }
+
+  object DummyName {
+    // just use an internal counter to make unique addresses
+    var count: Int = 1
+    def apply(): DummyName = {
+      val name = new DummyName(count)
+      count += 1
+      name
+    }
+  }
+
+  object DummyRef {
+    def apply(owner: Option[DummyName], target: DummyName): DummyRef =
+      if (owner.isDefined)
+        new DummyRef(Some(DummyToken()), owner, target)
+      else
+        new DummyRef(None, None, target)
+  }
+
+  object DummyToken {
+    var count = 1
+    def apply(): DummyToken = {
+      val t = new DummyToken(count)
+      count += 1
+      t
+    }
   }
 
 }
@@ -278,14 +312,20 @@ object Configuration {
   def apply(): Configuration = {
 
     // the initial actor
-    val A = DummyName()
+    val A = DummyName(0)
     // dummy reference for the receptionist A
-    val x = DummyRef(None, A)
+    val x = DummyRef(None, None, A)
     // reference from A to itself
-    val y = DummyRef(Some(A), A)
+    val y = DummyRef(Some(DummyToken(0)), Some(A), A)
     // A starts knowing itself and that it is a receptionist
     val aState = new DummyState(y, x)
 
     new Configuration(Map(A -> aState), Map(A -> Busy), Map(A -> mutable.Queue()))
+  }
+
+  def fromExecution(execution: Execution): Configuration = {
+    val config = Configuration()
+    for (event <- execution) config.transition(event)
+    config
   }
 }

@@ -1,7 +1,8 @@
 package gc.properties.model
 
-import org.scalacheck.Gen
+import org.scalacheck.{Gen, Shrink}
 import org.scalacheck.Gen._
+import org.scalacheck.Shrink.shrink
 
 object Generators {
 
@@ -30,8 +31,10 @@ object Generators {
   def genSpawn(c: Configuration): Gen[Spawn] = {
     for {
       parent <- oneOf(c.busyActors)
-      child = DummyName()
-    } yield Spawn(parent, child)
+      child = c.DummyName()
+      creatorRef = c.DummyRef(Some(parent), child)
+      selfRef = c.DummyRef(Some(child), child)
+    } yield Spawn(parent, child, creatorRef, selfRef)
   }
 
   def genSend(c: Configuration): Gen[Send] = {
@@ -46,7 +49,7 @@ object Generators {
 
       // generate a collection of refs that will be owned by the recipient
       n <- choose(0,3)
-      newAcquaintances <- containerOfN[List, (DummyRef, DummyRef)](n,genRef(senderState, recipient))
+      newAcquaintances <- containerOfN[List, (DummyRef, DummyRef)](n,genRef(c, senderState, recipient))
       (createdRefs, createdUsingRefs) = newAcquaintances.unzip
 
     } yield Send(sender, recipientRef, createdRefs, createdUsingRefs)
@@ -58,10 +61,10 @@ object Generators {
    *         is the ref that was used to create it. That is, the second element is one of
    *         the creator's active refs pointing to the target of the new ref.
    */
-  def genRef(actorState: DummyState, owner: DummyName): Gen[(DummyRef, DummyRef)] = {
+  def genRef(c: Configuration, actorState: DummyState, owner: DummyName): Gen[(DummyRef, DummyRef)] = {
     for {
       createdUsingRef <- oneOf(actorState.activeRefs)
-      newRef = DummyRef(Some(DummyToken()), Some(owner), createdUsingRef.target)
+      newRef = DummyRef(Some(c.DummyToken()), Some(owner), createdUsingRef.target)
     } yield (newRef, createdUsingRef)
   }
 
@@ -91,7 +94,7 @@ object Generators {
     } yield Snapshot(idleActor)
   }
 
-  def genExecutionAndConfiguration(
+  private def genExecutionAndConfiguration(
     executionSize: Int,
     initialConfig: Configuration = Configuration(),
     minAmountOfGarbage: Int = 0,
@@ -136,6 +139,69 @@ object Generators {
     for {
       (exec, _) <- genExecutionAndConfiguration(executionLength, initialConfig, minAmountOfGarbage)
     } yield exec
+  }
+
+  implicit def shrinkEvent(event: Event): Shrink[Event] = Shrink {
+    case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
+      // To shrink a `send` event, shrink the createdRefs and the createdUsingRefs
+      val pairs = createdRefs.zip(createdUsingRefs)
+      for {
+        shrunkPairs <- shrink(pairs)
+        (createdRefs, createdUsingRefs) = shrunkPairs.unzip
+      } yield Send(sender, recipientRef, createdRefs, createdUsingRefs)
+
+    case _ =>
+      // No way to shrink the other events
+      Stream.empty
+  }
+
+  def executionShrinkStream(execution: Execution): Stream[Execution] = {
+    if (execution.isEmpty) return Stream.empty
+
+    val last = execution.last
+    val prefix = execution.slice(0, execution.length - 1)
+
+    // We try to shrink the execution in the following ways:
+    // 1. Remove the last element
+    // 2. Shrink the last element
+    // 3. Remove or shrink one of the preceding elements
+
+    val omitLast = execution.dropRight(1)
+
+    val shrinkLast =
+      for (shrunkEvent <- shrink(last))
+        yield execution.updated(execution.length - 1, shrunkEvent)
+
+    val shrinkRest =
+      if (prefix.isEmpty)
+        Stream.empty
+      else
+        for (shrunkExecution <- executionShrinkStream(prefix))
+          yield shrunkExecution :+ last
+
+    Stream.cons(omitLast, shrinkLast).append(shrinkRest)
+  }
+
+  implicit val shrinkExecution: Shrink[Execution] = Shrink(execution =>
+    executionShrinkStream(execution).filter(isLegal) // Only accept legal shrunken executions
+  )
+
+  implicit val shrinkConfiguration: Shrink[Configuration] = Shrink(config => {
+    shrink(config.execution).map(Configuration.fromExecution)
+  })
+
+  private def isLegal(execution: Execution): Boolean = {
+    try {
+      val c = Configuration()
+      for (event <- execution) {
+        c.transition(event)
+      }
+      true
+    }
+    catch {
+      case _:AssertionError | _:Throwable =>
+        false
+    }
   }
 }
 
