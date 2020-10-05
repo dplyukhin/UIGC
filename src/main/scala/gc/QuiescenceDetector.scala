@@ -34,11 +34,16 @@ class QuiescenceDetector [
    * @return
    */
   def isConsistent(ref: Ref, snapshots: Map[Name, Snapshot]): Boolean = {
+    // if the refob is owned by an external actor, it is never consistent
+    if (ref.owner.isEmpty) return false
+
+    val x: Token = ref.token.get
     val A: Name = ref.owner.get
     val B: Name = ref.target
-    val sent: Int = snapshots(A).sentCounts(ref.token.get)
-    val recv: Int = snapshots(B).recvCounts(ref.token.get)
-    (snapshots contains A) && (snapshots contains B) && (snapshots(A).refs exists { _ == ref }) && (sent == recv)
+
+    (snapshots contains A) && (snapshots contains B) &&
+      (snapshots(A).refs exists { _ == ref }) &&
+      (snapshots(A).sentCounts.getOrElse(x, 0) == snapshots(B).recvCounts.getOrElse(x, 0))
   }
 
   /**
@@ -73,27 +78,29 @@ class QuiescenceDetector [
    * @return A mapping from actor names to the set of unreleased refobs that they own.
    */
   private def mapSnapshots(snapshots: Map[Name, Snapshot]): mutable.Map[Name, mutable.Set[Ref]] = {
-    // this maps actors to the set of refobs that we *think* are unreleased
+    // this maps actors to the set of refobs they own that we *think* are unreleased
     val unreleased_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
-    // this maps actors to the set of refobs that have already been released
+    // this maps actors to the set of refobs they own that have already been released
     val released_map: mutable.Map[Name, mutable.Set[Ref]] = mutable.Map()
 
     for ((name, snap) <- snapshots) {
       val unreleased = unreleased_map getOrElseUpdate(name, mutable.Set())
       unreleased ++= snap.refs
 
-      for (ref <- snap.created ++ snap.owners) {
+      for (ref <- snap.created ++ snap.owners if ref.owner.isDefined) {
         val other_unreleased = unreleased_map getOrElseUpdate(ref.owner.get, mutable.Set())
         other_unreleased += ref
       }
 
-      val released = released_map getOrElseUpdate(name, mutable.Set())
-      released ++= snap.releasedRefs
+      for (ref <- snap.releasedRefs) {
+        val released = released_map getOrElseUpdate(ref.owner.get, mutable.Set())
+        released += ref
+      }
     }
 
-    // kemove the references we've learned are released
+    // remove the references we've learned are released
     for ((name, unreleased) <- unreleased_map) {
-      unreleased --= released_map(name)
+      unreleased --= released_map.getOrElse(name, Set())
     }
     unreleased_map
   }

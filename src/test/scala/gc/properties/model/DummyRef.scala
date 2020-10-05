@@ -1,4 +1,4 @@
-package gc.executions
+package gc.properties.model
 
 import gc.AbstractRef
 
@@ -15,22 +15,6 @@ case class DummyRef(token: Option[DummyToken],
   }
 }
 
-object DummyRef {
-  def apply(owner: Option[DummyName], target: DummyName): DummyRef =
-    if (owner.isDefined)
-      new DummyRef(Some(DummyToken()), owner, target)
-    else
-      new DummyRef(None, None, target)
-}
-
 
 case class DummyToken(n: Int)
 
-object DummyToken {
-  var count = 0
-  def apply(): DummyToken = {
-    val t = new DummyToken(count)
-    count += 1
-    t
-  }
-}

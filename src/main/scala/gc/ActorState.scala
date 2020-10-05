@@ -232,7 +232,7 @@ class ActorState[
     // But do not deactivate the `self` ref, because it is always accessible from
     // the ActorContext.
     var refsToSelf: Seq[Ref] = Seq()
-    for (ref <- releasing if (trivialActiveRefs contains ref) && (ref != self)) {
+    for (ref <- releasing if (trivialActiveRefs contains ref) && (ref != selfRef)) {
       sentCount remove ref.token.get
       activeRefs -= ref
       refsToSelf :+= ref

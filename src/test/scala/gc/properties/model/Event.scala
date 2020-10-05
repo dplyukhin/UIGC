@@ -1,11 +1,11 @@
-package gc.executions
+package gc.properties.model
 
 sealed trait Event
 
 /** An actor spawns a child. */
-case class Spawn(parent: DummyName, child: DummyName) extends Event {
+case class Spawn(parent: DummyName, child: DummyName, creatorRef: DummyRef, selfRef: DummyRef) extends Event {
   override def toString: String = {
-    s"SPAWN: $parent spawns $child"
+    s"SPAWN: $parent spawns $child using $creatorRef"
   }
 }
 
@@ -15,13 +15,13 @@ case class Send(sender: DummyName,
                 createdRefs: Iterable[DummyRef],
                 createdUsingRefs: Iterable[DummyRef]) extends Event {
   override def toString: String = {
-    s"SEND: $sender sends a message along ref $recipientRef, containing refs $createdRefs, created using $createdUsingRefs, respectively"
+    s"SEND: $sender sends a message along $recipientRef containing $createdRefs"
   }
 }
 
 /** An actor receives an application-level message */
-case class Receive(recipient: DummyName) extends Event {
-  override def toString: String = s"RECV: $recipient receives a message"
+case class Receive(recipient: DummyName, sender: DummyName) extends Event {
+  override def toString: String = s"RECV: $recipient receives a message from $sender"
 }
 
 /** An actor goes idle. */
