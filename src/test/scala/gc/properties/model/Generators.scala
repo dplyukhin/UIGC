@@ -15,12 +15,12 @@ object Generators {
     var generators: Seq[(Int, Gen[Event])] = Seq()
 
     // add each generator to the collection if its precondition is satisfied
-    if (c.busyActors.nonEmpty)           generators :+= (10, genSpawn(c))
-    if (c.busyActors.nonEmpty)           generators :+= (10, genSend(c))
-    if (c.busyActors.nonEmpty)           generators :+= (20, genIdle(c))
-    if (c.idleActors.nonEmpty)           generators :+= (10, genSnapshot(c))
-    if (c.readyActors.nonEmpty)          generators :+= (10, genReceive(c))
-    if (c.actorsWithActiveRefs.nonEmpty) generators :+= (5, genDeactivate(c))
+    if (c.busyActors.nonEmpty)                      generators :+= (10, genSpawn(c))
+    if (c.busyActors.nonEmpty)                      generators :+= (10, genSend(c))
+    if (c.busyActors.nonEmpty)                      generators :+= (20, genIdle(c))
+    if (c.readyActors.nonEmpty)                     generators :+= (10, genReceive(c))
+    if (c.actorsThatCanTakeASnapshot.nonEmpty)      generators :+= (10, genSnapshot(c))
+    if (c.actorsThatCanDeactivate.nonEmpty)         generators :+= (5, genDeactivate(c))
 
     if (generators.isEmpty)
       const(None)
@@ -83,7 +83,7 @@ object Generators {
 
   def genDeactivate(c: Configuration): Gen[Deactivate] = {
     for {
-      actor <- oneOf(c.actorsWithActiveRefs)
+      actor <- oneOf(c.actorsThatCanDeactivate)
       state = c.state(actor)
       refs <- oneOf(state.activeRefs - state.selfRef) // pick a reference to deactivate
     } yield Deactivate(actor, refs)
@@ -91,7 +91,7 @@ object Generators {
 
   def genSnapshot(c: Configuration): Gen[Snapshot] = {
     for {
-      idleActor <- oneOf(c.idleActors)
+      idleActor <- oneOf(c.actorsThatCanTakeASnapshot)
     } yield Snapshot(idleActor)
   }
 

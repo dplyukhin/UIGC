@@ -39,4 +39,6 @@ class PendingMessages() {
       messagesFrom -= sender
     msg
   }
+
+  override def toString: String = messagesFrom.values.flatten.toString
 }

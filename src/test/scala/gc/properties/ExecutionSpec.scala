@@ -1,7 +1,8 @@
 package gc.properties
 
 import gc.properties.model.Configuration
-import org.scalacheck.Prop.{collect, forAll, forAllNoShrink, propBoolean}
+import org.scalacheck.Gen.oneOf
+import org.scalacheck.Prop.{all, collect, forAll, forAllNoShrink, propBoolean}
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Properties, Test}
 
@@ -17,6 +18,8 @@ object ExecutionSpec extends Properties("Properties of executions") {
       // This prevents Scalacheck from giving up when it has to discard a lot of tests
       .withMaxDiscardRatio(100000)
 
+  // Check that any generated execution can be replayed on a fresh Configuration;
+  // this is useful for shrinking and reproducibility of bugs.
   property(" Executions should be reproducible") =
     forAllNoShrink(genExecution(executionSize)) { execution =>
       val c = new Configuration()
@@ -35,7 +38,6 @@ object ExecutionSpec extends Properties("Properties of executions") {
   // Uncomment below to check that non-causal executions are possible; the test should fail on some executions
 
   // import gc.properties.model.{Receive, Send}
-  // import org.scalacheck.Gen.oneOf
   //
   // property(" Message delivery is not causal; this test should fail") =
   //   forAll(genExecution(100)) { execution =>
@@ -59,6 +61,14 @@ object ExecutionSpec extends Properties("Properties of executions") {
   //     }
   //   }
 
+  property(" Actors are either blocked or unblocked, never both") =
+    forAll(genConfiguration(executionSize)) { config =>
+      config.actors.forall { actor =>
+        (config.blocked(actor) && !config.unblocked(actor)) ||
+        (!config.blocked(actor) && config.unblocked(actor))
+      }
+    }
+
   property(" Blocked actors are idle") =
     forAll(genConfiguration(executionSize)) { config =>
       config.blockedActors.forall(config.idle)
@@ -69,16 +79,50 @@ object ExecutionSpec extends Properties("Properties of executions") {
       config.blockedActors.forall(config.pendingMessages(_).isEmpty)
     }
 
-  property(" Garbage actors must also be blocked") =
-    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config =>
-      config.garbageActors subsetOf config.blockedActors.toSet
+  property(" The initial actor is a receptionist") =
+    forAll(genConfiguration(executionSize)) { config =>
+      config.receptionist(config.initialActor)
     }
 
-  property(" Potential inverse acquaintances of garbage must also be blocked") =
+  property(" Receptionists are unblocked") =
+    forAll(genConfiguration(executionSize)) { config =>
+      config.actors.filter(config.receptionist).forall(config.unblocked)
+    }
+
+  property(" Terminated actors are blocked") =
+    forAll(genConfiguration(executionSize)) { config =>
+      config.terminatedActors.forall(config.blocked)
+    }
+
+  property(" Terminated actors have no nontrivial inverse acquaintances") =
+    forAll(genConfiguration(executionSize)) { config =>
+      config.terminatedActors.forall { actor =>
+        config.potentialInverseAcquaintances(actor).toSet == Set(actor)
+      }
+    }
+
+  property(" Garbage actors are blocked") =
     forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
-      val garbage = config.garbageActors
-      val blocked = config.blockedActors.toSet
-      garbage.forall(config.potentialInverseAcquaintances(_).toSet subsetOf blocked)
+      config.garbageActors.forall(config.blocked)
+    }}
+
+  property(" Garbage actors are not already terminated") =
+    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
+      config.garbageActors.forall(!config.terminated(_))
+    }}
+
+  property(" Potential inverse acquaintances of garbage are blocked") =
+    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
+      config.garbageActors.forall { actor =>
+        config.potentialInverseAcquaintances(actor).forall(config.garbage)
+      }
+    }}
+
+  property(" Garbage actors are not reachable from a receptionist") =
+    forAll(genConfiguration(executionSize, minAmountOfGarbage = 10)) { config => {
+      config.garbageActors.forall { actor =>
+        config.canPotentiallyReach(actor).forall(!config.receptionist(_))
+      }
     }}
 
   // By the preceding tests, this implies that garbage actors remain idle
@@ -88,10 +132,10 @@ object ExecutionSpec extends Properties("Properties of executions") {
       // Compute the set of garbage actors in `config`, run the system for a
       // few more steps, and then check that those actors have remained garbage.
       // Note that `laterConfig` is the same object as `config`, but mutated.
-      val garbage = config.garbageActors
+      val garbage = config.garbageActors.toSet
 
-      forAll(genConfiguration(executionSize, initialConfig = config)) { laterConfig => {
-        garbage subsetOf laterConfig.garbageActors
+      forAll(genConfiguration(100, initialConfig = config)) { laterConfig => {
+        garbage subsetOf laterConfig.garbageActors.toSet
       }}
     }}
 

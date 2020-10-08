@@ -25,8 +25,8 @@ object QuiescenceDetectionSpec extends Properties("Quiescence detection") {
 
       val detectedGarbage = q.findTerminated(config.snapshots.toMap)
       val approxDetected = (detectedGarbage.size / 5.0).round * 5
-      collect(s"~${approxDetected} garbage actors detected") {
-        detectedGarbage subsetOf config.garbageActors
+      collect(s"~$approxDetected garbage actors detected") {
+        detectedGarbage subsetOf config.garbageActors.toSet
       }
     }}
 

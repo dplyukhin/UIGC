@@ -14,7 +14,7 @@ import gc.ActorState
 class Configuration() {
   import Configuration._
 
-  private val initialActor = DummyName()
+  val initialActor: DummyName = DummyName()
 
   /** A mapping from all actors in the configuration to their states */
   var state: Map[DummyName, DummyState] = Map(
@@ -40,45 +40,56 @@ class Configuration() {
   /** The execution that produced this configuration. */
   var execution: Execution = Seq()
 
+  /** The set of actors that have self-terminated due to a reference count of 0 */
+  private var _terminatedActors: Set[DummyName] = Set()
+
   //// Accessor methods
 
   def idle(actor: DummyName): Boolean = status(actor) == Idle
 
   def busy(actor: DummyName): Boolean = status(actor) == Busy
 
-  def stopped(actor: DummyName): Boolean = status(actor) == Stopped
+  def terminated(actor: DummyName): Boolean = _terminatedActors contains actor
+
+  def receptionist(actor: DummyName): Boolean =
+    state(actor).owners.exists(_.owner.isEmpty)
+
+  def canDeactivate(actor: DummyName): Boolean = {
+    val s = state(actor)
+    busy(actor) && s.activeRefs.exists(_ != s.selfRef)
+  }
+
+  def canTakeSnapshot(actor: DummyName): Boolean =
+    idle(actor) && !terminated(actor)
+
+  def unblocked(actor: DummyName): Boolean =
+    busy(actor) || pendingMessages(actor).nonEmpty || receptionist(actor)
+
+  def blocked(actor: DummyName): Boolean =
+    idle(actor) && pendingMessages(actor).isEmpty && !receptionist(actor)
+
+  def ready(actor: DummyName): Boolean =
+    idle(actor) && pendingMessages(actor).nonEmpty
+
+  /** An actor is garbage if it is only potentially reachable by blocked actors.
+   * This excludes actors that have self-terminated.
+   */
+  def garbage(actor: DummyName): Boolean =
+    !terminated(actor) && canPotentiallyReach(actor).forall(blocked)
+
+  def idleActors: Iterable[DummyName] = actors.filter(idle)
+  def busyActors: Iterable[DummyName] = actors.filter(busy)
+  def blockedActors: Iterable[DummyName] = actors.filter(blocked)
+  def unblockedActors: Iterable[DummyName] = actors.filter(unblocked)
+  def receptionists: Iterable[DummyName] = actors.filter(receptionist)
+  def readyActors: Iterable[DummyName] = actors.filter(ready)
+  def terminatedActors: Iterable[DummyName] = actors.filter(terminated)
+  def actorsThatCanDeactivate: Iterable[DummyName] = actors.filter(canDeactivate)
+  def actorsThatCanTakeASnapshot: Iterable[DummyName] = actors.filter(canTakeSnapshot)
+  def garbageActors: Iterable[DummyName] = actors.filter(garbage)
 
   def actors: Iterable[DummyName] = state.keys
-
-  def liveActors: Iterable[DummyName] = state.keys.filter { !stopped(_) }
-
-  def stoppedActors: Iterable[DummyName] = state.keys.filter { stopped }
-
-  def busyActors: Iterable[DummyName] = state.keys.filter { busy }
-
-  def idleActors: Iterable[DummyName] = state.keys.filter { idle }
-
-  /** Returns the actors that have active refs, excluding the unreleasable `self` ref */
-  def actorsWithActiveRefs: Iterable[DummyName] = for {
-    actor <- busyActors
-    s = state(actor)
-    if (s.activeRefs - s.selfRef).nonEmpty
-  } yield actor
-
-  /** Returns the actors that are busy or are idle with pending messages */
-  def unblockedActors: Iterable[DummyName] = state.keys.filter {
-    actor => busy(actor) || (idle(actor) && pendingMessages(actor).nonEmpty)
-  }
-
-  /** Returns the actors that are idle and have pending messages */
-  def readyActors: Iterable[DummyName] = state.keys.filter {
-    actor => idle(actor) && pendingMessages(actor).nonEmpty
-  }
-
-  /** Returns the actors that are idle and have no messages left to process. */
-  def blockedActors: Iterable[DummyName] = state.keys.filter {
-    actor => idle(actor) && pendingMessages(actor).isEmpty
-  }
+  def actorStates: Iterable[DummyState] = state.values
 
   /**
    * The set of all pending refobs in the configuration. A refob is pending if
@@ -115,7 +126,7 @@ class Configuration() {
    */
   def activeRefobs: Iterable[DummyRef] =
     for {
-      actorState <- state.values
+      actorState <- actorStates
       ref <- actorState.activeRefs
     } yield ref
 
@@ -138,7 +149,9 @@ class Configuration() {
     unreleasedRefobs(actor).map(_.owner.get)
   }
 
-  /** Returns the set of actors that can potential reach the given actor. */
+  /** Returns the set of actors that can potentially reach the given actor.
+   * This set always includes the actor itself.
+   */
   def canPotentiallyReach(actor: DummyName): Set[DummyName] = {
 
     // Traverse the actor graph depth-first to compute the transitive closure.
@@ -157,22 +170,6 @@ class Configuration() {
     }
 
     traverse(actor, Set())
-  }
-
-  /** Returns the garbage actors in a configuration. */
-  def garbageActors: Set[DummyName] = {
-    // actors are garbage iff they are blocked and only potentially reachable by blocked actors
-    var garbage: Set[DummyName] = Set()
-    val blocked = blockedActors.toSet
-    for (actor <- blocked) {
-      // for every blocked actor, get the actors that can reach it
-      val canReach = canPotentiallyReach(actor)
-      // if all the actors that can reach this actor are also blocked, then this actor is garbage
-      if (canReach subsetOf blocked) {
-        garbage += actor
-      }
-    }
-    garbage
   }
 
 
@@ -198,14 +195,17 @@ class Configuration() {
         pendingMessages(actor).add(SelfCheck, sender = actor)
       case ActorState.Terminated =>
         deactivate(actor, actorState.nontrivialActiveRefs)
-        status += (actor -> Stopped)
+        _terminatedActors += actor
     }
   }
 
   def transition(e: Event): Unit = {
     e match {
       case Spawn(parent, child, creatorRef, selfRef) =>
+        require(state contains parent)
         require(!(state contains child))
+        require(!(state(parent).activeRefs contains creatorRef))
+        require(busy(parent))
         // create child's state
         val childState = new DummyState(selfRef, creatorRef)
         // add the new active ref to the parent's state
@@ -216,6 +216,10 @@ class Configuration() {
         pendingMessages += (child -> new PendingMessages())
 
       case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
+        require(state contains sender)
+        require(state(sender).activeRefs contains recipientRef)
+        require(createdUsingRefs.forall(ref => state(sender).activeRefs contains ref))
+        require(busy(sender))
         val senderState = state(sender)
         // Add createdRefs to sender's state
         for ((targetRef, newRef) <- createdUsingRefs zip createdRefs)
@@ -229,6 +233,7 @@ class Configuration() {
         )
 
       case Receive(recipient, sender) =>
+        require(state contains recipient)
         require(idle(recipient))
         // take the next message from this sender out of the queue;
         // this should mimic the behavior of [[gc.AbstractBehavior]]
@@ -247,15 +252,21 @@ class Configuration() {
           }
 
       case BecomeIdle(actor) =>
+        require(state contains actor)
         require(busy(actor))
         status += (actor -> Idle)
 
       case Deactivate(actor, ref) =>
+        require(state contains actor)
+        require(state(actor).activeRefs contains ref)
+        require(ref != state(actor).selfRef)
         require(busy(actor))
         deactivate(actor, Seq(ref))
 
       case Snapshot(actor) =>
+        require(state contains actor)
         require(idle(actor))
+        require(!terminated(actor))
         val snapshot = state(actor).snapshot()
         snapshots :+= ((actor, snapshot))
     }
@@ -325,7 +336,6 @@ object Configuration {
   sealed trait ActorStatus
   case object Idle extends ActorStatus
   case object Busy extends ActorStatus
-  case object Stopped extends ActorStatus
 
   def fromExecution(execution: Execution): Configuration = {
     val config = new Configuration()
