@@ -95,7 +95,7 @@ object Generators {
     } yield Snapshot(idleActor)
   }
 
-  private def genExecutionAndConfiguration(
+  def genExecutionAndConfiguration(
     executionSize: Int,
     initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0,
@@ -190,6 +190,11 @@ object Generators {
   implicit val shrinkConfiguration: Shrink[Configuration] = Shrink(config => {
     shrink(config.execution).map(Configuration.fromExecution)
   })
+
+  implicit val shrinkExecutionAndConfiguration: Shrink[(Execution, Configuration)] = Shrink {
+    case (execution, _) =>
+      shrink(execution).map(e => (e, Configuration.fromExecution(e)))
+  }
 
   private def isLegal(execution: Execution): Boolean = {
     try {
