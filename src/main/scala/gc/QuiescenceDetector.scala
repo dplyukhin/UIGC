@@ -106,14 +106,11 @@ class QuiescenceDetector [
         released += ref
       }
 
-      // each active refob (x: A -o B) in the snapshot must be added to createdRefs(A);
-      val created = createdRefs getOrElseUpdate(actor, mutable.Set())
-      created ++= snapshot.refs
     }
 
     // remove the references we've learned are released
-    for ((name, unreleased) <- createdRefs) {
-      unreleased --= releasedRefs.getOrElse(name, Set())
+    for ((name, created) <- createdRefs) {
+      created --= releasedRefs.getOrElse(name, Set())
     }
 
     (createdRefs, receptionists)
