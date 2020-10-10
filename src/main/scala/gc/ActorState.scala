@@ -1,5 +1,7 @@
 package gc
 
+import gc.detector.{AbstractRef, AbstractSnapshot}
+
 import scala.collection.mutable
 
 

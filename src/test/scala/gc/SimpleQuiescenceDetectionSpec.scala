@@ -3,9 +3,10 @@ package gc
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
+import gc.detector.SimpleQuiescenceDetector
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class QuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
+class SimpleQuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val dummyActor: AkkaBehavior[Any] = Behaviors.receive { (_, _) => Behaviors.same }
   // starring...
   val A: AkkaActorRef[Any] = testKit.spawn(dummyActor, "A")
@@ -18,7 +19,7 @@ class QuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
   val selfA: ActorRef[Message] = ActorRef(Some(aToken), Some(A), A)
   val selfB: ActorRef[Message] = ActorRef(Some(bToken), Some(B), B)
 
-  val quiescenceDetector = new QuiescenceDetector[AkkaActorRef[Nothing], gc.Token, gc.ActorRef[Nothing], gc.ActorSnapshot]
+  val quiescenceDetector = new SimpleQuiescenceDetector[AkkaActorRef[Nothing], gc.Token, gc.ActorRef[Nothing], gc.ActorSnapshot]
 
   "Basic cycles" should {
     // A has ref x:A->B and B has ref y:B->A.
@@ -45,7 +46,7 @@ class QuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         recvCounts = Map(bToken -> 0, xToken -> 1)
       )
 
-      val quiescent = quiescenceDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
+      val quiescent = quiescenceDetector.findGarbage(Map(A -> dummyA, B -> dummyB))
       quiescent should contain only(A, B)
     }
     "be ignored when they don't appear blocked" in {
@@ -67,8 +68,8 @@ class QuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpec
         recvCounts = Map(bToken -> 0, xToken -> 1)
       )
 
-      val quiescent = quiescenceDetector.findTerminated(Map(A -> dummyA, B -> dummyB))
-      quiescent shouldBe empty
+      val quiescent = quiescenceDetector.findGarbage(Map(A -> dummyA, B -> dummyB))
+      assert(quiescent.isEmpty)
     }
   }
   // TODO: tests for more complex configurations, such as

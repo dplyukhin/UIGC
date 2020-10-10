@@ -1,6 +1,7 @@
 package gc
 
 import akka.actor.typed.{ActorRef => AkkaActorRef}
+import gc.detector.{AbstractRef, AbstractSnapshot}
 
 /**
  * An opaque and globally unique token.

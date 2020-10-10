@@ -1,50 +1,21 @@
-package gc
+package gc.detector
+
+import akka.actor.typed
+import gc.{ActorRef, ActorSnapshot}
 
 import scala.collection.mutable
-import akka.actor.typed
 
-trait AbstractRef[Name, Token] {
-  val token: Option[Token]
-  val owner: Option[Name]
-  val target: Name
-}
-
-trait AbstractSnapshot[Name, Token, Ref <: AbstractRef[Name, Token]] {
-  val refs: Iterable[Ref]
-  val owners: Iterable[Ref]
-  val created: Iterable[Ref]
-  val releasedRefs: Iterable[Ref]
-  val sentCounts: Map[Token, Int]
-  val recvCounts: Map[Token, Int]
-}
-
-class QuiescenceDetector [
+/**
+ * This quiescence detector is (theoretically) fast, but not "complete":
+ * A stale snapshot from a non-garbage actor can prevent a garbage actor
+ * from being detected.
+ */
+class SimpleQuiescenceDetector [
   Name,
   Token,
   Ref <: AbstractRef[Name, Token],
   Snapshot <: AbstractSnapshot[Name, Token, Ref]
-] {
-
-
-  /**
-   * Tests whether a ref is consistent with respect to a set of snapshots. A ref is consistent when its owner and
-   * target are in the set of snapshots, the owner actively holds it, and the sent and receive counts are equal.
-   * @param ref Ref to check consistency of.
-   * @param snapshots Map of actor references to their snapshots.
-   * @return
-   */
-  def isConsistent(ref: Ref, snapshots: Map[Name, Snapshot]): Boolean = {
-    // if the refob is owned by an external actor, it is never consistent
-    if (ref.owner.isEmpty) return false
-
-    val x: Token = ref.token.get
-    val A: Name = ref.owner.get
-    val B: Name = ref.target
-
-    (snapshots contains A) && (snapshots contains B) &&
-      (snapshots(A).refs exists { _ == ref }) &&
-      (snapshots(A).sentCounts.getOrElse(x, 0) == snapshots(B).recvCounts.getOrElse(x, 0))
-  }
+] extends QuiescenceDetector[Name, Token, Ref, Snapshot] {
 
   /**
    * Given an actor name, it will recursively move all of the actors reachable through the given actor's unreleased
@@ -116,40 +87,35 @@ class QuiescenceDetector [
     (createdRefs, receptionists)
   }
 
-  /**
-   * Identifies the actors that have terminated in a given map of names to snapshots.
-   * @param snapshots A map of names to snapshots.
-   * @return The terminated actors.
-   */
-  def findTerminated(snapshots: Map[Name, Snapshot]): Set[Name] = {
-    // strategy: identify all the inconsistent actors and return the set without them
+  override def findGarbage(snapshots: Map[Name, Snapshot]): Set[Name] = {
+    // strategy: identify all the irrelevant actors and return the set without them
     val (outgoingRefs, receptionists) = mapSnapshots(snapshots)
-    val inconsistentActors: mutable.Set[Name] = mutable.Set()
+    val irrelevantActors: mutable.Set[Name] = mutable.Set()
 
-    // An actor's snapshot is "inconsistent" if:
+    // An actor's snapshot is "irrelevant" if:
     // (1) it is a "receptionist", i.e. it is owned by an external actor; or
-    // (2) any of its incoming unreleased *refs* are inconsistent; or
-    // (3) the actor is reachable (via a sequence of unreleased refobs) from an "inconsistent" actor
+    // (2) any of its incoming unreleased *refs* are irrelevant; or
+    // (3) the actor is reachable (via a sequence of unreleased refobs) from an "irrelevant" actor
 
     // This loop finds all the actors satisfying property (1) and adds all reachable actors to the
-    // inconsistent set.
+    // irrelevant set.
     for (actor <- receptionists)
-      collectReachable(actor, inconsistentActors, outgoingRefs)
+      collectReachable(actor, irrelevantActors, outgoingRefs)
 
     // This loop finds all the actors satisfying property (2) and adds all reachable actors to the
-    // inconsistent set.
+    // irrelevant set.
     for {
       refs <- outgoingRefs.values
       ref <- refs
-      if !isConsistent(ref, snapshots)
-    } collectReachable(ref.target, inconsistentActors, outgoingRefs)
+      if !isRelevant(ref, snapshots)
+    } collectReachable(ref.target, irrelevantActors, outgoingRefs)
 
-    // An actor is terminated if its snapshot is not inconsistent
-    snapshots.keySet &~ inconsistentActors
+    // An actor is terminated if its snapshot is not irrelevant
+    snapshots.keySet &~ irrelevantActors
   }
 
 }
 
-object QuiescenceDetector {
-  val AkkaQuiescenceDetector = new QuiescenceDetector[typed.ActorRef[Nothing], gc.Token, ActorRef[Nothing], ActorSnapshot]
+object SimpleQuiescenceDetector {
+  val AkkaQuiescenceDetector = new SimpleQuiescenceDetector[typed.ActorRef[Nothing], gc.Token, ActorRef[Nothing], ActorSnapshot]
 }

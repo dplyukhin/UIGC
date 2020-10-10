@@ -1,6 +1,6 @@
 package gc.properties.model
 
-import gc.AbstractRef
+import gc.detector.AbstractRef
 
 
 case class DummyRef(token: Option[DummyToken],
