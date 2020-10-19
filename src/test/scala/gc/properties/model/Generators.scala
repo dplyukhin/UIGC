@@ -6,21 +6,52 @@ import org.scalacheck.Shrink.shrink
 
 object Generators {
 
+  sealed trait EventProbability
+  case object ProbSpawn          extends EventProbability
+  case object ProbSend           extends EventProbability
+  case object ProbIdle           extends EventProbability
+  case object ProbReceive        extends EventProbability
+  case object ProbSnapshot       extends EventProbability
+  case object ProbDeactivate     extends EventProbability
+  case object ProbDroppedMessage extends EventProbability
+
+  val defaultProbabilities: Map[EventProbability, Int] = Map(
+    ProbSpawn          -> 100,
+    ProbSend           -> 100,
+    ProbIdle           -> 200,
+    ProbReceive        -> 100,
+    ProbSnapshot       -> 100,
+    ProbDeactivate     -> 50,
+    ProbDroppedMessage -> 0,
+  )
+
+  val defaultWithDroppedMessages: Map[EventProbability, Int] =
+    defaultProbabilities + (ProbDroppedMessage -> 100)
+
   /**
    * Generates an event that can legally be executed in the given configuration.
    * Generates `None` if no more events are possible.
    */
-  def genEvent(c: Configuration): Gen[Option[Event]] = {
+  def genEvent(c: Configuration, probability: Map[EventProbability, Int]): Gen[Option[Event]] = {
 
     var generators: Seq[(Int, Gen[Event])] = Seq()
 
     // add each generator to the collection if its precondition is satisfied
-    if (c.busyActors.nonEmpty)                      generators :+= (10, genSpawn(c))
-    if (c.busyActors.nonEmpty)                      generators :+= (10, genSend(c))
-    if (c.busyActors.nonEmpty)                      generators :+= (20, genIdle(c))
-    if (c.readyActors.nonEmpty)                     generators :+= (10, genReceive(c))
-    if (c.actorsThatCanTakeASnapshot.nonEmpty)      generators :+= (10, genSnapshot(c))
-    if (c.actorsThatCanDeactivate.nonEmpty)         generators :+= (5, genDeactivate(c))
+    if (c.busyActors.nonEmpty)
+      generators :+= (probability(ProbSpawn), genSpawn(c))
+    if (c.busyActors.nonEmpty)
+      generators :+= (probability(ProbSend), genSend(c))
+    if (c.busyActors.nonEmpty)
+      generators :+= (probability(ProbIdle), genIdle(c))
+    if (c.readyActors.nonEmpty)
+      generators :+= (probability(ProbReceive), genReceive(c))
+    if (c.readyActors.nonEmpty)
+      generators :+= (probability(ProbDroppedMessage), genDroppedMessage(c))
+    if (c.actorsThatCanTakeASnapshot.nonEmpty)
+      generators :+= (probability(ProbSnapshot), genSnapshot(c))
+    if (c.actorsThatCanDeactivate.nonEmpty)
+      generators :+= (probability(ProbDeactivate), genDeactivate(c))
+
 
     if (generators.isEmpty)
       const(None)
@@ -75,6 +106,13 @@ object Generators {
     } yield Receive(recipient, sender)
   }
 
+  def genDroppedMessage(c: Configuration): Gen[DroppedMessage] = {
+    for {
+      recipient <- oneOf(c.readyActors)
+      sender <- oneOf(c.pendingMessages(recipient).senders)
+    } yield DroppedMessage(recipient, sender)
+  }
+
   def genIdle(c: Configuration): Gen[BecomeIdle] = {
     for {
       actor <- oneOf(c.busyActors)
@@ -99,6 +137,7 @@ object Generators {
     executionSize: Int,
     initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0,
+    probability: Map[EventProbability, Int] = defaultProbabilities,
   ): Gen[(Execution, Configuration)] = {
     // This function takes:
     // (a) the execution generated so far,
@@ -111,7 +150,7 @@ object Generators {
       if (size <= 0)
         return const(Right(e,c))
 
-      genEvent(c).flatMap {
+      genEvent(c, probability).flatMap {
         case None =>
           const(Right(e,c))
         case Some(event) =>
@@ -127,18 +166,20 @@ object Generators {
     executionLength: Int,
     initialConfig: Configuration = new Configuration(),
     minAmountOfGarbage: Int = 0,
+    probability: Map[EventProbability, Int] = defaultProbabilities,
   ): Gen[Configuration] = {
     for {
-      (_, config) <- genExecutionAndConfiguration(executionLength, initialConfig, minAmountOfGarbage)
+      (_, config) <- genExecutionAndConfiguration(executionLength, initialConfig, minAmountOfGarbage, probability)
     } yield config
   }
   def genExecution(
     executionLength: Int,
     initialConfig: Configuration = new Configuration(),
-    minAmountOfGarbage: Int = 0
+    minAmountOfGarbage: Int = 0,
+    probability: Map[EventProbability, Int] = defaultProbabilities,
   ): Gen[Execution] = {
     for {
-      (exec, _) <- genExecutionAndConfiguration(executionLength, initialConfig, minAmountOfGarbage)
+      (exec, _) <- genExecutionAndConfiguration(executionLength, initialConfig, minAmountOfGarbage, probability)
     } yield exec
   }
 

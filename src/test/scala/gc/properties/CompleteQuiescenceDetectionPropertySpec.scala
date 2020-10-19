@@ -13,7 +13,7 @@ object CompleteQuiescenceDetectionPropertySpec extends Properties("Complete quie
   val executionSize = 1000
 
   override def overrideParameters(p: Test.Parameters): Test.Parameters =
-    p.withMinSuccessfulTests(1000)
+    p.withMinSuccessfulTests(500)
       // This prevents Scalacheck console output from getting wrapped at 75 chars
       .withTestCallback(ConsoleReporter(1, Int.MaxValue))
       // This prevents Scalacheck from giving up when it has to discard a lot of tests

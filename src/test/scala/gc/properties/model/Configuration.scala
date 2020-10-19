@@ -232,8 +232,16 @@ class Configuration() {
           sender
         )
 
+      case DroppedMessage(recipient, sender) =>
+        require(state contains recipient)
+        require(state contains sender)
+        // take the next message from this sender out of the queue;
+        // don't do anything with it
+        pendingMessages(recipient).deliverFrom(sender)
+
       case Receive(recipient, sender) =>
         require(state contains recipient)
+        require(state contains sender)
         require(idle(recipient))
         // take the next message from this sender out of the queue;
         // this should mimic the behavior of [[gc.AbstractBehavior]]

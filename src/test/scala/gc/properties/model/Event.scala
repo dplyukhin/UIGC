@@ -38,3 +38,10 @@ case class Deactivate(actor: DummyName, ref: DummyRef) extends Event {
 case class Snapshot(actor: DummyName) extends Event {
   override def toString: String = s"SNAPSHOT: $actor takes a snapshot"
 }
+
+/**
+ * Drop the next message from `sender` to `recipient`.
+ */
+case class DroppedMessage(recipient: DummyName, sender: DummyName) extends Event {
+  override def toString: String = s"DROPPED MESSAGE: next message from $sender to $recipient dropped"
+}
