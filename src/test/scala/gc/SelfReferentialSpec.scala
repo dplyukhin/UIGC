@@ -56,11 +56,11 @@ class SelfReferentialSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike
       msg match {
         case Init =>
           actorB = context.spawn(ActorB(), "actorB")
-          probe.ref ! SnapshotMessage(context.snapshot())
+          probe.ref ! SnapshotMessage(context.snapshot)
           val ref = context.createRef(context.self, actorB)
           actorB ! GetRef(ref)
           probe.ref ! CreatedRef(ref)
-          probe.ref ! SnapshotMessage(context.snapshot())
+          probe.ref ! SnapshotMessage(context.snapshot)
           this
 
         case _ => this

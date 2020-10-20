@@ -264,7 +264,7 @@ class ActorState[
    * Gets the current [[ActorSnapshot]].
    * @return The current snapshot.
    */
-  def snapshot(): Snapshot = {
+  def snapshot: Snapshot = {
     // get immutable copies
     val sent: Map[Token, Int] = sentCount.toMap
     val recv: Map[Token, Int] = recvCount.toMap

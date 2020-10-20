@@ -1,6 +1,6 @@
 package gc
 
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
+import akka.actor.typed.scaladsl.{TimerScheduler, ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}
 
 /**
@@ -18,6 +18,7 @@ import akka.actor.typed.{ActorRef => AkkaActorRef}
  */
 class ActorContext[T <: Message](
   val context: AkkaActorContext[GCMessage[T]],
+  val timers: Option[TimerScheduler[GCMessage[T]]],
   val creator: Option[AkkaActorRef[Nothing]],
   val token: Option[Token]
 ) {
@@ -169,8 +170,8 @@ class ActorContext[T <: Message](
    * Gets the current [[ActorSnapshot]].
    * @return The current snapshot.
    */
-  def snapshot(): ActorSnapshot = {
-    state.snapshot()
+  def snapshot: ActorSnapshot = {
+    state.snapshot
   }
 
   /**
