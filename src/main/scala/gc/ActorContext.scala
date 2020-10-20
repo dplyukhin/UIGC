@@ -114,7 +114,7 @@ class ActorContext[T <: Message](
         AkkaBehaviors.same
 
       case ActorState.RemindMeLater =>
-        self.target ! SelfCheck()
+        self.target ! SelfCheck
         AkkaBehaviors.same
 
       case ActorState.Terminated =>

@@ -20,8 +20,12 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
       case AppMsg(payload, token) =>
         context.handleMessage(payload.refs, token)
         onMessage(payload)
-      case SelfCheck() =>
+      case SelfCheck =>
         context.handleSelfCheck()
         context.tryTerminate()
+      case TakeSnapshot =>
+        println(s"${context.self} Taking a snapshot")
+        context.snapshot()
+        this
     }
 }

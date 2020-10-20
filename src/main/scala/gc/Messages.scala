@@ -1,7 +1,5 @@
 package gc
 
-import akka.actor.typed.{ActorRef => AkkaActorRef}
-
 /**
  * An interface that all messages sent to a garbage-collected actor must adhere to.
  */
@@ -21,6 +19,11 @@ final case class ReleaseMsg[+T <: Message](releasing: Iterable[AnyActorRef],
                                            ) extends GCMessage[T]
 
 /**
+ * A message asking its recipient to take a snapshot.
+ */
+case object TakeSnapshot extends GCMessage[Nothing]
+
+/**
  * A message sent by an actor to itself to check whether it's ready to terminate.
  */
-final case class SelfCheck[+T <: Message]() extends GCMessage[T]
+case object SelfCheck extends GCMessage[Nothing]
