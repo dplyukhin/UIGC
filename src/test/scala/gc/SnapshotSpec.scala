@@ -182,7 +182,7 @@ class SnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           context.release(Iterable(actorC))
           this
         case RequestKnowledge =>
-          probe.ref ! Knowledge(context.snapshot)
+          probe.ref ! Knowledge(context.snapshot())
           this
         case _ => this
       }
@@ -197,7 +197,7 @@ class SnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           actorC = ref
           this
         case RequestKnowledge =>
-          probe.ref ! Knowledge(context.snapshot)
+          probe.ref ! Knowledge(context.snapshot())
           this
         case ForgetC =>
           context.release(Iterable(actorC))
@@ -210,7 +210,7 @@ class SnapshotSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onMessage(msg: KnowledgeTestMessage): Behavior[KnowledgeTestMessage] = {
       msg match {
         case RequestKnowledge =>
-          probe.ref ! Knowledge(context.snapshot)
+          probe.ref ! Knowledge(context.snapshot())
           this
         case _ => this
       }

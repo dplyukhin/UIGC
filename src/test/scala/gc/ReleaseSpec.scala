@@ -83,7 +83,7 @@ class ReleaseSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           context.release(x)
           this
         case State(_) =>
-          probe.ref ! State(Some(context.snapshot))
+          probe.ref ! State(Some(context.snapshot()))
           this
         case _ =>
           this

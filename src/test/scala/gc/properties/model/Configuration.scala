@@ -275,7 +275,7 @@ class Configuration() {
         require(state contains actor)
         require(idle(actor))
         require(!terminated(actor))
-        val snapshot = state(actor).snapshot
+        val snapshot = state(actor).snapshot()
         snapshots :+= ((actor, snapshot))
     }
     // Once successful, add the event to the execution so far
