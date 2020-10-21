@@ -1,7 +1,7 @@
 package gc
 
 import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior}
-import akka.actor.typed.{Behavior => AkkaBehavior}
+import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import gc.aggregator.SnapshotAggregator
 
 
@@ -13,6 +13,8 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
 
   private val snapshotAggregator: SnapshotAggregator =
     SnapshotAggregator(context.context.system)
+
+  snapshotAggregator.generation.add(context.self.target)
 
   def onMessage(msg: T): Behavior[T]
 
@@ -32,4 +34,13 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
         context.snapshot()
         this
     }
+
+  override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[T]]] = {
+    case PostStop =>
+      snapshotAggregator.generation.remove(context.self.target)
+      this
+
+    case signal =>
+      super.onSignal(signal)
+  }
 }
