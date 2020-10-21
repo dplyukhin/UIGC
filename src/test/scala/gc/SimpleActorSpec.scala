@@ -1,7 +1,8 @@
 package gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
-import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
+import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
+import gc.aggregator.SnapshotAggregator
 import org.scalatest.wordspec.AnyWordSpecLike
 
 
@@ -20,7 +21,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   case object ReleaseC extends testMessage with NoRefsMessage
   case object ReleaseB extends testMessage with NoRefsMessage
   case object Hello extends testMessage with NoRefsMessage
-  case object Spawned extends testMessage with NoRefsMessage
+  case class Spawned(name: AkkaActorRef[Nothing]) extends testMessage with NoRefsMessage
   case object Terminated extends testMessage with NoRefsMessage
   case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
     override def refs: Iterable[AnyActorRef] = Iterable(ref)
@@ -30,10 +31,16 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
+    var children: Set[AkkaActorRef[Nothing]] = Set()
     "be able to spawn actors" in {
       actorA ! Init
-      probe.expectMessage(Spawned)
-      probe.expectMessage(Spawned)
+      children += probe.expectMessageType[Spawned].name
+      children += probe.expectMessageType[Spawned].name
+    }
+    "add themselves to the GC registry" in {
+      assert(children.forall { child =>
+        SnapshotAggregator(testKit.system).generation.contains(child)
+      })
     }
     "be able to send messages" in {
       actorA ! SendC(Hello)
@@ -59,6 +66,11 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     "terminate after the only reference has been released" in {
       actorA ! ReleaseB
       probe.expectMessage(Terminated)
+    }
+    "remove themselves from the GC registry after terminating" in {
+      assert(children.forall { child =>
+        !SnapshotAggregator(testKit.system).generation.contains(child)
+      })
     }
   }
 
@@ -107,7 +119,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
     var actorC: ActorRef[testMessage]= _
-    probe.ref ! Spawned
+    probe.ref ! Spawned(context.self.target)
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case GetRef(ref) =>
@@ -125,11 +137,13 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
       case PostStop =>
         probe.ref ! Terminated
-        this
+        super.onSignal(PostStop)
+      case signal =>
+        super.onSignal(signal)
     }
   }
   class ActorC(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    probe.ref ! Spawned
+    probe.ref ! Spawned(context.self.target)
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Hello =>
@@ -141,7 +155,9 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
       case PostStop =>
         probe.ref ! Terminated
-        this
+        super.onSignal(PostStop)
+      case signal =>
+        super.onSignal(signal)
     }
   }
 }
