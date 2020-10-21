@@ -2,6 +2,7 @@ package gc
 
 import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior}
 import akka.actor.typed.{Behavior => AkkaBehavior}
+import gc.aggregator.SnapshotAggregator
 
 
 /**
@@ -9,6 +10,9 @@ import akka.actor.typed.{Behavior => AkkaBehavior}
  */
 abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
+
+  private val snapshotAggregator: SnapshotAggregator =
+    SnapshotAggregator(context.context.system)
 
   def onMessage(msg: T): Behavior[T]
 
