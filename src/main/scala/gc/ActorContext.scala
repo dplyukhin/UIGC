@@ -18,7 +18,7 @@ import akka.actor.typed.{ActorRef => AkkaActorRef}
  */
 class ActorContext[T <: Message](
   val context: AkkaActorContext[GCMessage[T]],
-  val creator: Option[AkkaActorRef[Nothing]],
+  val creator: Option[ActorName],
   val token: Option[Token]
 ) {
 
@@ -28,7 +28,7 @@ class ActorContext[T <: Message](
 
   val creatorRef = new ActorRef[Nothing](token, creator, context.self)
 
-  val state = new ActorState[AkkaActorRef[Nothing], Token, ActorRef[Nothing], ActorSnapshot](
+  val state = new ActorState[ActorName, Token, AnyActorRef, ActorSnapshot](
     self,
     creatorRef,
     ActorSnapshot
@@ -144,13 +144,12 @@ class ActorContext[T <: Message](
    */
   def release(releasing: Iterable[AnyActorRef]): Unit = {
 
-    val targets: Map[AkkaActorRef[Nothing], (Seq[AnyActorRef], Seq[AnyActorRef])]
+    val targets: Map[ActorName, (Seq[AnyActorRef], Seq[AnyActorRef])]
       = state.release(releasing)
 
     // send the release message for each target actor
     for ((target, (targetedRefs, createdRefs)) <- targets) {
-      // TODO Remove unsafe upcast if possible
-      target.unsafeUpcast[GCMessage[Nothing]] ! ReleaseMsg(targetedRefs, createdRefs)
+      target ! ReleaseMsg(targetedRefs, createdRefs)
     }
   }
 

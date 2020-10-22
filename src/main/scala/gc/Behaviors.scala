@@ -8,7 +8,7 @@ import scala.reflect.ClassTag
 
 object Behaviors {
   def setup[T <: Message](factory: ActorContext[T] => Behavior[T]): ActorFactory[T] =
-    (creator: AkkaActorRef[Nothing], token: Token) =>
+    (creator: ActorName, token: Token) =>
       AkkaBehaviors.setup(context => factory(new ActorContext(context, Some(creator), Some(token))))
 
   private class ReceptionistAdapter[T <: Message](implicit interceptMessageClassTag: ClassTag[T]) extends BehaviorInterceptor[T, GCMessage[T]] {

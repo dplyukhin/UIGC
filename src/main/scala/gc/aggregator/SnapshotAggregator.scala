@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import akka.actor.typed
 import akka.actor.typed.{ActorSystem, Extension, ExtensionId}
-import gc.{ActorSnapshot, GCMessage}
+import gc.{ActorName, ActorSnapshot, GCMessage}
 
 import scala.concurrent.duration.DurationInt
 
@@ -14,7 +14,9 @@ class SnapshotAggregator(system: ActorSystem[_]) extends Extension {
   val generation: Generation = ConcurrentHashMap.newKeySet()
   val snapshots: ConcurrentHashMap[ActorName, ActorSnapshot] = new ConcurrentHashMap()
 
-  system.systemActorOf(SnapshotRequester(1.second), "SnapshotRequester")
+  system.systemActorOf(SnapshotRequester(200.millis), "SnapshotRequester")
+  system.systemActorOf(Reaper(550.millis), "Reaper")
+  println("GC initialized")
 
   def register(actor: ActorName): Unit = {
     generation.add(actor)
@@ -29,7 +31,6 @@ class SnapshotAggregator(system: ActorSystem[_]) extends Extension {
 }
 
 object SnapshotAggregator extends ExtensionId[SnapshotAggregator] {
-  type ActorName = typed.ActorRef[GCMessage[Nothing]]
   /** A concurrent set of actor refs */
   type Generation = ConcurrentHashMap.KeySetView[ActorName, java.lang.Boolean]
 

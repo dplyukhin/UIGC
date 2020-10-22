@@ -22,9 +22,9 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  */
 
 case class ActorRef[-T <: Message](token: Option[Token],
-                                   owner: Option[AkkaActorRef[Nothing]],
+                                   owner: Option[AkkaActorRef[GCMessage[Nothing]]],
                                    target: AkkaActorRef[GCMessage[T]],
-                                   ) extends AbstractRef[AkkaActorRef[Nothing], Token] {
+                                   ) extends AbstractRef[ActorName, Token] {
   private var context: Option[ActorContext[_ <: Message]] = None
 
   def initialize[S <: Message](_context: ActorContext[S]): Unit = {
@@ -47,4 +47,4 @@ case class ActorSnapshot(refs: Iterable[AnyActorRef],
                          releasedRefs: Iterable[AnyActorRef],
                          sentCounts: Map[Token, Int],
                          recvCounts: Map[Token, Int])
-  extends AbstractSnapshot[AkkaActorRef[Nothing], Token, AnyActorRef]
+  extends AbstractSnapshot[ActorName, Token, AnyActorRef]

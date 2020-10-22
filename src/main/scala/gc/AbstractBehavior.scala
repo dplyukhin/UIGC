@@ -1,6 +1,6 @@
 package gc
 
-import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior}
+import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import gc.aggregator.SnapshotAggregator
 
@@ -33,6 +33,8 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
         snapshotAggregator.put(context.self.target, context.snapshot())
         context.snapshot()
         this
+      case Kill =>
+        AkkaBehaviors.stopped
     }
 
   override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[T]]] = {

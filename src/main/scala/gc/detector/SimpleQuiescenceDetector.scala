@@ -1,8 +1,5 @@
 package gc.detector
 
-import akka.actor.typed
-import gc.{ActorRef, ActorSnapshot}
-
 import scala.collection.mutable
 
 /**
@@ -114,8 +111,4 @@ class SimpleQuiescenceDetector [
     snapshots.keySet &~ irrelevantActors
   }
 
-}
-
-object SimpleQuiescenceDetector {
-  val AkkaQuiescenceDetector = new SimpleQuiescenceDetector[typed.ActorRef[Nothing], gc.Token, ActorRef[Nothing], ActorSnapshot]
 }

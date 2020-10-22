@@ -19,7 +19,7 @@ class SimpleQuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWo
   val selfA: ActorRef[Message] = ActorRef(Some(aToken), Some(A), A)
   val selfB: ActorRef[Message] = ActorRef(Some(bToken), Some(B), B)
 
-  val quiescenceDetector = new SimpleQuiescenceDetector[AkkaActorRef[Nothing], gc.Token, gc.ActorRef[Nothing], gc.ActorSnapshot]
+  val quiescenceDetector = new SimpleQuiescenceDetector[AkkaActorRef[GCMessage[Nothing]], gc.Token, gc.ActorRef[Nothing], gc.ActorSnapshot]
 
   "Basic cycles" should {
     // A has ref x:A->B and B has ref y:B->A.

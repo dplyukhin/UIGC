@@ -27,3 +27,6 @@ case object TakeSnapshot extends GCMessage[Nothing]
  * A message sent by an actor to itself to check whether it's ready to terminate.
  */
 case object SelfCheck extends GCMessage[Nothing]
+
+/** A message sent by the garbage collector, indicating that this actor is garbage */
+case object Kill extends GCMessage[Nothing]
