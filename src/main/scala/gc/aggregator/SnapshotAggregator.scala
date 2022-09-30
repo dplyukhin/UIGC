@@ -15,7 +15,7 @@ class SnapshotAggregator(system: ActorSystem[_]) extends Extension {
   val snapshots: ConcurrentHashMap[ActorName, ActorSnapshot] = new ConcurrentHashMap()
 
   system.systemActorOf(SnapshotRequester(200.millis), "SnapshotRequester")
-  system.systemActorOf(Reaper(550.millis), "Reaper")
+  system.systemActorOf(Reaper(100.millis), "Reaper")
   println("GC initialized")
 
   def register(actor: ActorName): Unit = {

@@ -22,8 +22,10 @@ object Reaper {
           snapshots = snapshots + (name -> snapshot)
         }
 
+        val t0 = System.nanoTime()
         val garbage = new SimpleQuiescenceDetector[ActorName, Token, ActorRef[Nothing], ActorSnapshot].findGarbage(snapshots)
-        println(s"Killing ${garbage.size} of ${snapshots.size} actors")
+        val t1 = System.nanoTime()
+        println(s"Killing ${garbage.size} of ${snapshots.size} actors, scanned in ${t1 - t0} ns")
         for (actor <- garbage)
           actor ! Kill
 
