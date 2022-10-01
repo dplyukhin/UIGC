@@ -10,7 +10,7 @@ trait Benchmark {
 }
 
 object Benchmark {
-  def runBenchmark(benchmark: Benchmark, warmupIterations: Int = 10, numIterations: Int = 20) = {
+  def runBenchmark(benchmark: Benchmark, warmupIterations: Int = 0, numIterations: Int = 5) = {
     var iterationTimes = Seq[Double]()
     println(benchmark.name)
   

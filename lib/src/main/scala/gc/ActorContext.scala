@@ -22,6 +22,8 @@ class ActorContext[T <: Message](
   val token: Option[Token]
 ) {
 
+  val name = context.self
+
   /** This actor's self reference. */
   val self = new ActorRef[T](Some(newToken()), Some(context.self), context.self)
   self.initialize(this)
@@ -119,6 +121,7 @@ class ActorContext[T <: Message](
 
       case ActorState.Terminated =>
         releaseEverything()
+        println(s"${context.self} terminated")
         AkkaBehaviors.stopped
     }
   }

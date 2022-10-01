@@ -5,6 +5,7 @@ import gc._
 import common.Benchmark
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import com.typesafe.config.ConfigFactory
 
 object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
@@ -16,7 +17,16 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
   override def init(): Unit = {
     stats = new Statistics
-    system = ActorSystem(BenchmarkActor.createRoot(stats), name)
+    if (RandomGraphsConfig.IsSequential) {
+      val conf = ConfigFactory.parseString("""
+        akka.actor.default-dispatcher.fork-join-executor.parallelism-min = 1
+        akka.actor.default-dispatcher.fork-join-executor.parallelism-max = 1
+      """)
+      system = ActorSystem(BenchmarkActor.createRoot(stats), name, ConfigFactory.load(conf))
+    }
+    else {
+      system = ActorSystem(BenchmarkActor.createRoot(stats), name)
+    }
   }
 
   def cleanup(): Unit = {
@@ -51,7 +61,11 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
     }
 
     def createRoot(statistics: Statistics): AkkaBehavior[Msg] = {
-      Behaviors.setupReceptionist(context => new BenchmarkActor(context, statistics))
+      Behaviors.setupReceptionist(context => {
+        if (RandomGraphsConfig.ShouldLog) 
+          println("\nSpawned root actor\n")
+        new BenchmarkActor(context, statistics)
+      })
     }
   }
 
@@ -63,28 +77,39 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
 
     override val statistics: Statistics = stats
-    override val debug: Boolean = true
 
-    override def spawn(): ActorRef[Msg] =
-      context.spawnAnonymous(BenchmarkActor(stats))
+    override def spawn(): ActorRef[Msg] = {
+      val child = context.spawnAnonymous(BenchmarkActor(stats))
+      if (RandomGraphsConfig.ShouldLog) 
+        println(s"${context.name} spawned ${child.target}")
+      child
+    }
 
     override def linkActors(owner: ActorRef[Msg], target: ActorRef[Msg]): Unit = {
       val ref = context.createRef(target, owner)
       owner ! Link(ref)
+      if (RandomGraphsConfig.ShouldLog) 
+        println(s"${context.name} sent Link($ref) to ${owner.target}")
       super.linkActors(owner, target)
     }
 
     override def forgetActor(ref: ActorRef[Msg]): Unit = {
       context.release(ref)
+      if (RandomGraphsConfig.ShouldLog) 
+        println(s"${context.name} released ${ref.target}")
       super.forgetActor(ref)
     }
 
     override def ping(ref: ActorRef[Msg]): Unit = {
       ref ! Ping()
+      if (RandomGraphsConfig.ShouldLog) 
+        println(s"${context.name} pinging ${ref.target}")
       super.ping(ref)
     }
 
     override def onMessage(msg: Msg): Behavior[Msg] = {
+      if (RandomGraphsConfig.ShouldLog) 
+        println(s"${context.name} got message: $msg")
 
       msg match {
         case Link(ref) =>

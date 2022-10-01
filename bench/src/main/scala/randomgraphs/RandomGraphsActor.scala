@@ -1,11 +1,11 @@
 package randomgraphs
 
 import scala.util.Random
+import RandomGraphsConfig._
 
 trait RandomGraphsActor[T] {
 
     val statistics: Statistics
-    val debug: Boolean
 
     /** a list of references to other actors */
     var acquaintances: Set[T] = Set()
@@ -14,29 +14,28 @@ trait RandomGraphsActor[T] {
 
     final def spawnActor(): Unit = {
         val child = spawn()
-        if (debug) statistics.latch.countDown()
+        statistics.latch.countDown()
         acquaintances += child
     }
 
     def forgetActor(ref: T): Unit = {
-        if (debug) statistics.releaseCount.incrementAndGet()
+        if (LogStats) statistics.releaseCount.incrementAndGet()
         acquaintances -= ref
     }
 
     def linkActors(owner: T, target: T): Unit = {
-        if (debug) statistics.linkCount.incrementAndGet()
+        if (LogStats) statistics.linkCount.incrementAndGet()
     }
 
     def ping(ref: T): Unit = {
-        if (debug) statistics.pingCount.incrementAndGet()
+        if (LogStats) statistics.pingCount.incrementAndGet()
     }
 
     final def noop(): Unit = {
-        if (debug) statistics.noopCount.incrementAndGet()
+        if (LogStats) statistics.noopCount.incrementAndGet()
     }
 
     final def doSomeActions(): Unit = {
-        import RandomGraphsConfig._
         if (statistics.latch.getCount() == 0) {
             return ()
         }

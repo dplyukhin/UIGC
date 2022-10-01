@@ -54,7 +54,6 @@ object RandomGraphsAkkaBenchmark extends App with Benchmark {
     import BenchmarkActor._
 
     override val statistics: Statistics = stats
-    override val debug: Boolean = true
 
     override def spawn(): ActorRef[Msg] =
       context.spawnAnonymous(BenchmarkActor(stats))

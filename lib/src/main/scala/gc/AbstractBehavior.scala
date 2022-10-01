@@ -11,10 +11,10 @@ import gc.aggregator.SnapshotAggregator
 abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
   extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
 
-  private val snapshotAggregator: SnapshotAggregator =
-    SnapshotAggregator(context.context.system)
+  // private val snapshotAggregator: SnapshotAggregator =
+  //   SnapshotAggregator(context.context.system)
 
-  snapshotAggregator.register(context.self.target)
+  // snapshotAggregator.register(context.self.target)
 
   def onMessage(msg: T): Behavior[T]
 
@@ -30,7 +30,7 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
         context.handleSelfCheck()
         context.tryTerminate()
       case TakeSnapshot =>
-        snapshotAggregator.put(context.self.target, context.snapshot())
+        // snapshotAggregator.put(context.self.target, context.snapshot())
         context.snapshot()
         this
       case Kill =>
@@ -39,7 +39,7 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
 
   override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[T]]] = {
     case PostStop =>
-      snapshotAggregator.unregister(context.self.target)
+      // snapshotAggregator.unregister(context.self.target)
       this
 
     case signal =>

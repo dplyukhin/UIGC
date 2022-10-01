@@ -4,7 +4,7 @@ object RandomGraphsConfig {
   /** M is a configurable fixed parameter that decides the number of action an Actor will perform */
   val NumberOfActions : Int = 10
   /** N is a configurable fixed parameter that decides the amount of Actors will be generated */
-  val NumberOfSpawns : Int = 100000
+  val NumberOfSpawns : Int = 5
   /** P1 is the probability for Action 1: Spawning an Actor */
   val ProbabilityToSpawn : Double = 0.01
   /** P2 is the probability for Action 2: Sending a ref from one Actor to another*/
@@ -16,4 +16,10 @@ object RandomGraphsConfig {
   /** P is the amount of ping messages that will be sent  */
   val NumberOfPingsSent : Int = 1000
 
+  /** Whether actors should track information via the Statistics object */
+  val LogStats : Boolean = true
+  /** Whether to execute this benchmark in a single-threaded way (for debugging) */
+  val IsSequential : Boolean = false
+  /** Whether to log extra messages (for debugging) */
+  val ShouldLog : Boolean = false
 }
