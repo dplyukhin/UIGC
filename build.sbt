@@ -18,14 +18,14 @@ lazy val lib = project
     )
   )
 
-// lazy val bench = project
-//   .dependsOn(lib)
-//   .settings(
-//     name := "akka-gc-bench",
-// 
-//     libraryDependencies ++= Seq(
-//         org %% "mle" % libVersion,
-//         "org.scalatest" %% "scalatest" % "3.1.1" % "test",
-//         "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % "test",
-//     )
-//   )
+lazy val bench = project
+  .dependsOn(lib)
+  .settings(
+    name := "akka-gc-bench",
+
+    libraryDependencies ++= Seq(
+        org %% "akka-gc" % libVersion,
+        "org.scalatest" %% "scalatest" % "3.1.1" % "test",
+        "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % "test",
+    )
+  )
