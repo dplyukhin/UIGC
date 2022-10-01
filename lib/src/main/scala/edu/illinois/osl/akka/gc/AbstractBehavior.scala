@@ -1,8 +1,8 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
-import gc.aggregator.SnapshotAggregator
+import aggregator.SnapshotAggregator
 
 
 /**

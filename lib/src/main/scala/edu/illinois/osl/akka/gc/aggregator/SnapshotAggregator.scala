@@ -1,10 +1,10 @@
-package gc.aggregator
+package edu.illinois.osl.akka.gc.aggregator
 
 import java.util.concurrent.ConcurrentHashMap
 
 import akka.actor.typed
 import akka.actor.typed.{ActorSystem, Extension, ExtensionId}
-import gc.{ActorName, ActorSnapshot, GCMessage}
+import edu.illinois.osl.akka.gc.{ActorName, ActorSnapshot, GCMessage}
 
 import scala.concurrent.duration.DurationInt
 

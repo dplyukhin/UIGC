@@ -1,4 +1,4 @@
-package gc.detector
+package edu.illinois.osl.akka.gc.detector
 
 trait AbstractRef[Name, Token] {
   val token: Option[Token]

@@ -1,4 +1,4 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{ActorRef => AkkaActorRef}

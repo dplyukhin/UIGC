@@ -1,3 +1,5 @@
+package edu.illinois.osl.akka
+
 import akka.actor.typed
 import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
 

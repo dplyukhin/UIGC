@@ -1,4 +1,4 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 /**
  * An interface that all messages sent to a garbage-collected actor must adhere to.

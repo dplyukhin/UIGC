@@ -1,4 +1,4 @@
-package gc.detector
+package edu.illinois.osl.akka.gc.detector
 
 import scala.collection.mutable
 

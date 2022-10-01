@@ -1,7 +1,7 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.{ActorRef => AkkaActorRef}
-import gc.detector.{AbstractRef, AbstractSnapshot}
+import edu.illinois.osl.akka.gc.detector.{AbstractRef, AbstractSnapshot}
 
 /**
  * An opaque and globally unique token.

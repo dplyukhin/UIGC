@@ -1,4 +1,4 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.BehaviorInterceptor.ReceiveTarget
 import akka.actor.typed.{BehaviorInterceptor, TypedActorContext, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}

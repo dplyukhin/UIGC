@@ -1,8 +1,8 @@
-package gc.aggregator
+package edu.illinois.osl.akka.gc.aggregator
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import gc.TakeSnapshot
+import edu.illinois.osl.akka.gc.TakeSnapshot
 
 import scala.concurrent.duration.FiniteDuration
 

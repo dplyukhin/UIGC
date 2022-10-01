@@ -1,6 +1,6 @@
-package gc
+package edu.illinois.osl.akka.gc
 
-import gc.detector.{AbstractRef, AbstractSnapshot}
+import edu.illinois.osl.akka.gc.detector.{AbstractRef, AbstractSnapshot}
 
 import scala.collection.mutable
 

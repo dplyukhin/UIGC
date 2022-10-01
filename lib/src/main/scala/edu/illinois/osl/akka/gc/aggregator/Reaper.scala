@@ -1,10 +1,10 @@
-package gc.aggregator
+package edu.illinois.osl.akka.gc.aggregator
 
 import akka.actor.typed
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import gc.{ActorName, ActorRef, ActorSnapshot, Kill, Token}
-import gc.detector.SimpleQuiescenceDetector
+import edu.illinois.osl.akka.gc.{ActorName, ActorRef, ActorSnapshot, Kill, Token}
+import edu.illinois.osl.akka.gc.detector.SimpleQuiescenceDetector
 
 import scala.concurrent.duration.FiniteDuration
 

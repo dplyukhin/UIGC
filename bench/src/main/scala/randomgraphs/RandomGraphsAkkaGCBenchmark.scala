@@ -1,7 +1,7 @@
 package randomgraphs
 
 import akka.actor.typed.{Behavior => AkkaBehavior, ActorSystem}
-import gc._
+import edu.illinois.osl.akka.gc._
 import common.Benchmark
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
