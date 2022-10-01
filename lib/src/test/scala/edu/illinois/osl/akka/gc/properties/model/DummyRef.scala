@@ -1,6 +1,6 @@
-package gc.properties.model
+package edu.illinois.osl.akka.gc.properties.model
 
-import gc.detector.AbstractRef
+import edu.illinois.osl.akka.gc.detector.AbstractRef
 
 
 case class DummyRef(token: Option[DummyToken],

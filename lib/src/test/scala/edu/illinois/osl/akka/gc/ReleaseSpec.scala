@@ -1,4 +1,4 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import org.scalatest.wordspec.AnyWordSpecLike

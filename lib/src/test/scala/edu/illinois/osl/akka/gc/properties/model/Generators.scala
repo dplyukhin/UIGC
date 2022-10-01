@@ -1,4 +1,4 @@
-package gc.properties.model
+package edu.illinois.osl.akka.gc.properties.model
 
 import org.scalacheck.{Gen, Shrink}
 import org.scalacheck.Gen._

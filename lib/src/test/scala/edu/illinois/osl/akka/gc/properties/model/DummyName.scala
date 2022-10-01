@@ -1,4 +1,4 @@
-package gc.properties.model
+package edu.illinois.osl.akka.gc.properties.model
 
 /**
  * A unique address to an actor.

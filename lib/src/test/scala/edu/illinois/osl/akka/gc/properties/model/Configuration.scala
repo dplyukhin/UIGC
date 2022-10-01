@@ -1,6 +1,6 @@
-package gc.properties.model
+package edu.illinois.osl.akka.gc.properties.model
 
-import gc.ActorState
+import edu.illinois.osl.akka.gc.ActorState
 
 /**
  * This class represents a simulated Actor System for the purpose of property-based testing.

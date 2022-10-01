@@ -1,13 +1,13 @@
-package gc.properties
+package edu.illinois.osl.akka.gc.properties
 
-import gc.properties.model.Configuration
+import edu.illinois.osl.akka.gc.properties.model.Configuration
 import org.scalacheck.Gen.oneOf
 import org.scalacheck.Prop.{all, collect, forAll, forAllNoShrink, propBoolean}
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Properties, Test}
 
 object ExecutionSpec extends Properties("Properties of executions") {
-  import gc.properties.model.Generators._
+  import edu.illinois.osl.akka.gc.properties.model.Generators._
 
   val executionSize = 1000
 

@@ -1,14 +1,14 @@
-package gc.properties
+package edu.illinois.osl.akka.gc.properties
 
-import gc.detector.{CompleteQuiescenceDetector, SimpleQuiescenceDetector}
-import gc.properties.model.{BecomeIdle, Configuration, DroppedMessage, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
+import edu.illinois.osl.akka.gc.detector.{CompleteQuiescenceDetector, SimpleQuiescenceDetector}
+import edu.illinois.osl.akka.gc.properties.model.{BecomeIdle, Configuration, DroppedMessage, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
 import org.scalacheck.Prop.{collect, forAll, propBoolean}
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Gen, Properties, Test}
 
 object DroppedMessagesSpec extends Properties("Dropped messages spec") {
 
-  import gc.properties.model.Generators._
+  import edu.illinois.osl.akka.gc.properties.model.Generators._
 
   val executionSize = 1000
 

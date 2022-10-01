@@ -1,4 +1,4 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed

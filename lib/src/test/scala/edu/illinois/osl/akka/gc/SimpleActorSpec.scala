@@ -1,8 +1,8 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-import gc.aggregator.SnapshotAggregator
+import edu.illinois.osl.akka.gc.aggregator.SnapshotAggregator
 import org.scalatest.wordspec.AnyWordSpecLike
 
 

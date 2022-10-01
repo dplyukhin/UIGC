@@ -1,14 +1,14 @@
-package gc.properties
+package edu.illinois.osl.akka.gc.properties
 
-import gc.detector.CompleteQuiescenceDetector
-import gc.properties.model.{BecomeIdle, Configuration, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
+import edu.illinois.osl.akka.gc.detector.CompleteQuiescenceDetector
+import edu.illinois.osl.akka.gc.properties.model.{BecomeIdle, Configuration, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
 import org.scalacheck.Prop.{collect, forAll, propBoolean}
 import org.scalacheck.Prop
 import org.scalacheck.util.ConsoleReporter
 import org.scalacheck.{Properties, Test}
 
 object CompleteQuiescenceDetectionPropertySpec extends Properties("Complete quiescence detection") {
-  import gc.properties.model.Generators._
+  import edu.illinois.osl.akka.gc.properties.model.Generators._
 
   val executionSize = 1000
 

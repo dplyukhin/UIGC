@@ -1,10 +1,11 @@
-package gc
+package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-import gc.detector.SimpleQuiescenceDetector
+import edu.illinois.osl.akka.gc.detector.SimpleQuiescenceDetector
 import org.scalatest.wordspec.AnyWordSpecLike
+import edu.illinois.osl.akka.gc
 
 class SimpleQuiescenceDetectionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   val dummyActor: AkkaBehavior[Any] = Behaviors.receive { (_, _) => Behaviors.same }

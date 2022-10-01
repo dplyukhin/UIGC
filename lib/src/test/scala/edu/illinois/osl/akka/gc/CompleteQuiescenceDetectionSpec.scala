@@ -1,7 +1,7 @@
-package gc
+package edu.illinois.osl.akka.gc
 
-import gc.detector.CompleteQuiescenceDetector
-import gc.properties.model.{DummyName, DummyRef, DummySnapshot, DummyToken}
+import edu.illinois.osl.akka.gc.detector.CompleteQuiescenceDetector
+import edu.illinois.osl.akka.gc.properties.model.{DummyName, DummyRef, DummySnapshot, DummyToken}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.collection.mutable

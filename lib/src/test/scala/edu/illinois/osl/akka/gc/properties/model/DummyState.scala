@@ -1,7 +1,7 @@
-package gc.properties.model
+package edu.illinois.osl.akka.gc.properties.model
 
-import gc.ActorState
-import gc.detector.AbstractSnapshot
+import edu.illinois.osl.akka.gc.ActorState
+import edu.illinois.osl.akka.gc.detector.AbstractSnapshot
 
 
 class DummyState(self: DummyRef, creator: DummyRef)
