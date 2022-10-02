@@ -6,6 +6,7 @@ import common.Benchmark
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import com.typesafe.config.ConfigFactory
+import akka.actor.typed.{Signal, PostStop}
 
 object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
@@ -121,6 +122,13 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
           doSomeActions()
           this
       }
+    }
+
+    override def uponSignal: PartialFunction[Signal,Behavior[Msg]] = {
+      case PostStop =>
+        if (RandomGraphsConfig.LogStats) 
+          statistics.terminatedCount.incrementAndGet()
+        this
     }
   }
 }

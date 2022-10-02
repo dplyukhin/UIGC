@@ -7,6 +7,8 @@ trait RandomGraphsActor[T] {
 
     val statistics: Statistics
 
+    val someArray: Array[Byte] = Array.tabulate(SizeOfActor)(n => 0)
+
     /** a list of references to other actors */
     var acquaintances: Set[T] = Set()
 
