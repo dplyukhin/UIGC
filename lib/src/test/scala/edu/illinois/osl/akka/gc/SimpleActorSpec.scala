@@ -29,7 +29,6 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
 
   val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
-  val aggregator: SnapshotAggregator = SnapshotAggregator(testKit.system)
 
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
@@ -39,19 +38,6 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       actorA ! Init
       children += probe.expectMessageType[Spawned].name
       children += probe.expectMessageType[Spawned].name
-    }
-    "add themselves to the GC registry" in {
-      assert(aggregator.generation.contains(actorA))
-      assert(children.forall { child =>
-        aggregator.generation.contains(child)
-      })
-    }
-    "send their snapshots to the aggregator" in {
-      Thread.sleep(2000)
-      assert(aggregator.snapshots.containsKey(actorA))
-      assert(children.forall { child =>
-        aggregator.snapshots.containsKey(child)
-      })
     }
     "be able to send messages" in {
       actorA ! SendC(Hello)
@@ -77,14 +63,6 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     "terminate after the only reference has been released" in {
       actorA ! ReleaseB
       probe.expectMessage(Terminated)
-    }
-    "remove themselves from the GC registry after terminating" in {
-      assert(children.forall { child =>
-        !aggregator.generation.contains(child)
-      })
-      assert(children.forall { child =>
-        !aggregator.snapshots.containsKey(child)
-      })
     }
   }
 
