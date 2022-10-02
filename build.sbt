@@ -1,14 +1,31 @@
-ThisBuild / scalaVersion     := "2.13.1"
-ThisBuild / version          := "0.1.0-SNAPSHOT"
-ThisBuild / organization     := "edu.illinois"
-ThisBuild / organizationName := "gc"
+val org = "edu.illinois.osl"
+val libVersion = "0.1.0-SNAPSHOT"
+val akkaVersion = "2.6.3"
 
-name := "akka-gc"
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.1" % "test"
-libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed" % "2.6.3"
-libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % "2.6.3"
-libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
-libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.14.1" % "test"
+ThisBuild / scalaVersion     := "2.13.8"
+ThisBuild / version          := libVersion
+ThisBuild / organization     := org
 
+lazy val lib = project
+  .settings(
+    name := "akka-gc",
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "3.1.1" % "test",
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion,
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
+      "org.scalacheck" %% "scalacheck" % "1.14.1" % "test",
+    )
+  )
 
-// See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for instructions on how to publish to Sonatype.
+lazy val bench = project
+  .dependsOn(lib)
+  .settings(
+    name := "akka-gc-bench",
+
+    libraryDependencies ++= Seq(
+        org %% "akka-gc" % libVersion,
+        "org.scalatest" %% "scalatest" % "3.1.1" % "test",
+        "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % "test",
+    )
+  )
