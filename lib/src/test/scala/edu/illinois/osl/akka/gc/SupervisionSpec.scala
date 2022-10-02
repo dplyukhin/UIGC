@@ -123,12 +123,10 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
+    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
-        super.onSignal(PostStop)
-      case signal =>
-        super.onSignal(signal)
+        this
     }
   }
   class Child(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
@@ -137,12 +135,10 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
+    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
-        super.onSignal(PostStop)
-      case signal =>
-        super.onSignal(signal)
+        this
     }
   }
 }

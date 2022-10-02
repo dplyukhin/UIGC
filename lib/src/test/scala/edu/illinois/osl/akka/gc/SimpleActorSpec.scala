@@ -126,12 +126,10 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
+    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
-        super.onSignal(PostStop)
-      case signal =>
-        super.onSignal(signal)
+        this
     }
   }
   class ActorC(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
@@ -144,12 +142,10 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[testMessage]]] = {
+    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
-        super.onSignal(PostStop)
-      case signal =>
-        super.onSignal(signal)
+        this
     }
   }
 }
