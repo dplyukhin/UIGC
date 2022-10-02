@@ -74,7 +74,7 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           this
       }
     }
-    override def onSignal: PartialFunction[Signal, AkkaBehavior[GCMessage[SelfRefMsg]]] = {
+    override def uponSignal: PartialFunction[Signal, Behavior[SelfRefMsg]] = {
       case PostStop =>
         probe.ref ! SelfRefTerminated(count)
         this

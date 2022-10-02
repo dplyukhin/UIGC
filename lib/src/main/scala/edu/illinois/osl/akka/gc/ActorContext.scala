@@ -74,6 +74,7 @@ class ActorContext[T <: Message](
     val ref = new ActorRef[S](Some(x), Some(self), child)
     ref.initialize(this)
     state.addRef(ref)
+    context.watch(child)
     ref
   }
 
@@ -110,19 +111,21 @@ class ActorContext[T <: Message](
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
-  def tryTerminate(): Behavior[T] = {
+  def tryTerminate(): Boolean = {
+    if (context.children.nonEmpty)
+      return false
+
     state.tryTerminate() match {
       case ActorState.NotTerminated =>
-        AkkaBehaviors.same
+        false
 
       case ActorState.RemindMeLater =>
         self.target ! SelfCheck
-        AkkaBehaviors.same
+        false
 
       case ActorState.Terminated =>
         releaseEverything()
-        println(s"${context.self} terminated")
-        AkkaBehaviors.stopped
+        true
     }
   }
 
