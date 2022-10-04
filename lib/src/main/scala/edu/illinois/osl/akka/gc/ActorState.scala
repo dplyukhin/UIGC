@@ -66,7 +66,7 @@ class ActorState[
    * @return True if this actor's behavior should stop.
    */
   def handleRelease(releasing: Iterable[Ref], created: Iterable[Ref]): Unit = {
-    require(releasing.nonEmpty)
+    assert(releasing.nonEmpty)
     val sender = releasing.head.owner
 
     if (sender == self) {
@@ -187,8 +187,8 @@ class ActorState[
    * @param newRef The new ref that has been created using `target`
    */
   def handleCreatedRef(target: Ref, newRef: Ref): Unit = {
-    require(target.target == newRef.target)
-    require(activeRefs contains target)
+    assert(target.target == newRef.target)
+    assert(activeRefs contains target)
 
     // If I am creating a reference to myself...
     if (target.target == self) {

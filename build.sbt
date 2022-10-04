@@ -15,7 +15,10 @@ lazy val lib = project
       "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion,
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "org.scalacheck" %% "scalacheck" % "1.14.1" % "test",
-    )
+    ),
+    scalacOptions in Compile ++= Seq(
+      "-optimise", 
+      "-Xdisable-assertions")
   )
 
 lazy val bench = project
