@@ -168,7 +168,7 @@ object DRL extends Protocol {
       assert(releasing.nonEmpty)
       val sender = releasing.head.owner
   
-      if (sender == self) {
+      if (sender.get == self) {
         numPendingReleaseMessagesToSelf -= 1
       }
   
@@ -467,7 +467,7 @@ object DRL extends Protocol {
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
-  def tryTerminate[T](
+  def tryTerminate[T <: Message](
     state: State,
     ctx: AkkaActorContext[GCMessage[T]]
   ): Boolean = {
@@ -511,9 +511,9 @@ object DRL extends Protocol {
     }
   }
 
-  def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
+  override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
 
-  def onSignal[T](
+  override def onSignal[T <: Message](
     signal: Signal, 
     uponSignal: PartialFunction[Signal, Behavior[T]],
     state: State,
