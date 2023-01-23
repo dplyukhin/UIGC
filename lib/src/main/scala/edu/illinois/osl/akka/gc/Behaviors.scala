@@ -8,24 +8,24 @@ import scala.reflect.ClassTag
 
 object Behaviors {
   def setup[T <: Message](factory: ActorContext[T] => Behavior[T]): ActorFactory[T] =
-    (creator: ActorName, token: Token) =>
-      AkkaBehaviors.setup(context => factory(new ActorContext(context, Some(creator), Some(token))))
+    (info: protocol.SpawnInfo) =>
+      AkkaBehaviors.setup(context => factory(new ActorContext(context, info)))
 
-  private class ReceptionistAdapter[T <: Message](implicit interceptMessageClassTag: ClassTag[T]) extends BehaviorInterceptor[T, GCMessage[T]] {
-    def aroundReceive(ctx: TypedActorContext[T], msg: T, target: ReceiveTarget[GCMessage[T]]): AkkaBehavior[GCMessage[T]] =
-      target.apply(ctx, AppMsg(msg, None))
+  private class ReceptionistAdapter[T <: Message](implicit interceptMessageClassTag: ClassTag[T]) extends BehaviorInterceptor[T, protocol.GCMessage[T]] {
+    def aroundReceive(ctx: TypedActorContext[T], msg: T, target: ReceiveTarget[protocol.GCMessage[T]]): AkkaBehavior[protocol.GCMessage[T]] =
+      target.apply(ctx, protocol.rootMessage(msg))
   }
 
   def setupReceptionist[T <: Message](factory: ActorContext[T] => Behavior[T])(implicit classTag: ClassTag[T]): AkkaBehavior[T] = {
-    val b: AkkaBehavior[GCMessage[T]] = AkkaBehaviors.setup(context =>
-      factory(new ActorContext(context, None, None))
+    val b: AkkaBehavior[protocol.GCMessage[T]] = AkkaBehaviors.setup(context =>
+      factory(new ActorContext(context, protocol.rootSpawnInfo()))
     )
     AkkaBehaviors.intercept(() => new ReceptionistAdapter[T]())(b)
   }
 
   private class Stopped[T <: Message](context: ActorContext[T]) extends AbstractBehavior[T](context) {
     context.releaseEverything()
-    override def onMessage(msg: T): Behavior[T] = {
+    override def uponMessage(msg: T): Behavior[T] = {
       context.release(msg.refs)
       this
     }
