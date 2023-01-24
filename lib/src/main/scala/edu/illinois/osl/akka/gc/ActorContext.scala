@@ -24,7 +24,10 @@ class ActorContext[T <: Message](
   val name = context.self
 
   val state = protocol.initState(context, spawnInfo)
+
   val self = state.selfRef
+
+  val rawActorRef = context.self
 
   /**
    * Spawn a new named actor into the GC system.

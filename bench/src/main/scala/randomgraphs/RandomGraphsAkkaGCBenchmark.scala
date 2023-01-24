@@ -2,6 +2,7 @@ package randomgraphs
 
 import akka.actor.typed.{Behavior => AkkaBehavior, ActorSystem}
 import edu.illinois.osl.akka.gc._
+import edu.illinois.osl.akka.gc.protocol._
 import common.Benchmark
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -82,7 +83,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
     override def spawn(): ActorRef[Msg] = {
       val child = context.spawnAnonymous(BenchmarkActor(stats))
       if (RandomGraphsConfig.ShouldLog) 
-        println(s"${context.name} spawned ${child.target}")
+        println(s"${context.name} spawned ${child.rawActorRef}")
       child
     }
 
@@ -90,21 +91,21 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
       val ref = context.createRef(target, owner)
       owner ! Link(ref)
       if (RandomGraphsConfig.ShouldLog) 
-        println(s"${context.name} sent Link($ref) to ${owner.target}")
+        println(s"${context.name} sent Link($ref) to ${owner.rawActorRef}")
       super.linkActors(owner, target)
     }
 
     override def forgetActor(ref: ActorRef[Msg]): Unit = {
       context.release(ref)
       if (RandomGraphsConfig.ShouldLog) 
-        println(s"${context.name} released ${ref.target}")
+        println(s"${context.name} released ${ref.rawActorRef}")
       super.forgetActor(ref)
     }
 
     override def ping(ref: ActorRef[Msg]): Unit = {
       ref ! Ping()
       if (RandomGraphsConfig.ShouldLog) 
-        println(s"${context.name} pinging ${ref.target}")
+        println(s"${context.name} pinging ${ref.rawActorRef}")
       super.ping(ref)
     }
 

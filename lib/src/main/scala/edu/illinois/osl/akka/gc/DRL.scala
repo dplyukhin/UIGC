@@ -55,19 +55,23 @@ object DRL extends Protocol {
    * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
    */
   
-  case class ActorRef[-T <: Message](token: Option[Token],
-                                     owner: Option[AkkaActorRef[GCMessage[Nothing]]],
-                                     target: AkkaActorRef[GCMessage[T]],
-                                     ) {
+  case class ActorRef[-T <: Message](
+    token: Option[Token],
+    owner: Option[AkkaActorRef[GCMessage[Nothing]]],
+    target: AkkaActorRef[GCMessage[T]],
+  ) extends IActorRef[T] {
     private var state: Option[State] = None
   
     def initialize[S <: Message](_state: State): Unit = {
       state = Some(_state)
     }
-    def !(msg: T): Unit = {
+    override def !(msg: T): Unit = {
       target.tell(AppMsg(msg, token))
       state.get.incSentCount(token)
     }
+
+    override def rawActorRef: AkkaActorRef[GCMessage[T]] =
+      target
   
     override def toString: String = {
       f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
@@ -96,7 +100,7 @@ object DRL extends Protocol {
   (
     val self: Name,
     val spawnInfo: SpawnInfo,
-  ) extends ProtocolState {
+  ) extends IState {
     import State._
 
     object newToken {

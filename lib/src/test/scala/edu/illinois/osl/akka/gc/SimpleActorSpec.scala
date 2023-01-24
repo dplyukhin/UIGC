@@ -2,7 +2,6 @@ package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-import edu.illinois.osl.akka.gc.aggregator.SnapshotAggregator
 import org.scalatest.wordspec.AnyWordSpecLike
 
 
@@ -23,7 +22,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   case object Hello extends testMessage with NoRefsMessage
   case class Spawned(name: AkkaActorRef[Nothing]) extends testMessage with NoRefsMessage
   case object Terminated extends testMessage with NoRefsMessage
-  case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
+  case class GetRef(ref: protocol.ActorRef[testMessage]) extends testMessage with Message {
     override def refs: Iterable[AnyActorRef] = Iterable(ref)
   }
 
@@ -81,8 +80,8 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB: ActorRef[testMessage] = _
-    var actorC: ActorRef[testMessage] = _
+    var actorB: protocol.ActorRef[testMessage] = _
+    var actorC: protocol.ActorRef[testMessage] = _
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Init =>
@@ -110,8 +109,8 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC: ActorRef[testMessage]= _
-    probe.ref ! Spawned(context.self.target)
+    var actorC: protocol.ActorRef[testMessage]= _
+    probe.ref ! Spawned(context.rawActorRef)
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case GetRef(ref) =>
@@ -133,7 +132,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorC(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    probe.ref ! Spawned(context.self.target)
+    probe.ref ! Spawned(context.rawActorRef)
     override def onMessage(msg: testMessage): Behavior[testMessage] = {
       msg match {
         case Hello =>

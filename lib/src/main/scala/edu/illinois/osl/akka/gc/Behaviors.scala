@@ -25,7 +25,7 @@ object Behaviors {
 
   private class Stopped[T <: Message](context: ActorContext[T]) extends AbstractBehavior[T](context) {
     context.releaseEverything()
-    override def uponMessage(msg: T): Behavior[T] = {
+    override def onMessage(msg: T): Behavior[T] = {
       context.release(msg.refs)
       this
     }

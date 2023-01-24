@@ -5,11 +5,16 @@ import akka.actor.typed.{Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehav
 
 trait Protocol {
   type GCMessage[+T <: Message]
-  type ActorRef[-T <: Message]
+  type ActorRef[-T <: Message] <: IActorRef[T]
   type SpawnInfo
-  type State <: ProtocolState
+  type State <: IState
 
-  trait ProtocolState {
+  trait IActorRef[-T <: Message] {
+    def !(msg: T): Unit
+    def rawActorRef: AkkaActorRef[GCMessage[T]]
+  }
+
+  trait IState {
     val selfRef: ActorRef[Nothing]
   }
 

@@ -15,10 +15,10 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
 
   // snapshotAggregator.register(context.self.target)
 
-  def uponMessage(msg: T): Behavior[T]
+  def onMessage(msg: T): Behavior[T]
 
   final def onMessage(msg: protocol.GCMessage[T]): AkkaBehavior[protocol.GCMessage[T]] =
-    protocol.onMessage(msg, this.uponMessage, context.state, context.context)
+    protocol.onMessage(msg, this.onMessage, context.state, context.context)
 
   def uponSignal: PartialFunction[Signal, Behavior[T]] = Map.empty
 

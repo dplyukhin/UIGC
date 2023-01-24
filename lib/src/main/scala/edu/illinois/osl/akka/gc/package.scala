@@ -14,7 +14,7 @@ package object gc {
     def refs: Iterable[AnyActorRef]
   }
 
-  val protocol: Protocol = ???
+  val protocol: Protocol = DRL
 
   /**
    * A behavior that can handle the GC protocol.
