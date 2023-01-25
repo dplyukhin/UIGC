@@ -19,8 +19,8 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   case object ReleaseChild2 extends TestMessage with NoRefs
   case object ReleaseChild1 extends TestMessage with NoRefs
   case object ReleaseParent extends TestMessage with NoRefs
-  case class Spawned(name: AkkaActorRef[Nothing]) extends TestMessage with NoRefs
-  case class Terminated(name: AkkaActorRef[Nothing]) extends TestMessage with NoRefs
+  case class Spawned(name: ActorName) extends TestMessage with NoRefs
+  case class Terminated(name: ActorName) extends TestMessage with NoRefs
   case class GetRef(ref: ActorRef[TestMessage]) extends TestMessage with Message {
     override def refs: Iterable[ActorRef[Nothing]] = Iterable(ref)
   }
@@ -30,9 +30,9 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
   "GC Actors" must {
     val root = testKit.spawn(RootActor(), "root")
-    var parent: AkkaActorRef[Nothing] = null
-    var child1: AkkaActorRef[Nothing] = null
-    var child2: AkkaActorRef[Nothing] = null
+    var parent: ActorName = null
+    var child1: ActorName = null
+    var child2: ActorName = null
 
     root ! Init
     parent = probe.expectMessageType[Spawned].name

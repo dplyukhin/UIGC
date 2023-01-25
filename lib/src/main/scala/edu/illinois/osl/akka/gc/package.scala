@@ -24,7 +24,7 @@ package object gc {
 
   type Behavior[T <: Message] = raw.Behavior[protocol.GCMessage[T]]
 
-  type ActorName = raw.ActorRef[Nothing]
+  type ActorName = proxy.ActorRef[Nothing]
 
   /**
    * A recipe for spawning a garbage-collected actor. Similar to

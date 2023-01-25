@@ -4,6 +4,7 @@ import edu.illinois.osl.akka.gc.proxy
 import edu.illinois.osl.akka.gc.{Protocol, Message, Behavior}
 import akka.actor.typed.Signal
 import scala.annotation.unchecked.uncheckedVariance
+import akka.actor.ActorPath
 
 object NoProtocol extends Protocol {
   type GCMessage[+T <: Message] = T

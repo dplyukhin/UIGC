@@ -19,7 +19,7 @@ class ActorContext[T <: Message](
 
   def self: ActorRef[T] = state.selfRef.unsafeUpcast[T]
 
-  def name: ActorName = state.selfRef.rawActorRef.asInstanceOf[proxy.ProxyRef[T]].ref
+  def name: ActorName = state.selfRef.rawActorRef
 
   /**
    * Spawn a new named actor into the GC system.
