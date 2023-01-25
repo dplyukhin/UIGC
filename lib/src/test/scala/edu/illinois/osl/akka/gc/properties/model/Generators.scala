@@ -48,7 +48,7 @@ object Generators {
     if (c.readyActors.nonEmpty)
       generators :+= (probability(ProbDroppedMessage), genDroppedMessage(c))
     if (c.actorsThatCanTakeASnapshot.nonEmpty)
-      generators :+= (probability(ProbSnapshot), genSnapshot(c))
+      generators :+= ???
     if (c.actorsThatCanDeactivate.nonEmpty)
       generators :+= (probability(ProbDeactivate), genDeactivate(c))
 
@@ -62,9 +62,9 @@ object Generators {
   def genSpawn(c: Configuration): Gen[Spawn] = {
     for {
       parent <- oneOf(c.busyActors)
-      child = c.DummyName()
-      creatorRef = c.DummyRef(Some(parent), child)
-      selfRef = c.DummyRef(Some(child), child)
+      child = c.Name()
+      creatorRef = ???
+      selfRef = ???
     } yield Spawn(parent, child, creatorRef, selfRef)
   }
 
@@ -76,11 +76,11 @@ object Generators {
 
       // pick a recipient from its active refs
       recipientRef <- oneOf(senderState.activeRefs)
-      recipient = recipientRef.target
+      recipient = ???
 
       // generate a collection of refs that will be owned by the recipient
       n <- choose(0,3)
-      newAcquaintances <- containerOfN[List, (DummyRef, DummyRef)](n,genRef(c, senderState, recipient))
+      newAcquaintances <- containerOfN[List, (Ref, Ref)](n,genRef(c, senderState, recipient))
       (createdRefs, createdUsingRefs) = newAcquaintances.unzip
 
     } yield Send(sender, recipientRef, createdRefs, createdUsingRefs)
@@ -92,10 +92,10 @@ object Generators {
    *         is the ref that was used to create it. That is, the second element is one of
    *         the creator's active refs pointing to the target of the new ref.
    */
-  def genRef(c: Configuration, actorState: DummyState, owner: DummyName): Gen[(DummyRef, DummyRef)] = {
+  def genRef(c: Configuration, actorState: Behavior, owner: Name): Gen[(Ref, Ref)] = {
     for {
       createdUsingRef <- oneOf(actorState.activeRefs)
-      newRef = DummyRef(Some(c.DummyToken()), Some(owner), createdUsingRef.target)
+      newRef = ???
     } yield (newRef, createdUsingRef)
   }
 
@@ -130,7 +130,7 @@ object Generators {
   def genSnapshot(c: Configuration): Gen[Snapshot] = {
     for {
       idleActor <- oneOf(c.actorsThatCanTakeASnapshot)
-    } yield Snapshot(idleActor)
+    } yield ???
   }
 
   def genExecutionAndConfiguration(
