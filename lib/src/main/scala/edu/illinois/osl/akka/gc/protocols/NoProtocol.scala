@@ -1,7 +1,8 @@
-package edu.illinois.osl.akka.gc
+package edu.illinois.osl.akka.gc.protocols
 import edu.illinois.osl.akka.gc
 import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
 import akka.actor.typed.{Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
+import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
 
 object NoProtocol extends Protocol {
   type GCMessage[+T <: Message] = T

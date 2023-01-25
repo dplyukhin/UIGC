@@ -3,6 +3,8 @@ package edu.illinois.osl.akka
 import akka.actor.typed
 import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
 
+import edu.illinois.osl.akka.gc.protocols.NoProtocol
+
 package object gc {
   /**
    * An interface that all messages sent to a garbage-collected actor must adhere to.
@@ -14,7 +16,7 @@ package object gc {
     def refs: Iterable[AnyActorRef]
   }
 
-  val protocol: Protocol = DRL
+  val protocol: Protocol = protocols.drl.DRL
 
   /**
    * A behavior that can handle the GC protocol.
