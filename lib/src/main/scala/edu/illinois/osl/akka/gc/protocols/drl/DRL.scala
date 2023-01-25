@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
-import edu.illinois.osl.akka.gc.{raw, Protocol, Message, Behavior}
+import edu.illinois.osl.akka.gc.{proxy, Protocol, Message}
 import edu.illinois.osl.akka.gc.protocols.drl
 
 object DRL extends Protocol {
@@ -22,15 +22,15 @@ object DRL extends Protocol {
     new SpawnInfo(None, None)
 
   override def initState[T <: Message](
-    context: raw.ActorContext[GCMessage[T]],
+    context: proxy.ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State =
     new State(context.self, spawnInfo)
 
   override def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => raw.ActorRef[GCMessage[S]],
+    factory: SpawnInfo => proxy.ActorRef[GCMessage[S]],
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
+    ctx: proxy.ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val x = state.newToken()
     val self = state.self
@@ -42,36 +42,37 @@ object DRL extends Protocol {
     ref
   }
 
-  override def onMessage[T <: Message](
+  override def onMessage[T <: Message, Beh](
     msg: GCMessage[T],
-    uponMessage: T => raw.Behavior[GCMessage[T]],
+    uponMessage: T => Beh,
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
-  ): raw.Behavior[GCMessage[T]] =
+    ctx: proxy.ActorContext[GCMessage[T]]
+  ): Protocol.TerminationDecision[Beh] =
     msg match {
       case ReleaseMsg(releasing, created) =>
         state.handleRelease(releasing, created)
         if (tryTerminate(state, ctx))
-          raw.Behaviors.stopped
+          Protocol.ShouldStop
         else 
-          raw.Behaviors.same
+          Protocol.ShouldContinue
       case AppMsg(payload, token) =>
         val refs = payload.refs.asInstanceOf[Iterable[Refob[Nothing]]]
         refs.foreach(ref => ref.initialize(state))
         state.handleMessage(refs, token)
-        uponMessage(payload)
+        val beh = uponMessage(payload)
+        Protocol.ContinueWith(beh)
       case SelfCheck =>
         state.handleSelfCheck()
         if (tryTerminate(state, ctx))
-          raw.Behaviors.stopped
+          Protocol.ShouldStop
         else 
-          raw.Behaviors.same
+          Protocol.ShouldContinue
       // case TakeSnapshot =>
       //   // snapshotAggregator.put(context.self.target, context.snapshot())
       //   context.snapshot()
       //   AkkaBehaviors.same
       case Kill =>
-        raw.Behaviors.stopped
+        Protocol.ShouldStop
     }
 
   /**
@@ -80,7 +81,7 @@ object DRL extends Protocol {
    */
   def tryTerminate[T <: Message](
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
+    ctx: proxy.ActorContext[GCMessage[T]]
   ): Boolean = {
     if (ctx.children.nonEmpty)
       return false
@@ -108,8 +109,8 @@ object DRL extends Protocol {
     ref
   }
 
-  override def release(
-    releasing: Iterable[Refob[Nothing]],
+  override def release[S <: Message](
+    releasing: Iterable[Refob[S]],
     state: State
   ): Unit = {
 
@@ -124,27 +125,29 @@ object DRL extends Protocol {
 
   override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
 
-  override def onSignal[T <: Message](
+  override def onSignal[T <: Message, Beh](
     signal: Signal, 
-    uponSignal: PartialFunction[Signal, Behavior[T]],
+    uponSignal: Signal => Beh,
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
-  ): Behavior[T] =
+    ctx: proxy.ActorContext[GCMessage[T]]
+  ): Protocol.TerminationDecision[Beh] =
     signal match {
       case PostStop =>
         // snapshotAggregator.unregister(context.self.target)
         // Forward the signal to the user level if there's a handler; else do nothing.
-        uponSignal.applyOrElse[Signal, Behavior[T]](PostStop, _ => raw.Behaviors.same)
+        val beh = uponSignal(signal)
+        Protocol.ContinueWith(beh)
 
       case signal: Terminated =>
         // Try handling the termination signal first
-        val result = uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => raw.Behaviors.same)
+        val beh = uponSignal(signal)
         // Now see if we can terminate
         if (tryTerminate(state, ctx))  
-          raw.Behaviors.stopped
+          Protocol.ShouldStop
         else
-          result
+          Protocol.ContinueWith(beh)
       case signal =>
-        uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => raw.Behaviors.same)
+        val beh = uponSignal(signal)
+        Protocol.ContinueWith(beh)
     }
 }

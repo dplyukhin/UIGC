@@ -1,6 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import edu.illinois.osl.akka.gc.{raw, Message, Behavior}
+import edu.illinois.osl.akka.gc.{proxy, Message}
+import scala.annotation.unchecked.uncheckedVariance
 
 /**
  * An opaque and globally unique token.
@@ -21,23 +22,26 @@ case class Token(ref: Name, n: Int)
  */
 case class Refob[-T <: Message](
   token: Option[Token],
-  owner: Option[raw.ActorRef[GCMessage[Nothing]]],
-  target: raw.ActorRef[GCMessage[T]],
+  owner: Option[proxy.ActorRef[GCMessage[Nothing]]],
+  target: proxy.ActorRef[GCMessage[T]],
 ) extends DRL.IRefob[T] {
   private var state: Option[State] = None
+
+  override def unsafeUpcast[U >: T @uncheckedVariance <: Message]: Refob[U] =
+    this.asInstanceOf[Refob[U]]
 
   def initialize[S <: Message](_state: State): Unit = {
     state = Some(_state)
   }
   override def !(msg: T): Unit = {
-    target.tell(AppMsg(msg, token))
+    target ! AppMsg(msg, token)
     state.get.incSentCount(token)
   }
 
   override def rawActorRef: Name = target
 
   override def toString: String = {
-    f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"
+    f"ActorRef#${token.hashCode()}: ${owner.get}->${target}"
   }
 
 }

@@ -13,11 +13,13 @@ class ActorContext[T <: Message](
   val spawnInfo: protocol.SpawnInfo,
 ) {
 
-  val state = protocol.initState(rawContext, spawnInfo)
+  private[gc] val proxyContext = proxy.ProxyContext(rawContext)
 
-  def self: ActorRef[T] = state.selfRef.asInstanceOf[ActorRef[T]]
+  val state = protocol.initState(proxyContext, spawnInfo)
 
-  def name: ActorName = state.selfRef.rawActorRef
+  def self: ActorRef[T] = state.selfRef.unsafeUpcast[T]
+
+  def name: ActorName = state.selfRef.rawActorRef.asInstanceOf[proxy.ProxyRef[T]].ref
 
   /**
    * Spawn a new named actor into the GC system.
@@ -29,8 +31,8 @@ class ActorContext[T <: Message](
    */
   def spawn[S <: Message](factory: ActorFactory[S], name: String): ActorRef[S] = {
     protocol.spawnImpl(
-      info => rawContext.spawn(factory(info), name), 
-      state, rawContext)
+      info => proxy.ProxyRef(rawContext.spawn(factory(info), name)), 
+      state, proxyContext)
   }
 
   /**
@@ -42,8 +44,8 @@ class ActorContext[T <: Message](
    */
   def spawnAnonymous[S <: Message](factory: ActorFactory[S]): ActorRef[S] = {
     protocol.spawnImpl(
-      info => rawContext.spawnAnonymous(factory(info)), 
-      state, rawContext)
+      info => proxy.ProxyRef(rawContext.spawnAnonymous(factory(info))), 
+      state, proxyContext)
   }
 
 

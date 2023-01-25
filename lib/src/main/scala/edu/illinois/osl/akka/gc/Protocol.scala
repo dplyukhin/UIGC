@@ -1,6 +1,14 @@
 package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.Signal
+import scala.annotation.unchecked.uncheckedVariance
+
+object Protocol {
+  sealed trait TerminationDecision[+Beh]
+  case object ShouldStop extends TerminationDecision[Nothing]
+  case object ShouldContinue extends TerminationDecision[Nothing]
+  case class ContinueWith[Beh](beh: Beh) extends TerminationDecision[Beh]
+}
 
 trait Protocol {
   type GCMessage[+T <: Message]
@@ -10,7 +18,8 @@ trait Protocol {
 
   trait IRefob[-T <: Message] {
     def !(msg: T): Unit
-    def rawActorRef: ActorName
+    def rawActorRef: proxy.ActorRef[Nothing]
+    def unsafeUpcast[U >: T @uncheckedVariance <: Message]: Refob[U]
   }
 
   trait IState {
@@ -29,37 +38,37 @@ trait Protocol {
   def rootSpawnInfo(): SpawnInfo
 
   def initState[T <: Message](
-    context: raw.ActorContext[GCMessage[T]],
+    context: proxy.ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State
 
   def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => raw.ActorRef[GCMessage[S]],
+    factory: SpawnInfo => proxy.ActorRef[GCMessage[S]],
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
+    ctx: proxy.ActorContext[GCMessage[T]]
   ): Refob[S]
 
-  def onMessage[T <: Message](
+  def onMessage[T <: Message, Beh](
     msg: GCMessage[T],
-    uponMessage: T => raw.Behavior[GCMessage[T]],
+    uponMessage: T => Beh,
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
-  ): raw.Behavior[GCMessage[T]]
+    ctx: proxy.ActorContext[GCMessage[T]]
+  ): Protocol.TerminationDecision[Beh]
 
-  def onSignal[T <: Message](
+  def onSignal[T <: Message, Beh](
     signal: Signal, 
-    uponSignal: PartialFunction[Signal, Behavior[T]],
+    uponSignal: Signal => Beh,
     state: State,
-    ctx: raw.ActorContext[GCMessage[T]]
-  ): Behavior[T]
+    ctx: proxy.ActorContext[GCMessage[T]]
+  ): Protocol.TerminationDecision[Beh]
 
   def createRef[S <: Message](
     target: Refob[S], owner: Refob[Nothing],
     state: State
   ): Refob[S]
 
-  def release(
-    releasing: Iterable[Refob[Nothing]],
+  def release[S <: Message](
+    releasing: Iterable[Refob[S]],
     state: State
   ): Unit
 

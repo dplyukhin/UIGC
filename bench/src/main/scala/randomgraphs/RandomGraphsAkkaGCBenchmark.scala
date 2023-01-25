@@ -63,7 +63,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
     }
 
     def createRoot(statistics: Statistics): AkkaBehavior[Msg] = {
-      Behaviors.setupReceptionist(context => {
+      Behaviors.setupRoot(context => {
         if (RandomGraphsConfig.ShouldLog) 
           println("\nSpawned root actor\n")
         new BenchmarkActor(context, statistics)
