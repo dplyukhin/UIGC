@@ -1,7 +1,5 @@
 package edu.illinois.osl.akka.gc.properties.model
 
-import edu.illinois.osl.akka.gc.ActorState
-
 /**
  * This class represents a simulated Actor System for the purpose of property-based testing.
  * An [[Event]] can be used to transition the configuration from one global state to another

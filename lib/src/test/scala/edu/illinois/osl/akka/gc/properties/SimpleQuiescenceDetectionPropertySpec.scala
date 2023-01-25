@@ -1,10 +1,10 @@
 package edu.illinois.osl.akka.gc.properties
 
-import edu.illinois.osl.akka.gc.properties.model.{BecomeIdle, Configuration, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
-import org.scalacheck.Prop.{collect, forAll, propBoolean}
-import org.scalacheck.util.ConsoleReporter
-import org.scalacheck.{Properties, Test}
-
+// import edu.illinois.osl.akka.gc.properties.model.{BecomeIdle, Configuration, DummyName, DummyRef, DummySnapshot, DummyToken, Execution, Snapshot}
+// import org.scalacheck.Prop.{collect, forAll, propBoolean}
+// import org.scalacheck.util.ConsoleReporter
+// import org.scalacheck.{Properties, Test}
+// 
 // object SimpleQuiescenceDetectionPropertySpec extends Properties("\"Simple\" Quiescence detection") {
 //   import edu.illinois.osl.akka.gc.properties.model.Generators._
 // 

@@ -4,14 +4,9 @@ import scala.collection.mutable
 
 /**
  * A collection of undelivered messages sent to some actor. These messages
- * have FIFO semantics. However, if two actors concurrently put messages in
- * this data structure, they could be delivered in any order.
- *
- * NB: Previously, we gave each actor a single mailbox, onto which all other actors
- * enqueued their messages. This gave *causal* message semantics, which is stronger
- * than the FIFO property we want.
+ * have FIFO (rather than causal) semantics.
  */
-class PendingMessages() {
+class PendingMessages {
 
   private var messagesFrom: Map[DummyName, mutable.Queue[ExecMessage]] = Map()
 
