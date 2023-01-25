@@ -1,17 +1,13 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior, PostStop, Terminated, Signal}
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
-import scala.collection.mutable
-import akka.actor.typed.SpawnProtocol
-import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
-
+import akka.actor.typed.{PostStop, Terminated, Signal}
+import edu.illinois.osl.akka.gc.{raw, Protocol, Message, Behavior}
 import edu.illinois.osl.akka.gc.protocols.drl
 
 object DRL extends Protocol {
 
   type GCMessage[+T <: Message] = drl.GCMessage[T]
-  type ActorRef[-T <: Message] = drl.ActorRef[T]
+  type Refob[-T <: Message] = drl.Refob[T]
   type State = drl.State
 
   class SpawnInfo(
@@ -26,20 +22,20 @@ object DRL extends Protocol {
     new SpawnInfo(None, None)
 
   override def initState[T <: Message](
-    context: AkkaActorContext[GCMessage[T]],
+    context: raw.ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State =
     new State(context.self, spawnInfo)
 
   override def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => AkkaActorRef[GCMessage[S]],
+    factory: SpawnInfo => raw.ActorRef[GCMessage[S]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
-  ): ActorRef[S] = {
+    ctx: raw.ActorContext[GCMessage[T]]
+  ): Refob[S] = {
     val x = state.newToken()
     val self = state.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
-    val ref = new ActorRef[S](Some(x), Some(self), child)
+    val ref = new Refob[S](Some(x), Some(self), child)
     ref.initialize(state)
     state.addRef(ref)
     ctx.watch(child)
@@ -48,34 +44,34 @@ object DRL extends Protocol {
 
   override def onMessage[T <: Message](
     msg: GCMessage[T],
-    uponMessage: T => AkkaBehavior[GCMessage[T]],
+    uponMessage: T => raw.Behavior[GCMessage[T]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
-  ): AkkaBehavior[GCMessage[T]] =
+    ctx: raw.ActorContext[GCMessage[T]]
+  ): raw.Behavior[GCMessage[T]] =
     msg match {
       case ReleaseMsg(releasing, created) =>
         state.handleRelease(releasing, created)
         if (tryTerminate(state, ctx))
-          AkkaBehaviors.stopped
+          raw.Behaviors.stopped
         else 
-          AkkaBehaviors.same
+          raw.Behaviors.same
       case AppMsg(payload, token) =>
-        val refs = payload.refs.asInstanceOf[Iterable[ActorRef[Nothing]]]
+        val refs = payload.refs.asInstanceOf[Iterable[Refob[Nothing]]]
         refs.foreach(ref => ref.initialize(state))
         state.handleMessage(refs, token)
         uponMessage(payload)
       case SelfCheck =>
         state.handleSelfCheck()
         if (tryTerminate(state, ctx))
-          AkkaBehaviors.stopped
+          raw.Behaviors.stopped
         else 
-          AkkaBehaviors.same
+          raw.Behaviors.same
       // case TakeSnapshot =>
       //   // snapshotAggregator.put(context.self.target, context.snapshot())
       //   context.snapshot()
       //   AkkaBehaviors.same
       case Kill =>
-        AkkaBehaviors.stopped
+        raw.Behaviors.stopped
     }
 
   /**
@@ -84,7 +80,7 @@ object DRL extends Protocol {
    */
   def tryTerminate[T <: Message](
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
+    ctx: raw.ActorContext[GCMessage[T]]
   ): Boolean = {
     if (ctx.children.nonEmpty)
       return false
@@ -104,16 +100,16 @@ object DRL extends Protocol {
   }
 
   override def createRef[S <: Message](
-    target: ActorRef[S], owner: ActorRef[Nothing],
+    target: Refob[S], owner: Refob[Nothing],
     state: State
-  ): ActorRef[S] = {
+  ): Refob[S] = {
     val ref = state.newRef(owner, target)
     state.handleCreatedRef(target, ref)
     ref
   }
 
   override def release(
-    releasing: Iterable[ActorRef[Nothing]],
+    releasing: Iterable[Refob[Nothing]],
     state: State
   ): Unit = {
 
@@ -132,23 +128,23 @@ object DRL extends Protocol {
     signal: Signal, 
     uponSignal: PartialFunction[Signal, Behavior[T]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
+    ctx: raw.ActorContext[GCMessage[T]]
   ): Behavior[T] =
     signal match {
       case PostStop =>
         // snapshotAggregator.unregister(context.self.target)
         // Forward the signal to the user level if there's a handler; else do nothing.
-        uponSignal.applyOrElse[Signal, Behavior[T]](PostStop, _ => AkkaBehaviors.same)
+        uponSignal.applyOrElse[Signal, Behavior[T]](PostStop, _ => raw.Behaviors.same)
 
       case signal: Terminated =>
         // Try handling the termination signal first
-        val result = uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => AkkaBehaviors.same)
+        val result = uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => raw.Behaviors.same)
         // Now see if we can terminate
         if (tryTerminate(state, ctx))  
-          AkkaBehaviors.stopped
+          raw.Behaviors.stopped
         else
           result
       case signal =>
-        uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => AkkaBehaviors.same)
+        uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => raw.Behaviors.same)
     }
 }

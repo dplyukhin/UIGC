@@ -1,38 +1,46 @@
 package edu.illinois.osl.akka
 
-import akka.actor.typed
-import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-
-import edu.illinois.osl.akka.gc.protocols.NoProtocol
-
 package object gc {
-  /**
-   * An interface that all messages sent to a garbage-collected actor must adhere to.
-   */
-  trait Message {
-    /**
-     * This method must return all the references contained in the message.
-     */
-    def refs: Iterable[AnyActorRef]
-  }
 
   val protocol: Protocol = protocols.drl.DRL
 
   /**
-   * A behavior that can handle the GC protocol.
+   * All messages to garbage-collected actors must implement this interface.
+   * It allows the GC middleware to find references inside the message and
+   * take necessary action accordingly.
    */
-  type Behavior[T <: Message] = AkkaBehavior[protocol.GCMessage[T]]
-
-  /** The unique identifier of an actor that supports garbage collection */
-  type ActorName = typed.ActorRef[protocol.GCMessage[Nothing]]
+  trait Message {
+    def refs: Iterable[ActorRef[Nothing]]
+  }
 
   /**
-   * A factory that can be passed to `LocalGC.spawn` to create a garbage-collected actor.
+   * Helper trait to indicate that a message doesn't contain any references.
+   */
+  trait NoRefs extends Message {
+    override def refs: Iterable[ActorRef[Nothing]] = Nil
+  }
+
+  type ActorRef[-T <: Message] = protocol.Refob[T]
+
+  type Behavior[T <: Message] = raw.Behavior[protocol.GCMessage[T]]
+
+  type ActorName = raw.ActorRef[Nothing]
+
+  /**
+   * A recipe for spawning a garbage-collected actor. Similar to
+   * [[AkkaBehavior]], but this recipe can only be used by *GC-aware* actors,
+   * i.e. a root actor or another garbage-collected actor.
    */
   type ActorFactory[T <: Message] = protocol.SpawnInfo => Behavior[T]
 
-  /**
-   * A type representing any kind of ActorRef.
-   */
-  type AnyActorRef = protocol.ActorRef[Nothing]
+  object raw {
+    import akka.actor.typed
+    import akka.actor.typed.scaladsl
+    type Ref = typed.ActorRef[Nothing]
+    type ActorRef[-T] = typed.ActorRef[T]
+    type Behavior[T] = typed.Behavior[T]
+    type ActorContext[T] = scaladsl.ActorContext[T]
+    type AbstractBehavior[T] = scaladsl.AbstractBehavior[T]
+    val Behaviors = scaladsl.Behaviors
+  }
 }

@@ -51,7 +51,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
   object BenchmarkActor {
     sealed trait Msg extends Message
-    final case class Link(ref: ActorRef[Msg]) extends Msg {
+    final case class Link(ref: Refob[Msg]) extends Msg {
       def refs = Seq(ref)
     }
     final case class Ping() extends Msg {
@@ -73,21 +73,21 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
 
   private class BenchmarkActor(context: ActorContext[BenchmarkActor.Msg], stats: Statistics)
     extends AbstractBehavior[BenchmarkActor.Msg](context) 
-    with RandomGraphsActor[ActorRef[BenchmarkActor.Msg]] {
+    with RandomGraphsActor[Refob[BenchmarkActor.Msg]] {
 
     import BenchmarkActor._
 
 
     override val statistics: Statistics = stats
 
-    override def spawn(): ActorRef[Msg] = {
+    override def spawn(): Refob[Msg] = {
       val child = context.spawnAnonymous(BenchmarkActor(stats))
       if (RandomGraphsConfig.ShouldLog) 
         println(s"${context.name} spawned ${child.rawActorRef}")
       child
     }
 
-    override def linkActors(owner: ActorRef[Msg], target: ActorRef[Msg]): Unit = {
+    override def linkActors(owner: Refob[Msg], target: Refob[Msg]): Unit = {
       val ref = context.createRef(target, owner)
       owner ! Link(ref)
       if (RandomGraphsConfig.ShouldLog) 
@@ -95,14 +95,14 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
       super.linkActors(owner, target)
     }
 
-    override def forgetActor(ref: ActorRef[Msg]): Unit = {
+    override def forgetActor(ref: Refob[Msg]): Unit = {
       context.release(ref)
       if (RandomGraphsConfig.ShouldLog) 
         println(s"${context.name} released ${ref.rawActorRef}")
       super.forgetActor(ref)
     }
 
-    override def ping(ref: ActorRef[Msg]): Unit = {
+    override def ping(ref: Refob[Msg]): Unit = {
       ref ! Ping()
       if (RandomGraphsConfig.ShouldLog) 
         println(s"${context.name} pinging ${ref.rawActorRef}")

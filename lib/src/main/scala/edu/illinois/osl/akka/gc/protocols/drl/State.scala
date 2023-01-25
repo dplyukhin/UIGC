@@ -1,10 +1,8 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior, PostStop, Terminated, Signal}
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
+import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
-import akka.actor.typed.SpawnProtocol
-import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
+import edu.illinois.osl.akka.gc.{Protocol, Message, Behavior}
 
 object State {
   sealed trait TerminationStatus
@@ -30,10 +28,10 @@ class State
   }
   
   /** This actor's self reference. */
-  override val selfRef: Ref = new ActorRef[Nothing](Some(newToken()), Some(self), self)
+  override val selfRef: Ref = Refob[Nothing](Some(newToken()), Some(self), self)
   selfRef.initialize(this)
 
-  val creatorRef = new ActorRef[Nothing](spawnInfo.token, spawnInfo.creator, self)
+  val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
   /** References this actor owns. Starts with its self reference. */
   var activeRefs: Set[Ref] = Set(selfRef)
@@ -62,9 +60,9 @@ class State
     activeRefs += ref
   }
 
-  def newRef[S <: Message](owner: ActorRef[Nothing], target: ActorRef[S]): ActorRef[S] = {
+  def newRef[S <: Message](owner: Refob[Nothing], target: Refob[S]): Refob[S] = {
     val token = newToken()
-    new ActorRef[S](Some(token), Some(owner.target), target.target)
+    Refob[S](Some(token), Some(owner.target), target.target)
   }
 
   /**

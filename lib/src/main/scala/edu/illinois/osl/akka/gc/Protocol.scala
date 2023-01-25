@@ -1,21 +1,20 @@
 package edu.illinois.osl.akka.gc
-import edu.illinois.osl.akka.gc
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
-import akka.actor.typed.{Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
+
+import akka.actor.typed.Signal
 
 trait Protocol {
   type GCMessage[+T <: Message]
-  type ActorRef[-T <: Message] <: IActorRef[T]
+  type Refob[-T <: Message] <: IRefob[T]
   type SpawnInfo
   type State <: IState
 
-  trait IActorRef[-T <: Message] {
+  trait IRefob[-T <: Message] {
     def !(msg: T): Unit
-    def rawActorRef: AkkaActorRef[GCMessage[T]]
+    def rawActorRef: ActorName
   }
 
   trait IState {
-    val selfRef: ActorRef[Nothing]
+    val selfRef: Refob[Nothing]
   }
 
   /**
@@ -30,37 +29,37 @@ trait Protocol {
   def rootSpawnInfo(): SpawnInfo
 
   def initState[T <: Message](
-    context: AkkaActorContext[GCMessage[T]],
+    context: raw.ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State
 
   def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => AkkaActorRef[GCMessage[S]],
+    factory: SpawnInfo => raw.ActorRef[GCMessage[S]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
-  ): ActorRef[S]
+    ctx: raw.ActorContext[GCMessage[T]]
+  ): Refob[S]
 
   def onMessage[T <: Message](
     msg: GCMessage[T],
-    uponMessage: T => AkkaBehavior[GCMessage[T]],
+    uponMessage: T => raw.Behavior[GCMessage[T]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
-  ): AkkaBehavior[GCMessage[T]]
+    ctx: raw.ActorContext[GCMessage[T]]
+  ): raw.Behavior[GCMessage[T]]
 
   def onSignal[T <: Message](
     signal: Signal, 
     uponSignal: PartialFunction[Signal, Behavior[T]],
     state: State,
-    ctx: AkkaActorContext[GCMessage[T]]
+    ctx: raw.ActorContext[GCMessage[T]]
   ): Behavior[T]
 
   def createRef[S <: Message](
-    target: ActorRef[S], owner: ActorRef[Nothing],
+    target: Refob[S], owner: Refob[Nothing],
     state: State
-  ): ActorRef[S]
+  ): Refob[S]
 
   def release(
-    releasing: Iterable[ActorRef[Nothing]],
+    releasing: Iterable[Refob[Nothing]],
     state: State
   ): Unit
 

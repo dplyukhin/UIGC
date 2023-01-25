@@ -1,10 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior, PostStop, Terminated, Signal}
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
-import scala.collection.mutable
-import akka.actor.typed.SpawnProtocol
-import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
+import edu.illinois.osl.akka.gc.{raw, Message, Behavior}
 
 /**
  * An opaque and globally unique token.
@@ -12,7 +8,7 @@ import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
  * @param ref The [[AkkaActorRef]] of the creator of the token
  * @param n A sequence number, unique for the creating actor
  */
-case class Token(ref: AkkaActorRef[Nothing], n: Int)
+case class Token(ref: Name, n: Int)
 
 /**
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
@@ -23,11 +19,11 @@ case class Token(ref: AkkaActorRef[Nothing], n: Int)
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
-case class ActorRef[-T <: Message](
+case class Refob[-T <: Message](
   token: Option[Token],
-  owner: Option[AkkaActorRef[GCMessage[Nothing]]],
-  target: AkkaActorRef[GCMessage[T]],
-) extends DRL.IActorRef[T] {
+  owner: Option[raw.ActorRef[GCMessage[Nothing]]],
+  target: raw.ActorRef[GCMessage[T]],
+) extends DRL.IRefob[T] {
   private var state: Option[State] = None
 
   def initialize[S <: Message](_state: State): Unit = {
@@ -38,8 +34,7 @@ case class ActorRef[-T <: Message](
     state.get.incSentCount(token)
   }
 
-  override def rawActorRef: AkkaActorRef[GCMessage[T]] =
-    target
+  override def rawActorRef: Name = target
 
   override def toString: String = {
     f"ActorRef#${token.hashCode()}: ${owner.get.path.name}->${target.path.name}"

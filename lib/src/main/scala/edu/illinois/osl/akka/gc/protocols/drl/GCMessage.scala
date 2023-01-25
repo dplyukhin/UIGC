@@ -1,10 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import akka.actor.typed.{ActorRef => AkkaActorRef, Behavior => AkkaBehavior, PostStop, Terminated, Signal}
-import akka.actor.typed.scaladsl.{ActorContext => AkkaActorContext, Behaviors => AkkaBehaviors}
-import scala.collection.mutable
-import akka.actor.typed.SpawnProtocol
-import edu.illinois.osl.akka.gc.{Protocol, Message, AnyActorRef, Behavior}
+import edu.illinois.osl.akka.gc.Message
 
 sealed trait GCMessage[+T <: Message]
 
@@ -13,12 +9,12 @@ final case class AppMsg[+T <: Message](
 ) extends GCMessage[T]
 
 final case class ReleaseMsg[+T <: Message](
-  releasing: Iterable[ActorRef[Nothing]],
-  created: Iterable[ActorRef[Nothing]],
+  releasing: Iterable[Refob[Nothing]],
+  created: Iterable[Refob[Nothing]],
 ) extends GCMessage[T]
 
-/** A message asking its recipient to take a snapshot. */
-case object TakeSnapshot extends GCMessage[Nothing]
+// /** A message asking its recipient to take a snapshot. */
+// case object TakeSnapshot extends GCMessage[Nothing]
 
 /**
  * A message sent by an actor to itself to check whether it's ready to
