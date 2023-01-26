@@ -23,8 +23,10 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
 
   final override def onSignal: PartialFunction[Signal, Behavior[T]] = {
     case signal => 
+      val handler = (signal: Signal) =>
+        this.uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => scaladsl.Behaviors.same)
       val decision = 
-        protocol.onSignal(signal, this.uponSignal, context.state, context.proxyContext)
+        protocol.onSignal(signal, handler, context.state, context.proxyContext)
       decision match {
         case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
         case _: Protocol.ShouldContinue.type => scaladsl.Behaviors.same
