@@ -1,135 +1,101 @@
 package edu.illinois.osl.akka.gc.properties.model
 
-/**
- * This class represents a simulated Actor System for the purpose of property-based testing.
- * An [[Event]] can be used to transition the configuration from one global state to another
- * if that event is legal in the current global state. For example, an actor cannot send a
- * message to another actor that it does not have a reference to.
- *
- * In the initial configuration, there is just one actor that acts as a receptionist, i.e.
- * it never terminates.
- */
-class Configuration() {
+import edu.illinois.osl.akka.gc.protocol
+import edu.illinois.osl.akka.gc.interfaces._
+import scala.collection.mutable
+
+object Configuration {
+  sealed trait RefobStatus 
+  case object Pending extends RefobStatus
+  case object Active extends RefobStatus
+  case object Deactivated extends RefobStatus
+  case object Released extends RefobStatus
+
+  def initialConfig(): Configuration = {
+    val config = new Configuration()
+    val actor = config.newName()
+    val ctx = new Context(
+      actor, config, protocol.rootSpawnInfo,
+      busy = true, root = true, 
+    )
+    config.context(actor) = ctx
+    config.mailbox(actor) = new FIFOMailbox[Msg]()
+    config
+  }
+}
+
+class Configuration {
   import Configuration._
 
-  val initialActor: Name = Name()
-
-  /** A mapping from all actors in the configuration to their states */
-  var state: Map[Name, Behavior] = Map(
-    initialActor -> ???
-  )
-
-  /** An indicator of whether an actor is idle, blocked, or stopped */
-  var status: Map[Name, Configuration.ActorStatus] = Map(
-    initialActor -> Busy
-  )
-
-  /** Associates each actor to the collection of undelivered messages that have been sent to them */
-  var pendingMessages: Map[Name, FIFOMailbox] = Map(
-    initialActor -> new FIFOMailbox()
-  )
-
-  /** This sequence is the list of snapshots taken by actors throughout this configuration. */
-  var snapshots: Seq[(Name, Snapshot)] = Seq()
-
-  /** The execution that produced this configuration. */
-  var execution: Execution = Seq()
-
-  /** The set of actors that have self-terminated due to a reference count of 0 */
-  private var _terminatedActors: Set[Name] = Set()
+  var counter: Int = 0
+  var context: mutable.Map[Name, Context] = mutable.Map()
+  var mailbox: mutable.Map[Name, Mailbox[Msg]] = mutable.Map()
+  var children: mutable.Map[Name, Set[Name]] = mutable.Map()
+  var watchedBy: mutable.Map[Name, Set[Name]] = mutable.Map()
+  var terminated: mutable.Set[Name] = mutable.Set()
+  var sentMessages: List[Msg] = Nil
+  var deactivated: mutable.Set[Ref] = mutable.Set()
 
   //// Accessor methods
 
-  def idle(actor: Name): Boolean = status(actor) == Idle
+  def idle(actor: Name): Boolean = !busy(actor)
 
-  def busy(actor: Name): Boolean = status(actor) == Busy
+  def busy(actor: Name): Boolean = context(actor).busy
 
-  def terminated(actor: Name): Boolean = _terminatedActors contains actor
-
-  def receptionist(actor: Name): Boolean = ???
-
-  def canDeactivate(actor: Name): Boolean = ???
-
-  def canTakeSnapshot(actor: Name): Boolean =
-    idle(actor) && !terminated(actor)
+  def root(actor: Name): Boolean = context(actor).root
 
   def unblocked(actor: Name): Boolean =
-    busy(actor) || pendingMessages(actor).nonEmpty || receptionist(actor)
+    busy(actor) || mailbox(actor).nonEmpty || root(actor)
 
   def blocked(actor: Name): Boolean =
-    idle(actor) && pendingMessages(actor).isEmpty && !receptionist(actor)
+    !unblocked(actor)
 
   def ready(actor: Name): Boolean =
-    idle(actor) && pendingMessages(actor).nonEmpty
+    idle(actor) && mailbox(actor).nonEmpty
 
-  /** An actor is garbage if it is only potentially reachable by blocked actors.
+  /** 
+   * An actor is garbage if it is only potentially reachable by blocked actors.
    * This excludes actors that have self-terminated.
    */
   def garbage(actor: Name): Boolean =
     !terminated(actor) && canPotentiallyReach(actor).forall(blocked)
 
-  def idleActors: Iterable[Name] = actors.filter(idle)
-  def busyActors: Iterable[Name] = actors.filter(busy)
-  def blockedActors: Iterable[Name] = actors.filter(blocked)
-  def unblockedActors: Iterable[Name] = actors.filter(unblocked)
-  def receptionists: Iterable[Name] = actors.filter(receptionist)
-  def readyActors: Iterable[Name] = actors.filter(ready)
-  def terminatedActors: Iterable[Name] = actors.filter(terminated)
-  def actorsThatCanDeactivate: Iterable[Name] = actors.filter(canDeactivate)
-  def actorsThatCanTakeASnapshot: Iterable[Name] = actors.filter(canTakeSnapshot)
-  def garbageActors: Iterable[Name] = actors.filter(garbage)
+  def aliveActors: Iterable[Name] = context.keys
+  def idleActors: Iterable[Name] = aliveActors.filter(idle)
+  def busyActors: Iterable[Name] = aliveActors.filter(busy)
+  def blockedActors: Iterable[Name] = aliveActors.filter(blocked)
+  def unblockedActors: Iterable[Name] = aliveActors.filter(unblocked)
+  def rootActors: Iterable[Name] = aliveActors.filter(root)
+  def readyActors: Iterable[Name] = aliveActors.filter(ready)
+  def garbageLiveActors: Iterable[Name] = aliveActors.filter(garbage)
 
-  def actors: Iterable[Name] = state.keys
-  def actorStates: Iterable[Behavior] = state.values
 
-  /**
-   * The set of all pending refobs in the configuration. A refob is pending if
-   * it is contained in an in-transit `AppMessage`.
-   */
-  def pendingRefobs: Iterable[Ref] =
-    for {
-      msgs <- pendingMessages.values
-      msg <- msgs.toIterable
-    } yield ???
-
-  /**
-   * The set of all deactivated refobs in the configuration. A refob is deactivated
-   * if its owner has deactivated it, but the target has not yet processed the
-   * corresponding `ReleaseMessage`.
-   */
-  def deactivatedRefobs: Iterable[Ref] =
-    for {
-      msgs <- pendingMessages.values
-      msg <- msgs.toIterable
-    } yield ???
-
-  /**
-   * The set of all active refobs in the configuration. A refob is active if it is
-   * in an actor's `activeRefs` set.
-   */
-  def activeRefobs: Iterable[Ref] =
-    for {
-      actorState <- actorStates
-    } yield ???
-
-  /**
-   * The set of all unreleased refobs pointing to an actor. A refob is unreleased if
-   * it is either potentially active, active, or deactivated (and not yet released).
-   */
-  def unreleasedRefobs(actor: Name): Iterable[Ref] = {
-    val potentiallyActive = pendingRefobs.filter(_.rawActorRef == actor)
-    val active = activeRefobs.filter(_.rawActorRef == actor)
-    val deactivated = deactivatedRefobs.filter(_.rawActorRef == actor)
-
-    (potentiallyActive ++ active ++ deactivated).toSet
-  }
-
-  /** Gets the owners of the unreleased refobs to an actor, i.e. the actor's potential inverse acquaintances.
+  /** 
+   * Gets the owners of the unreleased refobs to an actor, i.e. the actor's potential inverse acquaintances.
    * Note that, since all actors have a `self` refob, this set includes the actor itself.
    */
-  def potentialInverseAcquaintances(actor: Name): Iterable[Name] = ???
+  def potentialInverseAcquaintances(actor: Name): Iterable[Name] = {
+    // Search every mailbox for refobs. If a refob points to the actor, add the
+    // recipient as an inverse acquaintance.
+    val pendingInverseAcquaintances = for {
+        recipient <- mailbox.keys;
+        msg <- mailbox(recipient).toIterable;
+        ref <- msg.refs;
+        if ref.target == actor
+      } yield recipient
 
-  /** Returns the set of actors that can potentially reach the given actor.
+    // Search every actor's local state for active refs.
+    val activeInverseAcquaintances = for {
+        owner <- aliveActors;
+        ref <- context(owner).activeRefs
+        if ref.target == actor
+      } yield owner
+
+    (pendingInverseAcquaintances ++ activeInverseAcquaintances).toSet
+  }
+
+  /** 
+   * Returns the set of actors that can potentially reach the given actor.
    * This set always includes the actor itself.
    */
   def canPotentiallyReach(actor: Name): Set[Name] = {
@@ -153,120 +119,165 @@ class Configuration() {
   }
 
 
-  //// Helper methods
-
-  def transition(e: Event): Unit = {
-    e match {
-      case Spawn(parent, child, creatorRef, selfRef) =>
-        require(state contains parent)
-        require(!(state contains child))
-        require(!(state(parent).activeRefs contains creatorRef))
-        require(busy(parent))
-        // create child's state
-        val childState = ???
-        // add the new active ref to the parent's state
-        ???
-        // update the configuration
-        state += (child -> childState)
-        status += (child -> Busy)
-        pendingMessages += (child -> new FIFOMailbox())
-
-      case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
-        require(state contains sender)
-        require(state(sender).activeRefs contains recipientRef)
-        require(createdUsingRefs.forall(ref => state(sender).activeRefs contains ref))
-        require(busy(sender))
-        val senderState = state(sender)
-        // Add createdRefs to sender's state
-        ???
-        // add the message to the recipient's "mailbox"
-        ???
-
-      case DroppedMessage(recipient, sender) =>
-        require(state contains recipient)
-        require(state contains sender)
-        // take the next message from this sender out of the queue;
-        // don't do anything with it
-        pendingMessages(recipient).deliverFrom(sender)
-
-      case Receive(recipient, sender) =>
-        require(state contains recipient)
-        require(state contains sender)
-        require(idle(recipient))
-        // take the next message from this sender out of the queue;
-        // this should mimic the behavior of [[gc.AbstractBehavior]]
-        val message = pendingMessages(recipient).deliverFrom(sender)
-        val actorState = state(recipient)
-        // handle the message
-        ???
-
-      case BecomeIdle(actor) =>
-        require(state contains actor)
-        require(busy(actor))
-        status += (actor -> Idle)
-
-      case Deactivate(actor, ref) =>
-        require(state contains actor)
-        require(state(actor).activeRefs contains ref)
-        require(ref != state(actor).selfRef)
-        require(busy(actor))
-        ???
-
-      case Snapshot(actor) =>
-        require(state contains actor)
-        require(idle(actor))
-        require(!terminated(actor))
-        val snapshot = ???
-        snapshots :+= ((actor, snapshot))
-    }
-    // Once successful, add the event to the execution so far
-    execution = execution :+ e
+  def newName(): Name = {
+    counter += 1
+    new Name(counter, this)
   }
 
-  def stateToString(name: Name, state: Behavior): String =
-    s"""    $name:
-       |      Active:  ${state.activeRefs}
-       |      Status:   ${status(name)}
-       |      Mailbox:  ${pendingMessages(name)}
-       |      Unreleased refobs: ${unreleasedRefobs(name)}
-       |""".stripMargin
+  def legalSpawnEvents: Iterable[Spawn] =
+    for {
+      parent <- busyActors
+    } yield Spawn(parent)
 
-  override def toString: String = {
-    s"""Configuration:
-       |  Execution:
-       |    $execution
-       |  Snapshots:
-       |    $snapshots
-       |  States:
-       |${state.keys.map(name => stateToString(name, state(name))).mkString("\n")}
-       |  Blocked:
-       |    $blockedActors
-       |  Garbage:
-       |    $garbageActors
-       |""".stripMargin
+  def legalSendEvents: Iterable[Send] = {
+    // The number of possible send events is unbounded; pick only the ones that 
+    // send up to 3 refs in a message.
+    def powerset(n: Int, refs: List[Ref]): List[List[Ref]] =
+      refs match {
+        case Nil => Nil
+        case ref :: refs if n == 0 => Nil
+        case ref :: refs =>
+          powerset(n, refs) ++
+          powerset(n-1, refs).map(ref :: _)
+      }
+
+    for {
+      sender <- busyActors;
+      recipient <- context(sender).activeRefs;
+      targetRefs <- powerset(3, context(sender).activeRefs.toList)
+    } yield Send(sender, recipient, targetRefs)
   }
 
-  object Name {
-    // just use an internal counter to make unique addresses
-    var count: Int = 0
-    def apply(): Name = {
-      val name = new Name(count)
-      count += 1
-      name
-    }
-  }
+  def legalReceiveEvents: Iterable[Receive] =
+    for {
+      recipient <- idleActors;
+      msg <- mailbox(recipient).next
+     } yield Receive(recipient, msg)
+
+  def legalBecomeIdleEvents: Iterable[BecomeIdle] =
+    for (actor <- busyActors) yield BecomeIdle(actor)
+
+  def legalDeactivateEvents: Iterable[Deactivate] =
+    for {
+      actor <- busyActors;
+      ref <- context(actor).activeRefs
+    } yield Deactivate(actor, ref)
+
+  def legalSnapshotEvents: Iterable[Snapshot] =
+    for (actor <- idleActors) yield Snapshot(actor)
+
+  def legalDroppedMessageEvents: Iterable[DroppedMessage] =
+    for {
+      recipient <- idleActors;
+      msg <- mailbox(recipient).next
+    } yield DroppedMessage(recipient, msg)
+
+  def legalEvents: Iterable[Event] =
+    legalSpawnEvents ++ legalSendEvents ++ legalReceiveEvents ++
+    legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents ++
+    legalDroppedMessageEvents 
+
+  // def transition(event: Event): Unit = event match {
+    // case Spawn(parent, child, creatorRef, selfRef) => 
+    //   require(state contains parent)
+    //   require(!(state contains child))
+    //   require(!(state(parent).activeRefs contains creatorRef))
+    //   require(busy(parent))
+    //   // create child's state
+    //   val childState = ???
+    //   // add the new active ref to the parent's state
+    //   ???
+    //   // update the configuration
+    //   state += (child -> childState)
+    //   status += (child -> Busy)
+    //   pendingMessages += (child -> new FIFOMailbox())
+
+    // case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
+    //   require(state contains sender)
+    //   require(state(sender).activeRefs contains recipientRef)
+    //   require(createdUsingRefs.forall(ref => state(sender).activeRefs contains ref))
+    //   require(busy(sender))
+    //   val senderState = state(sender)
+    //   // Add createdRefs to sender's state
+    //   ???
+    //   // add the message to the recipient's "mailbox"
+    //   ???
+
+    // case DroppedMessage(recipient, sender) =>
+    //   require(state contains recipient)
+    //   require(state contains sender)
+    //   // take the next message from this sender out of the queue;
+    //   // don't do anything with it
+    //   pendingMessages(recipient).deliverFrom(sender)
+
+    // case Receive(recipient, sender) =>
+    //   require(state contains recipient)
+    //   require(state contains sender)
+    //   require(idle(recipient))
+    //   // take the next message from this sender out of the queue;
+    //   // this should mimic the behavior of [[gc.AbstractBehavior]]
+    //   val message = pendingMessages(recipient).deliverFrom(sender)
+    //   val actorState = state(recipient)
+    //   // handle the message
+    //   ???
+
+    // case BecomeIdle(actor) =>
+    //   require(state contains actor)
+    //   require(busy(actor))
+    //   status += (actor -> Idle)
+
+    // case Deactivate(actor, ref) =>
+    //   require(state contains actor)
+    //   require(state(actor).activeRefs contains ref)
+    //   require(ref != state(actor).selfRef)
+    //   require(busy(actor))
+    //   ???
+
+    // case Snapshot(actor) =>
+    //   require(state contains actor)
+    //   require(idle(actor))
+    //   require(!terminated(actor))
+    //   val snapshot = ???
+    //   snapshots :+= ((actor, snapshot))
+  // }
 
 }
 
-object Configuration {
+class Name(
+  val id: Int, config: Configuration
+) extends RefLike[Msg] {
+  override def !(msg: Msg): Unit =
+    config.sentMessages = config.sentMessages :+ msg
 
-  sealed trait ActorStatus
-  case object Idle extends ActorStatus
-  case object Busy extends ActorStatus
+  override def equals(that: Any): Boolean = that match {
+    case that: Name => this.id == that.id
+    case _ => false
+  }
 
-  def fromExecution(execution: Execution): Configuration = {
-    val config = new Configuration()
-    for (event <- execution) config.transition(event)
-    config
+  override def toString(): String = {
+    val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if (id >= 0 && id < 26) 
+      return alpha(id).toString()
+    else
+      return s"A${id}" 
+  }
+}
+
+class Context(
+  val self: Name, 
+  val config: Configuration,
+  val spawnInfo: protocol.SpawnInfo,
+  var busy: Boolean,
+  val root: Boolean,
+) extends ContextLike[Msg] {
+
+  val gcState: protocol.State = protocol.initState(this, spawnInfo)
+  val selfRef: Ref = protocol.getSelfRef(gcState, this)
+  var activeRefs: Set[Ref] = Set(selfRef)
+
+  def children: Iterable[RefLike[Nothing]] = 
+    config.children(self)
+  def watch[U](other: RefLike[U]): Unit = {
+    config.watchedBy(self) = config.watchedBy(self) + other.asInstanceOf[Name]
   }
 }

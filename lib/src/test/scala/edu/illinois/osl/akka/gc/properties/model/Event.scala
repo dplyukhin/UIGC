@@ -3,25 +3,24 @@ package edu.illinois.osl.akka.gc.properties.model
 sealed trait Event
 
 /** An actor spawns a child. */
-case class Spawn(parent: Name, child: Name, creatorRef: Ref, selfRef: Ref) extends Event {
+case class Spawn(parent: Name) extends Event {
   override def toString: String = {
-    s"SPAWN: $parent spawns $child using $creatorRef"
+    s"SPAWN: $parent spawns an actor"
   }
 }
 
 /** An actor sends an application-level message. */
 case class Send(sender: Name,
                 recipientRef: Ref,
-                createdRefs: Iterable[Ref],
-                createdUsingRefs: Iterable[Ref]) extends Event {
+                targetRefs: Iterable[Ref]) extends Event {
   override def toString: String = {
-    s"SEND: $sender sends a message along $recipientRef containing $createdRefs"
+    s"SEND: $sender sends a message along $recipientRef containing refs to $targetRefs"
   }
 }
 
 /** An actor receives an application-level message */
-case class Receive(recipient: Name, sender: Name) extends Event {
-  override def toString: String = s"RECV: $recipient receives a message from $sender"
+case class Receive(recipient: Name, msg: Msg) extends Event {
+  override def toString: String = s"RECV: $recipient receives $msg"
 }
 
 /** An actor goes idle. */
@@ -29,7 +28,7 @@ case class BecomeIdle(actor: Name) extends Event {
   override def toString: String = s"IDLE: $actor goes idle"
 }
 
-/** An actor deactivates references and sends a release message. */
+/** An actor deactivates references. */
 case class Deactivate(actor: Name, ref: Ref) extends Event {
   override def toString: String = s"DEACTIVATE: $actor deactivates $ref"
 }
@@ -42,6 +41,6 @@ case class Snapshot(actor: Name) extends Event {
 /**
  * Drop the next message from `sender` to `recipient`.
  */
-case class DroppedMessage(recipient: Name, sender: Name) extends Event {
-  override def toString: String = s"DROPPED MESSAGE: next message from $sender to $recipient dropped"
+case class DroppedMessage(recipient: Name, msg: Msg) extends Event {
+  override def toString: String = s"DROPPED MESSAGE: message $msg, sent to $recipient, dropped"
 }
