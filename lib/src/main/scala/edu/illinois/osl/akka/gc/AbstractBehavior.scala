@@ -1,18 +1,20 @@
 package edu.illinois.osl.akka.gc
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
+import akka.actor.typed.scaladsl
+import edu.illinois.osl.akka.gc.protocols.Protocol
 
-abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
-  extends raw.AbstractBehavior[protocol.GCMessage[T]](context.rawContext) {
+abstract class AbstractBehavior[T](context: ActorContext[T])
+  extends scaladsl.AbstractBehavior[protocol.GCMessage[T]](context.rawContext) {
 
-  def onMessage(msg: T): Behavior[T]
+  def uponMessage(msg: T): Behavior[T]
 
   final def onMessage(msg: protocol.GCMessage[T]): Behavior[T] = {
     val decision = 
-      protocol.onMessage[T, Behavior[T]](msg, this.onMessage, context.state, context.proxyContext)
+      protocol.onMessage(msg, this.uponMessage, context.state, context.proxyContext)
     decision match {
-      case _: Protocol.ShouldStop.type => raw.Behaviors.stopped
-      case _: Protocol.ShouldContinue.type => raw.Behaviors.same
+      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Protocol.ShouldContinue.type => scaladsl.Behaviors.same
       case Protocol.ContinueWith(b) => b
     }
   }
@@ -24,8 +26,8 @@ abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
       val decision = 
         protocol.onSignal(signal, this.uponSignal, context.state, context.proxyContext)
       decision match {
-        case _: Protocol.ShouldStop.type => raw.Behaviors.stopped
-        case _: Protocol.ShouldContinue.type => raw.Behaviors.same
+        case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+        case _: Protocol.ShouldContinue.type => scaladsl.Behaviors.same
         case Protocol.ContinueWith(b) => b
       }
   }

@@ -4,6 +4,7 @@ import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
 import scala.concurrent.duration._
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 
 /** 

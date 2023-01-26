@@ -1,5 +1,9 @@
 package edu.illinois.osl.akka.gc
 
+import akka.actor.typed
+import akka.actor.typed.scaladsl
+import edu.illinois.osl.akka.gc.proxies._
+
 /**
  * A version of [[AkkaActorContext]] used by garbage-collected actors. Provides
  * methods for spawning garbage-collected actors, creating new references, and
@@ -8,18 +12,18 @@ package edu.illinois.osl.akka.gc
  * change their behavior by passing their [[ActorContext]] to the behavior they
  * take on.
  */
-class ActorContext[T <: Message](
-  val rawContext: raw.ActorContext[protocol.GCMessage[T]],
+class ActorContext[T](
+  val rawContext: scaladsl.ActorContext[protocol.GCMessage[T]],
   val spawnInfo: protocol.SpawnInfo,
 ) {
 
-  private[gc] val proxyContext = proxy.ProxyContext(rawContext)
+  private[gc] val proxyContext = AkkaContext(rawContext)
 
   val state = protocol.initState(proxyContext, spawnInfo)
 
-  def self: ActorRef[T] = state.selfRef.unsafeUpcast[T]
+  val self: ActorRef[T] = protocol.getSelfRef(state, proxyContext)
 
-  def name: ActorName = state.selfRef.rawActorRef
+  def name: ActorName = rawContext.self
 
   /**
    * Spawn a new named actor into the GC system.
@@ -29,9 +33,9 @@ class ActorContext[T <: Message](
    * @tparam S The type of application-level messages to be handled by the new actor.
    * @return An [[ActorRef]] for the spawned actor.
    */
-  def spawn[S <: Message](factory: ActorFactory[S], name: String): ActorRef[S] = {
+  def spawn[S](factory: ActorFactory[S], name: String): ActorRef[S] = {
     protocol.spawnImpl(
-      info => proxy.ProxyRef(rawContext.spawn(factory(info), name)), 
+      info => AkkaRef(rawContext.spawn(factory(info), name)), 
       state, proxyContext)
   }
 
@@ -42,9 +46,9 @@ class ActorContext[T <: Message](
    * @tparam S The type of application-level messages to be handled by the new actor.
    * @return An [[ActorRef]] for the spawned actor.
    */
-  def spawnAnonymous[S <: Message](factory: ActorFactory[S]): ActorRef[S] = {
+  def spawnAnonymous[S](factory: ActorFactory[S]): ActorRef[S] = {
     protocol.spawnImpl(
-      info => proxy.ProxyRef(rawContext.spawnAnonymous(factory(info))), 
+      info => AkkaRef(rawContext.spawnAnonymous(factory(info))), 
       state, proxyContext)
   }
 
@@ -58,7 +62,7 @@ class ActorContext[T <: Message](
    * @tparam S The type that the actor handles.
    * @return The created reference.
    */
-  def createRef[S <: Message](target: ActorRef[S], owner: ActorRef[Nothing]): ActorRef[S] = {
+  def createRef[S](target: ActorRef[S], owner: ActorRef[Nothing]): ActorRef[S] = {
     protocol.createRef(target, owner, state)
   }
 

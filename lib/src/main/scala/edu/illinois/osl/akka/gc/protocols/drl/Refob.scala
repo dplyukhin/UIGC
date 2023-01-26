@@ -1,6 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import edu.illinois.osl.akka.gc.{proxy, Message}
+import edu.illinois.osl.akka.gc.interfaces._
 import scala.annotation.unchecked.uncheckedVariance
 
 /**
@@ -20,25 +20,20 @@ case class Token(ref: Name, n: Int)
  * @param target The [[AkkaActorRef]] of the actor that will receive messages.
  * @tparam T The type of messages handled by the target actor. Must implement the [[Message]] interface.
  */
-case class Refob[-T <: Message](
+case class Refob[-T](
   token: Option[Token],
-  owner: Option[proxy.ActorRef[GCMessage[Nothing]]],
-  target: proxy.ActorRef[GCMessage[T]],
-) extends DRL.IRefob[T] {
+  owner: Option[RefLike[GCMessage[Nothing]]],
+  target: RefLike[GCMessage[T]],
+) extends RefobLike[T] {
   private var state: Option[State] = None
 
-  override def unsafeUpcast[U >: T @uncheckedVariance <: Message]: Refob[U] =
-    this.asInstanceOf[Refob[U]]
-
-  def initialize[S <: Message](_state: State): Unit = {
+  def initialize[S](_state: State): Unit = {
     state = Some(_state)
   }
-  override def !(msg: T): Unit = {
-    target ! AppMsg(msg, token)
+  override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = {
+    target ! AppMsg(msg, token, refs.asInstanceOf[Iterable[Refob[Nothing]]])
     state.get.incSentCount(token)
   }
-
-  override def rawActorRef: Name = target
 
   override def toString: String = {
     f"ActorRef#${token.hashCode()}: ${owner.get}->${target}"

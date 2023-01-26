@@ -1,70 +1,74 @@
 package edu.illinois.osl.akka.gc.protocols
 
-import edu.illinois.osl.akka.gc.proxy
-import edu.illinois.osl.akka.gc.{Protocol, Message, Behavior}
+import edu.illinois.osl.akka.gc.interfaces._
 import akka.actor.typed.Signal
 import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.ActorPath
 
 object NoProtocol extends Protocol {
-  type GCMessage[+T <: Message] = T
-  case class Refob[-T <: Message](rawActorRef: proxy.ActorRef[T]) extends IRefob[T] {
-    override def !(msg: T): Unit = rawActorRef ! msg
-    override def unsafeUpcast[U >: T @uncheckedVariance <: Message]: Refob[U] =
-      this.asInstanceOf[Refob[U]]
+  type GCMessage[+T] = T
+  case class Refob[-T](target: RefLike[T]) extends RefobLike[T] {
+    override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = 
+      target ! msg
   }
   type SpawnInfo = Unit
   class State(
     val selfRef: Refob[Nothing]
-  ) extends IState
+  )
 
   /**
    * Transform a message from a non-GC actor so that it can be understood
    * by a GC actor. Necessarily, the recipient is a root actor.
    */
-  def rootMessage[T <: Message](payload: T): GCMessage[T] = payload
+  def rootMessage[T](payload: T): GCMessage[T] = payload
 
   /** 
    * Produces SpawnInfo indicating to the actor that it is a root actor.
    */
   def rootSpawnInfo(): SpawnInfo = ()
 
-  def initState[T <: Message](
-    context: proxy.ActorContext[T],
+  def initState[T](
+    context: ContextLike[T],
     spawnInfo: SpawnInfo,
   ): State =
     new State(Refob(context.self))
 
-  def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => proxy.ActorRef[S],
+  def getSelfRef[T](
     state: State,
-    ctx: proxy.ActorContext[T]
+    context: ContextLike[T]
+  ): Refob[T] =
+    state.selfRef.asInstanceOf[Refob[T]]
+
+  def spawnImpl[S, T](
+    factory: SpawnInfo => RefLike[S],
+    state: State,
+    ctx: ContextLike[T]
   ): Refob[S] =
     Refob(factory(()))
 
-  def onMessage[T <: Message, Beh](
+  def onMessage[T, Beh](
     msg: GCMessage[T],
     uponMessage: T => Beh,
     state: State,
-    ctx: proxy.ActorContext[T],
+    ctx: ContextLike[T],
   ): Protocol.TerminationDecision[Beh] =
     Protocol.ContinueWith(uponMessage(msg))
 
-  def onSignal[T <: Message, Beh](
+  def onSignal[T, Beh](
     signal: Signal, 
     uponSignal: Signal => Beh,
     state: State,
-    ctx: proxy.ActorContext[T]
+    ctx: ContextLike[T]
   ): Protocol.TerminationDecision[Beh] =
     Protocol.ContinueWith(uponSignal(signal))
 
-  def createRef[S <: Message](
+  def createRef[S](
     target: Refob[S], owner: Refob[Nothing],
     state: State
   ): Refob[S] = 
-    Refob(target.rawActorRef)
+    Refob(target.target)
 
-  def release[S <: Message](
+  def release[S](
     releasing: Iterable[Refob[S]],
     state: State
   ): Unit = ()

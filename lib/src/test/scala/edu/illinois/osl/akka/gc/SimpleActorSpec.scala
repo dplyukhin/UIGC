@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal}
 import org.scalatest.wordspec.AnyWordSpecLike
-import edu.illinois.osl.akka.gc.{ActorRef, ActorName, Behavior, NoRefs}
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
@@ -60,7 +60,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   object ActorA {
-    def apply(): raw.Behavior[TestMessage] = 
+    def apply(): unmanaged.Behavior[TestMessage] = 
       Behaviors.setupRoot(context => new ActorA(context))
   }
   object ActorB {
@@ -127,7 +127,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
   }
   class ActorC(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
-    probe.ref ! Spawned(context.self.rawActorRef)
+    probe.ref ! Spawned(context.name)
     override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Hello =>

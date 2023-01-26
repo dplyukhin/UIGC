@@ -1,14 +1,12 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import edu.illinois.osl.akka.gc.Message
+sealed trait GCMessage[+T]
 
-sealed trait GCMessage[+T <: Message]
-
-final case class AppMsg[+T <: Message](
-  payload: T, token: Option[Token]
+final case class AppMsg[+T](
+  payload: T, token: Option[Token], refs: Iterable[Refob[Nothing]]
 ) extends GCMessage[T]
 
-final case class ReleaseMsg[+T <: Message](
+final case class ReleaseMsg[+T](
   releasing: Iterable[Refob[Nothing]],
   created: Iterable[Refob[Nothing]],
 ) extends GCMessage[T]

@@ -1,13 +1,13 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
-import edu.illinois.osl.akka.gc.{proxy, Protocol, Message}
-import edu.illinois.osl.akka.gc.protocols.drl
+import edu.illinois.osl.akka.gc.interfaces._
+import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
 
 object DRL extends Protocol {
 
-  type GCMessage[+T <: Message] = drl.GCMessage[T]
-  type Refob[-T <: Message] = drl.Refob[T]
+  type GCMessage[+T] = drl.GCMessage[T]
+  type Refob[-T] = drl.Refob[T]
   type State = drl.State
 
   class SpawnInfo(
@@ -15,22 +15,28 @@ object DRL extends Protocol {
     val creator: Option[Name]
   )
 
-  override def rootMessage[T <: Message](payload: T): GCMessage[T] =
-    AppMsg(payload, None)
+  override def rootMessage[T](payload: T): GCMessage[T] =
+    AppMsg(payload, None, Nil)
 
   override def rootSpawnInfo(): SpawnInfo = 
     new SpawnInfo(None, None)
 
-  override def initState[T <: Message](
-    context: proxy.ActorContext[GCMessage[T]],
+  override def initState[T](
+    context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State =
     new State(context.self, spawnInfo)
 
-  override def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => proxy.ActorRef[GCMessage[S]],
+  def getSelfRef[T](
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    context: ContextLike[GCMessage[T]]
+  ): Refob[T] =
+    state.selfRef.asInstanceOf[Refob[T]]
+
+  override def spawnImpl[S, T](
+    factory: SpawnInfo => RefLike[GCMessage[S]],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
     val x = state.newToken()
     val self = state.self
@@ -42,11 +48,11 @@ object DRL extends Protocol {
     ref
   }
 
-  override def onMessage[T <: Message, Beh](
+  override def onMessage[T, Beh](
     msg: GCMessage[T],
     uponMessage: T => Beh,
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision[Beh] =
     msg match {
       case ReleaseMsg(releasing, created) =>
@@ -55,8 +61,7 @@ object DRL extends Protocol {
           Protocol.ShouldStop
         else 
           Protocol.ShouldContinue
-      case AppMsg(payload, token) =>
-        val refs = payload.refs.asInstanceOf[Iterable[Refob[Nothing]]]
+      case AppMsg(payload, token, refs) =>
         refs.foreach(ref => ref.initialize(state))
         state.handleMessage(refs, token)
         val beh = uponMessage(payload)
@@ -79,9 +84,9 @@ object DRL extends Protocol {
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
    * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
-  def tryTerminate[T <: Message](
+  def tryTerminate[T](
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    ctx: ContextLike[GCMessage[T]]
   ): Boolean = {
     if (ctx.children.nonEmpty)
       return false
@@ -100,7 +105,7 @@ object DRL extends Protocol {
     }
   }
 
-  override def createRef[S <: Message](
+  override def createRef[S](
     target: Refob[S], owner: Refob[Nothing],
     state: State
   ): Refob[S] = {
@@ -109,7 +114,7 @@ object DRL extends Protocol {
     ref
   }
 
-  override def release[S <: Message](
+  override def release[S](
     releasing: Iterable[Refob[S]],
     state: State
   ): Unit = {
@@ -125,11 +130,11 @@ object DRL extends Protocol {
 
   override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
 
-  override def onSignal[T <: Message, Beh](
+  override def onSignal[T, Beh](
     signal: Signal, 
     uponSignal: Signal => Beh,
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision[Beh] =
     signal match {
       case PostStop =>

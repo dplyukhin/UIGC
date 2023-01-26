@@ -2,7 +2,6 @@ package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
-import edu.illinois.osl.akka.gc.{Protocol, Message, Behavior}
 
 object State {
   sealed trait TerminationStatus
@@ -15,7 +14,7 @@ class State
 (
   val self: Name,
   val spawnInfo: DRL.SpawnInfo,
-) extends DRL.IState {
+) {
   import State._
 
   object newToken {
@@ -28,7 +27,7 @@ class State
   }
   
   /** This actor's self reference. */
-  override val selfRef: Ref = Refob[Nothing](Some(newToken()), Some(self), self)
+  val selfRef: Ref = Refob[Nothing](Some(newToken()), Some(self), self)
   selfRef.initialize(this)
 
   val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
@@ -60,7 +59,7 @@ class State
     activeRefs += ref
   }
 
-  def newRef[S <: Message](owner: Refob[Nothing], target: Refob[S]): Refob[S] = {
+  def newRef[S](owner: Refob[Nothing], target: Refob[S]): Refob[S] = {
     val token = newToken()
     Refob[S](Some(token), Some(owner.target), target.target)
   }

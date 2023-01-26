@@ -3,6 +3,7 @@ package edu.illinois.osl.akka.gc
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 
 object SelfMessagingSpec {

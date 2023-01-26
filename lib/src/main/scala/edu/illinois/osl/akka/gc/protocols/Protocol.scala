@@ -1,7 +1,8 @@
-package edu.illinois.osl.akka.gc
+package edu.illinois.osl.akka.gc.protocols
 
 import akka.actor.typed.Signal
 import scala.annotation.unchecked.uncheckedVariance
+import edu.illinois.osl.akka.gc.interfaces._
 
 object Protocol {
   sealed trait TerminationDecision[+Beh]
@@ -11,63 +12,58 @@ object Protocol {
 }
 
 trait Protocol {
-  type GCMessage[+T <: Message]
-  type Refob[-T <: Message] <: IRefob[T]
+  type GCMessage[+T]
+  type Refob[-T] <: RefobLike[T]
   type SpawnInfo
-  type State <: IState
-
-  trait IRefob[-T <: Message] {
-    def !(msg: T): Unit
-    def rawActorRef: proxy.ActorRef[Nothing]
-    def unsafeUpcast[U >: T @uncheckedVariance <: Message]: Refob[U]
-  }
-
-  trait IState {
-    val selfRef: Refob[Nothing]
-  }
+  type State
 
   /**
    * Transform a message from a non-GC actor so that it can be understood
    * by a GC actor. Necessarily, the recipient is a root actor.
    */
-  def rootMessage[T <: Message](payload: T): GCMessage[T]
+  def rootMessage[T](payload: T): GCMessage[T]
 
   /** 
    * Produces SpawnInfo indicating to the actor that it is a root actor.
    */
   def rootSpawnInfo(): SpawnInfo
 
-  def initState[T <: Message](
-    context: proxy.ActorContext[GCMessage[T]],
+  def initState[T](
+    context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State
 
-  def spawnImpl[S <: Message, T <: Message](
-    factory: SpawnInfo => proxy.ActorRef[GCMessage[S]],
+  def getSelfRef[T](
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    context: ContextLike[GCMessage[T]]
+  ): Refob[T]
+
+  def spawnImpl[S, T](
+    factory: SpawnInfo => RefLike[GCMessage[S]],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Refob[S]
 
-  def onMessage[T <: Message, Beh](
+  def onMessage[T, Beh](
     msg: GCMessage[T],
     uponMessage: T => Beh,
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision[Beh]
 
-  def onSignal[T <: Message, Beh](
+  def onSignal[T, Beh](
     signal: Signal, 
     uponSignal: Signal => Beh,
     state: State,
-    ctx: proxy.ActorContext[GCMessage[T]]
+    ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision[Beh]
 
-  def createRef[S <: Message](
+  def createRef[S](
     target: Refob[S], owner: Refob[Nothing],
     state: State
   ): Refob[S]
 
-  def release[S <: Message](
+  def release[S](
     releasing: Iterable[Refob[S]],
     state: State
   ): Unit
