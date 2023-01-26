@@ -9,6 +9,8 @@ trait Mailbox[T] {
   def toIterable: Iterable[T]
   /** The set of messages that can be delivered next */
   def next: Iterable[T]
+  /** Pull the message out of the mailbox */
+  def deliverMessage(msg: T): T
 }
 
 /**
@@ -32,9 +34,19 @@ class FIFOMailbox[T] extends Mailbox[T] {
 
   def next: Iterable[T] =
     for {
-        sender <- messagesFrom.keys;
-        if messagesFrom(sender).nonEmpty
+      sender <- messagesFrom.keys;
+      if messagesFrom(sender).nonEmpty
     } yield messagesFrom(sender).front
+
+  def deliverMessage(msg: T): T = {
+    val sender = for {
+      sender <- messagesFrom.keys;
+      if messagesFrom(sender).headOption == Some(msg)
+    } yield sender
+    assert(sender.size > 0, s"Can't find $msg in mailbox $messagesFrom")
+    assert(sender.size == 1, s"Found duplicate messages $msg in $messagesFrom")
+    deliverFrom(sender.head)
+  }
 
   def add(message: T, sender: Name): Unit = {
     val queue = messagesFrom.getOrElse(sender, mutable.Queue())

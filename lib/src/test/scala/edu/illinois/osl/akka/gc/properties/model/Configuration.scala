@@ -4,6 +4,45 @@ import edu.illinois.osl.akka.gc.protocol
 import edu.illinois.osl.akka.gc.interfaces._
 import scala.collection.mutable
 
+class Name(
+  val id: Int, config: Configuration
+) extends RefLike[Msg] {
+  override def !(msg: Msg): Unit =
+    config.sentMessages = config.sentMessages :+ msg
+
+  override def equals(that: Any): Boolean = that match {
+    case that: Name => this.id == that.id
+    case _ => false
+  }
+
+  override def toString(): String = {
+    val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if (id >= 0 && id < 26) 
+      return alpha(id).toString()
+    else
+      return s"A${id}" 
+  }
+}
+
+class Context(
+  val self: Name, 
+  val config: Configuration,
+  val spawnInfo: protocol.SpawnInfo,
+  var busy: Boolean,
+  val root: Boolean,
+) extends ContextLike[Msg] {
+
+  val gcState: protocol.State = protocol.initState(this, spawnInfo)
+  val selfRef: Ref = protocol.getSelfRef(gcState, this)
+  var activeRefs: Set[Ref] = Set(selfRef)
+
+  def children: Iterable[RefLike[Nothing]] = 
+    config.children(self)
+  def watch[U](other: RefLike[U]): Unit = {
+    config.watchedBy(self) = config.watchedBy(self) + other.asInstanceOf[Name]
+  }
+}
+
 object Configuration {
   sealed trait RefobStatus 
   case object Pending extends RefobStatus
@@ -177,107 +216,57 @@ class Configuration {
     legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents ++
     legalDroppedMessageEvents 
 
-  // def transition(event: Event): Unit = event match {
-    // case Spawn(parent, child, creatorRef, selfRef) => 
-    //   require(state contains parent)
-    //   require(!(state contains child))
-    //   require(!(state(parent).activeRefs contains creatorRef))
-    //   require(busy(parent))
-    //   // create child's state
-    //   val childState = ???
-    //   // add the new active ref to the parent's state
-    //   ???
-    //   // update the configuration
-    //   state += (child -> childState)
-    //   status += (child -> Busy)
-    //   pendingMessages += (child -> new FIFOMailbox())
+  def transition(event: Event): Unit = event match {
+    case Spawn(parent) => 
+      val child = newName()
+      var childContext: Context = null
+      def spawn(info: protocol.SpawnInfo): Name = {
+        childContext = new Context(
+          child, this, info,
+          busy = true, root = false, 
+        )
+        child
+      }
+      // create child's state
+      val refob = protocol.spawnImpl(
+        spawn,
+        context(parent).gcState,
+        context(parent)
+      )
+      // add the new active ref to the parent's state
+      context(parent).activeRefs += refob
+      // update the configuration
+      context(child) = childContext
+      mailbox(child) = new FIFOMailbox()
 
-    // case Send(sender, recipientRef, createdRefs, createdUsingRefs) =>
-    //   require(state contains sender)
-    //   require(state(sender).activeRefs contains recipientRef)
-    //   require(createdUsingRefs.forall(ref => state(sender).activeRefs contains ref))
-    //   require(busy(sender))
-    //   val senderState = state(sender)
-    //   // Add createdRefs to sender's state
-    //   ???
-    //   // add the message to the recipient's "mailbox"
-    //   ???
+    case Send(sender, recipientRef, targetRefs) =>
+      val senderState = context(sender)
+      // Create refs
+      val createdRefs = for (target <- targetRefs) yield
+        protocol.createRef(target, recipient, senderState)
+      // add the message to the recipient's mailbox
+      recipientRef.tell(new Payload(), createdRefs)
 
-    // case DroppedMessage(recipient, sender) =>
-    //   require(state contains recipient)
-    //   require(state contains sender)
-    //   // take the next message from this sender out of the queue;
-    //   // don't do anything with it
-    //   pendingMessages(recipient).deliverFrom(sender)
+    case DroppedMessage(recipient, msg) =>
+      // take the next message from this sender out of the queue;
+      // don't do anything with it
+      mailbox(recipient).deliverMessage(msg)
 
-    // case Receive(recipient, sender) =>
-    //   require(state contains recipient)
-    //   require(state contains sender)
-    //   require(idle(recipient))
-    //   // take the next message from this sender out of the queue;
-    //   // this should mimic the behavior of [[gc.AbstractBehavior]]
-    //   val message = pendingMessages(recipient).deliverFrom(sender)
-    //   val actorState = state(recipient)
-    //   // handle the message
-    //   ???
+    case Receive(recipient, msg) =>
+      // take the next message from this sender out of the queue;
+      val message = mailbox(recipient).deliverMessage(msg)
+      val actorState = context(recipient)
+      // handle the message
+      ???
 
-    // case BecomeIdle(actor) =>
-    //   require(state contains actor)
-    //   require(busy(actor))
-    //   status += (actor -> Idle)
+    case BecomeIdle(actor) =>
+      context(actor).busy = false
 
-    // case Deactivate(actor, ref) =>
-    //   require(state contains actor)
-    //   require(state(actor).activeRefs contains ref)
-    //   require(ref != state(actor).selfRef)
-    //   require(busy(actor))
-    //   ???
+    case Deactivate(actor, ref) =>
+      ???
 
-    // case Snapshot(actor) =>
-    //   require(state contains actor)
-    //   require(idle(actor))
-    //   require(!terminated(actor))
-    //   val snapshot = ???
-    //   snapshots :+= ((actor, snapshot))
-  // }
-
-}
-
-class Name(
-  val id: Int, config: Configuration
-) extends RefLike[Msg] {
-  override def !(msg: Msg): Unit =
-    config.sentMessages = config.sentMessages :+ msg
-
-  override def equals(that: Any): Boolean = that match {
-    case that: Name => this.id == that.id
-    case _ => false
+    case Snapshot(actor) =>
+      ???
   }
 
-  override def toString(): String = {
-    val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    if (id >= 0 && id < 26) 
-      return alpha(id).toString()
-    else
-      return s"A${id}" 
-  }
-}
-
-class Context(
-  val self: Name, 
-  val config: Configuration,
-  val spawnInfo: protocol.SpawnInfo,
-  var busy: Boolean,
-  val root: Boolean,
-) extends ContextLike[Msg] {
-
-  val gcState: protocol.State = protocol.initState(this, spawnInfo)
-  val selfRef: Ref = protocol.getSelfRef(gcState, this)
-  var activeRefs: Set[Ref] = Set(selfRef)
-
-  def children: Iterable[RefLike[Nothing]] = 
-    config.children(self)
-  def watch[U](other: RefLike[U]): Unit = {
-    config.watchedBy(self) = config.watchedBy(self) + other.asInstanceOf[Name]
-  }
 }
