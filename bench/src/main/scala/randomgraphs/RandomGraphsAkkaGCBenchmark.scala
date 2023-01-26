@@ -3,6 +3,7 @@ package randomgraphs
 import akka.actor.typed.{Behavior => AkkaBehavior, ActorSystem}
 import edu.illinois.osl.akka.gc._
 import edu.illinois.osl.akka.gc.protocol._
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 import common.Benchmark
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -109,7 +110,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
       super.ping(ref)
     }
 
-    override def onMessage(msg: Msg): Behavior[Msg] = {
+    override def uponMessage(msg: Msg): Behavior[Msg] = {
       if (RandomGraphsConfig.ShouldLog) 
         println(s"${context.name} got message: $msg")
 

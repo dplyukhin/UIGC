@@ -5,7 +5,7 @@ import edu.illinois.osl.akka.gc.protocols.Protocol
 
 package object gc {
 
-  val protocol: Protocol = ???
+  val protocol: Protocol = protocols.drl.DRL
 
   type ActorRef[-T] = protocol.Refob[T]
 

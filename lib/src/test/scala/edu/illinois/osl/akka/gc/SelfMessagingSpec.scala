@@ -41,7 +41,7 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   class ActorA(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
     val actorB: ActorRef[SelfRefMsg] = context.spawn(ActorB(), "actorB")
 
-    override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
+    override def uponMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {
         case SelfRefTestInit(n) =>
           actorB ! Countdown(n)
@@ -60,7 +60,7 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
   class ActorB(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
     private var count = 0
-    override def onMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
+    override def uponMessage(msg: SelfRefMsg): Behavior[SelfRefMsg] = {
       msg match {
         case Countdown(n) =>
           if (n > 0) {
