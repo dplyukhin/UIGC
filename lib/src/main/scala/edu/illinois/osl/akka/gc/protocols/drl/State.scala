@@ -17,40 +17,33 @@ class State
 ) {
   import State._
 
-  object newToken {
-    private var count: Int = 0
-    def apply(): Token = {
-      val token = Token(self, count)
-      count += 1
-      token
-    }
-  }
+  var count: Int = 1
   
   /** This actor's self reference. */
-  val selfRef: Ref = Refob[Nothing](Some(newToken()), Some(self), self)
+  val selfRef: Ref = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
   selfRef.initialize(this)
 
   val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
   /** References this actor owns. Starts with its self reference. */
-  var activeRefs: Set[Ref] = Set(selfRef)
+  val activeRefs: mutable.HashSet[Ref] = mutable.HashSet(selfRef)
   /**
    * References this actor has created for other actors.
    * Maps a key reference to a value set of references that were creating using that key. */
-  val createdUsing: mutable.Map[Ref, Seq[Ref]] = mutable.Map()
+  val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  var owners: Set[Ref] = Set(selfRef, creatorRef)
+  val owners: mutable.HashSet[Ref] = mutable.HashSet(selfRef, creatorRef)
   /** References to this actor discovered when they've been released. */
-  var releasedOwners: Set[Ref] = Set()
+  val releasedOwners: mutable.HashSet[Ref] = mutable.HashSet()
   /** Tracks how many messages are sent using each reference. */
-  val sentCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
+  val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
-  val recvCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
+  val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
 
   /** The set of refs that this actor owns that point to this actor itself */
-  def trivialActiveRefs: Set[Ref] = activeRefs filter { _.target == self }
+  def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }
   /** The set of refs that this actor owns that do not point to itself */
-  def nontrivialActiveRefs: Set[Ref] = activeRefs filter { _.target != self }
+  def nontrivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target != self }
 
   /**
    * Adds the given ref to this actor's collection of active refs
@@ -225,11 +218,11 @@ class State
    * @param releasing A collection of references.
    * @return A map from actors to the refs to them being released and refs to them that have been created for other actors.
    */
-  def release(releasing: Iterable[Ref]): Map[Name, (Seq[Ref], Seq[Ref])] = {
+  def release(releasing: Iterable[Ref]): mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = {
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
-    val targets: mutable.Map[Name, (Seq[Ref], Seq[Ref])] = mutable.Map()
+    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = mutable.HashMap()
     // process the references that are actually in the refs set
-    for (ref <- releasing if nontrivialActiveRefs contains ref) {
+    for (ref <- releasing if nontrivialActiveRefs exists (_ == ref)) {
       // remove each released reference's sent count
       sentCount remove ref.token.get
       // get the reference's target for grouping
@@ -251,7 +244,7 @@ class State
     // But do not deactivate the `self` ref, because it is always accessible from
     // the ActorContext.
     var refsToSelf: Seq[Ref] = Seq()
-    for (ref <- releasing if (trivialActiveRefs contains ref) && (ref != selfRef)) {
+    for (ref <- releasing if (trivialActiveRefs exists (_ == ref)) && (ref != selfRef)) {
       sentCount remove ref.token.get
       activeRefs -= ref
       refsToSelf :+= ref
@@ -268,7 +261,7 @@ class State
 
     // send the release message for each target actor
     // TODO: just leave this mutable?
-    targets.toMap
+    targets
   }
 
   /**
@@ -309,5 +302,11 @@ class State
       val count = sentCount getOrElse (token, 0)
       sentCount(token) = count + 1
     }
+  }
+
+  def newToken() = { 
+    val token = Token(self, count)
+    count += 1
+    token
   }
 }

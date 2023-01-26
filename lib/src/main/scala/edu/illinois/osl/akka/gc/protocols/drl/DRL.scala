@@ -1,6 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
+import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
 
@@ -119,7 +120,7 @@ object DRL extends Protocol {
     state: State
   ): Unit = {
 
-    val targets: Map[Name, (Seq[Ref], Seq[Ref])]
+    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])]
       = state.release(releasing)
 
     // send the release message for each target actor
