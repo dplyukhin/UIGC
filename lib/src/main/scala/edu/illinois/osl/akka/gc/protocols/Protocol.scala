@@ -12,7 +12,7 @@ object Protocol {
 }
 
 trait Protocol {
-  type GCMessage[+T]
+  type GCMessage[+T] <: Message
   type Refob[-T] <: RefobLike[T]
   type SpawnInfo
   type State
@@ -21,7 +21,7 @@ trait Protocol {
    * Transform a message from a non-GC actor so that it can be understood
    * by a GC actor. Necessarily, the recipient is a root actor.
    */
-  def rootMessage[T](payload: T): GCMessage[T]
+  def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T]
 
   /** 
    * Produces SpawnInfo indicating to the actor that it is a root actor.

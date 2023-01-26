@@ -15,8 +15,8 @@ object DRL extends Protocol {
     val creator: Option[Name]
   )
 
-  override def rootMessage[T](payload: T): GCMessage[T] =
-    AppMsg(payload, None, Nil)
+  override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
+    AppMsg(payload, None, refs.asInstanceOf[Iterable[Refob[Nothing]]])
 
   override def rootSpawnInfo(): SpawnInfo = 
     new SpawnInfo(None, None)

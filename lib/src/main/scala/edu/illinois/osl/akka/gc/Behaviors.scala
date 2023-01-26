@@ -4,6 +4,7 @@ import akka.actor.typed
 import akka.actor.typed.scaladsl
 import akka.actor.typed.BehaviorInterceptor.ReceiveTarget
 import akka.actor.typed.{BehaviorInterceptor, TypedActorContext}
+import edu.illinois.osl.akka.gc.interfaces.Message
 
 import scala.reflect.ClassTag
 
@@ -16,7 +17,7 @@ object Behaviors {
     (info: protocol.SpawnInfo) =>
       scaladsl.Behaviors.setup(context => factory(new ActorContext(context, info)))
 
-  private class RootAdapter[T](
+  private class RootAdapter[T <: Message](
     implicit interceptMessageClassTag: ClassTag[T]
   ) extends BehaviorInterceptor[T, protocol.GCMessage[T]] {
     def aroundReceive(
@@ -24,7 +25,7 @@ object Behaviors {
       msg: T, 
       target: ReceiveTarget[protocol.GCMessage[T]]
     ): Behavior[T] =
-      target.apply(ctx, protocol.rootMessage(msg))
+      target.apply(ctx, protocol.rootMessage(msg, msg.refs))
   }
 
   /**
@@ -34,7 +35,7 @@ object Behaviors {
    * automatically---as long as those descendants only interact with other
    * GC-aware actors.  
    */
-  def setupRoot[T](
+  def setupRoot[T <: Message](
     factory: ActorContext[T] => Behavior[T]
   )(implicit classTag: ClassTag[T]): typed.Behavior[T] = {
 
