@@ -4,6 +4,8 @@ import scala.annotation.unchecked.uncheckedVariance
 
 trait RefLike[-T] {
   def !(msg: T): Unit
-  def narrow[U <: T]: RefLike[U]
-  def unsafeUpcast[U >: T @uncheckedVariance]: RefLike[U]
+  def narrow[U <: T]: RefLike[U] =
+    this
+  def unsafeUpcast[U >: T @uncheckedVariance]: RefLike[U] =
+    this.asInstanceOf[RefLike[U]]
 }
