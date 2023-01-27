@@ -8,7 +8,7 @@ class Name(
   val id: Int, config: Configuration
 ) extends RefLike[Msg] {
   override def !(msg: Msg): Unit =
-    config.sentMessages = config.sentMessages :+ msg
+    config.mailbox(this).add(msg, config.currentSender)
 
   override def equals(that: Any): Boolean = that match {
     case that: Name => this.id == that.id
@@ -72,8 +72,10 @@ class Configuration {
   var children: mutable.Map[Name, Set[Name]] = mutable.Map()
   var watchedBy: mutable.Map[Name, Set[Name]] = mutable.Map()
   var terminated: mutable.Set[Name] = mutable.Set()
-  var sentMessages: List[Msg] = Nil
   var deactivated: mutable.Set[Ref] = mutable.Set()
+
+  // Ugly hack so that we can get FIFO delivery to work properly
+  var currentSender: Name = null
 
   //// Accessor methods
 
@@ -240,11 +242,12 @@ class Configuration {
       mailbox(child) = new FIFOMailbox()
 
     case Send(sender, recipientRef, targetRefs) =>
-      val senderState = context(sender)
+      val senderCtx = context(sender)
       // Create refs
       val createdRefs = for (target <- targetRefs) yield
-        protocol.createRef(target, recipient, senderState)
-      // add the message to the recipient's mailbox
+        protocol.createRef(target, recipientRef, senderCtx.gcState)
+      this.currentSender = sender
+      // send the message, as well as any control messages needed in the protocol
       recipientRef.tell(new Payload(), createdRefs)
 
     case DroppedMessage(recipient, msg) =>
