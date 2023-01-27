@@ -10,7 +10,7 @@ trait Mailbox[T] {
   /** The set of messages that can be delivered next */
   def next: Iterable[T]
   /** Pull the message out of the mailbox */
-  def deliverMessage(msg: T): T
+  def deliverMessage(msg: T): Unit
 }
 
 /**
@@ -38,7 +38,7 @@ class FIFOMailbox[T] extends Mailbox[T] {
       if messagesFrom(sender).nonEmpty
     } yield messagesFrom(sender).front
 
-  def deliverMessage(msg: T): T = {
+  def deliverMessage(msg: T): Unit = {
     val sender = for {
       sender <- messagesFrom.keys;
       if messagesFrom(sender).headOption == Some(msg)
@@ -54,12 +54,11 @@ class FIFOMailbox[T] extends Mailbox[T] {
     messagesFrom += (sender -> queue)
   }
 
-  def deliverFrom(sender: Name): T = {
+  def deliverFrom(sender: Name): Unit = {
     val mailbox = messagesFrom(sender)
-    val msg = mailbox.dequeue()
+    mailbox.dequeue()
     if (mailbox.isEmpty)
       messagesFrom -= sender
-    msg
   }
 
   override def toString: String = messagesFrom.values.flatten.toString

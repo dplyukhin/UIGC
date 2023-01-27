@@ -3,12 +3,13 @@ package edu.illinois.osl.akka.gc.properties.model
 import edu.illinois.osl.akka.gc.protocol
 import edu.illinois.osl.akka.gc.interfaces._
 import scala.collection.mutable
+import edu.illinois.osl.akka.gc.protocols.Protocol
 
 class Name(
   val id: Int, config: Configuration
 ) extends RefLike[Msg] {
   override def !(msg: Msg): Unit =
-    config.mailbox(this).add(msg, config.currentSender)
+    config.mailbox(this).add(msg, config.currentActor)
 
   override def equals(that: Any): Boolean = that match {
     case that: Name => this.id == that.id
@@ -35,6 +36,7 @@ class Context(
   val gcState: protocol.State = protocol.initState(this, spawnInfo)
   val selfRef: Ref = protocol.getSelfRef(gcState, this)
   var activeRefs: Set[Ref] = Set(selfRef)
+  var currentMessage: Option[Msg] = None
 
   def anyChildren: Boolean = 
     config.children(self).nonEmpty
@@ -79,7 +81,7 @@ class Configuration {
   var deactivated: mutable.Set[Ref] = mutable.Set()
 
   // Ugly hack so that we can get FIFO delivery to work properly
-  var currentSender: Name = null
+  var currentActor: Name = null
 
   //// Accessor methods
 
@@ -224,6 +226,7 @@ class Configuration {
 
   def transition(event: Event): Unit = event match {
     case Spawn(parent) => 
+      currentActor = parent
       val child = newName()
       var childContext: Context = null
       def spawn(info: protocol.SpawnInfo): Name = {
@@ -249,11 +252,11 @@ class Configuration {
       children(parent) += child
 
     case Send(sender, recipientRef, targetRefs) =>
+      currentActor = sender
       val senderCtx = context(sender)
       // Create refs
       val createdRefs = for (target <- targetRefs) yield
         protocol.createRef(target, recipientRef, senderCtx.gcState)
-      this.currentSender = sender
       // send the message, as well as any control messages needed in the protocol
       recipientRef.tell(new Payload(), createdRefs)
 
@@ -263,20 +266,50 @@ class Configuration {
       mailbox(recipient).deliverMessage(msg)
 
     case Receive(recipient, msg) =>
+      currentActor = recipient
       // take the next message from this sender out of the queue;
-      val message = mailbox(recipient).deliverMessage(msg)
-      val actorState = context(recipient)
+      mailbox(recipient).deliverMessage(msg)
+      val ctx = context(recipient)
       // handle the message
-      ???
+      val option = protocol.onMessage(msg, ctx.gcState, ctx)
+      option match {
+        case Some(_) =>
+          // start processing
+          ctx.busy = true
+          ctx.currentMessage = Some(msg)
+        case None =>
+          // immediately finish processing
+          ctx.busy = false
+          protocol.onIdle(msg, ctx.gcState, ctx) match {
+            case Protocol.ShouldContinue =>
+            case Protocol.ShouldStop =>
+              terminated.add(recipient)
+          }
+      }
 
     case BecomeIdle(actor) =>
-      context(actor).busy = false
+      currentActor = actor
+      val ctx = context(actor)
+      ctx.busy = false
+      // An actor might be busy because it's spawning a message, or because it
+      // was just spawned. We only call `onIdle` in the former case.
+      for (msg <- ctx.currentMessage)
+        protocol.onIdle(msg, ctx.gcState, ctx) match {
+          case Protocol.ShouldContinue =>
+          case Protocol.ShouldStop =>
+            terminated.add(actor)
+        }
+      ctx.currentMessage = None
 
     case Deactivate(actor, ref) =>
-      ???
+      currentActor = actor
+      val ctx = context(actor)
+      ctx.activeRefs -= ref
+      protocol.release(ref :: Nil, ctx.gcState)
 
     case Snapshot(actor) =>
-      ???
+      currentActor = actor
+      // do nothing for now
   }
 
 }
