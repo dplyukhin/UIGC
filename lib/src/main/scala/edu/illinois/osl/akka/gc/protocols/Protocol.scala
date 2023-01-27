@@ -5,10 +5,10 @@ import scala.annotation.unchecked.uncheckedVariance
 import edu.illinois.osl.akka.gc.interfaces._
 
 object Protocol {
-  sealed trait TerminationDecision[+Beh]
-  case object ShouldStop extends TerminationDecision[Nothing]
-  case object ShouldContinue extends TerminationDecision[Nothing]
-  case class ContinueWith[Beh](beh: Beh) extends TerminationDecision[Beh]
+  sealed trait TerminationDecision
+  case object ShouldStop extends TerminationDecision
+  case object ShouldContinue extends TerminationDecision
+  case object Unhandled extends TerminationDecision
 }
 
 trait Protocol {
@@ -44,19 +44,29 @@ trait Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S]
 
-  def onMessage[T, Beh](
+  def onMessage[T](
     msg: GCMessage[T],
-    uponMessage: T => Beh,
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision[Beh]
+  ): Option[T]
 
-  def onSignal[T, Beh](
-    signal: Signal, 
-    uponSignal: Signal => Beh,
+  def onIdle[T](
+    msg: GCMessage[T],
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision[Beh]
+  ): Protocol.TerminationDecision
+
+  def preSignal[T](
+    signal: Signal, 
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit
+
+  def postSignal[T](
+    signal: Signal, 
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision
 
   def createRef[S](
     target: Refob[S], owner: Refob[Nothing],

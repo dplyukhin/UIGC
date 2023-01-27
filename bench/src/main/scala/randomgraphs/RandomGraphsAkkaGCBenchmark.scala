@@ -110,7 +110,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
       super.ping(ref)
     }
 
-    override def uponMessage(msg: Msg): Behavior[Msg] = {
+    override def onMessage(msg: Msg): Behavior[Msg] = {
       if (RandomGraphsConfig.ShouldLog) 
         println(s"${context.name} got message: $msg")
 
@@ -126,7 +126,7 @@ object RandomGraphsAkkaGCActorBenchmark extends App with Benchmark {
       }
     }
 
-    override def uponSignal: PartialFunction[Signal,Behavior[Msg]] = {
+    override def onSignal: PartialFunction[Signal,Behavior[Msg]] = {
       case PostStop =>
         if (RandomGraphsConfig.LogStats) 
           statistics.terminatedCount.incrementAndGet()

@@ -74,7 +74,7 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     var actorA: ActorRef[TestMessage] = _
     var actorB: ActorRef[TestMessage] = _
     var actorC: ActorRef[TestMessage] = _
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Init =>
           actorA = context.spawn(Parent(), "parent")
@@ -108,7 +108,7 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     var actorC: ActorRef[TestMessage] = context.spawn(Child(), "child2")
     probe.ref ! Spawned(actorB.rawActorRef)
     probe.ref ! Spawned(actorC.rawActorRef)
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case GetRef(root) =>
           root ! GetRef(context.createRef(actorB, root))
@@ -118,19 +118,19 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
         this
     }
   }
   class Child(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
         this

@@ -49,36 +49,40 @@ object DRL extends Protocol {
     ref
   }
 
-  override def onMessage[T, Beh](
+  override def onMessage[T](
     msg: GCMessage[T],
-    uponMessage: T => Beh,
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision[Beh] =
+  ): Option[T] =
     msg match {
-      case ReleaseMsg(releasing, created) =>
-        state.handleRelease(releasing, created)
-        if (tryTerminate(state, ctx))
-          Protocol.ShouldStop
-        else 
-          Protocol.ShouldContinue
       case AppMsg(payload, token, refs) =>
         refs.foreach(ref => ref.initialize(state))
         state.handleMessage(refs, token)
-        val beh = uponMessage(payload)
-        Protocol.ContinueWith(beh)
+        Some(payload)
+      case ReleaseMsg(releasing, created) =>
+        state.handleRelease(releasing, created)
+        None
       case SelfCheck =>
         state.handleSelfCheck()
-        if (tryTerminate(state, ctx))
-          Protocol.ShouldStop
-        else 
-          Protocol.ShouldContinue
+        None
       // case TakeSnapshot =>
       //   // snapshotAggregator.put(context.self.target, context.snapshot())
       //   context.snapshot()
-      //   AkkaBehaviors.same
+      //   None
+      case Kill =>
+        None
+    }
+
+  override def onIdle[T](
+    msg: GCMessage[T],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision =
+    msg match {
       case Kill =>
         Protocol.ShouldStop
+      case _ =>
+        tryTerminate(state, ctx)
     }
 
   /**
@@ -88,22 +92,11 @@ object DRL extends Protocol {
   def tryTerminate[T](
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Boolean = {
-    if (ctx.children.nonEmpty)
-      return false
-
-    state.tryTerminate() match {
-      case State.NotTerminated =>
-        false
-
-      case State.RemindMeLater =>
-        ctx.self ! SelfCheck
-        false
-
-      case State.AmTerminated =>
-        releaseEverything(state)
-        true
-    }
+  ): Protocol.TerminationDecision = {
+    if (ctx.anyChildren || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
+      Protocol.ShouldContinue
+    else
+      Protocol.ShouldStop
   }
 
   override def createRef[S](
@@ -131,29 +124,21 @@ object DRL extends Protocol {
 
   override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
 
-  override def onSignal[T, Beh](
+  override def preSignal[T](
     signal: Signal, 
-    uponSignal: Signal => Beh,
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision[Beh] =
-    signal match {
-      case PostStop =>
-        // snapshotAggregator.unregister(context.self.target)
-        // Forward the signal to the user level if there's a handler; else do nothing.
-        val beh = uponSignal(signal)
-        Protocol.ContinueWith(beh)
+  ): Unit = ()
 
+  override def postSignal[T](
+    signal: Signal, 
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision =
+    signal match {
       case signal: Terminated =>
-        // Try handling the termination signal first
-        val beh = uponSignal(signal)
-        // Now see if we can terminate
-        if (tryTerminate(state, ctx))  
-          Protocol.ShouldStop
-        else
-          Protocol.ContinueWith(beh)
+        tryTerminate(state, ctx)
       case signal =>
-        val beh = uponSignal(signal)
-        Protocol.ContinueWith(beh)
+        Protocol.Unhandled
     }
 }

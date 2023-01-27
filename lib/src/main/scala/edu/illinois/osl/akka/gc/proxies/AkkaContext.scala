@@ -5,6 +5,6 @@ import edu.illinois.osl.akka.gc.interfaces._
 
 case class AkkaContext[T](ctx: ActorContext[T]) extends ContextLike[T] {
   override def self: AkkaRef[T] = AkkaRef(ctx.self)
-  override def children: Iterable[AkkaRef[Nothing]] = LazyList.from(ctx.children).map(AkkaRef[Nothing](_))
+  override def anyChildren: Boolean = ctx.children.nonEmpty
   override def watch[U](other: RefLike[U]): Unit = ctx.watch(other.asInstanceOf[AkkaRef[U]].ref)
 }

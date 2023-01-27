@@ -36,8 +36,8 @@ class Context(
   val selfRef: Ref = protocol.getSelfRef(gcState, this)
   var activeRefs: Set[Ref] = Set(selfRef)
 
-  def children: Iterable[RefLike[Nothing]] = 
-    config.children(self)
+  def anyChildren: Boolean = 
+    config.children(self).nonEmpty
   def watch[U](_other: RefLike[U]): Unit = {
     val other = _other.asInstanceOf[Name]
     config.watchers(other) = 
@@ -61,6 +61,8 @@ object Configuration {
     )
     config.context(actor) = ctx
     config.mailbox(actor) = new FIFOMailbox[Msg]()
+    config.children(actor) = Set()
+    config.watchers(actor) = Set()
     config
   }
 }
@@ -242,8 +244,9 @@ class Configuration {
       // update the configuration
       context(child) = childContext
       mailbox(child) = new FIFOMailbox()
-      children(parent) = children.getOrElse(parent, Set[Name]()) + child
-      watchers(child) = Set(parent)
+      children(child) = Set()
+      watchers(child) = Set()
+      children(parent) += child
 
     case Send(sender, recipientRef, targetRefs) =>
       val senderCtx = context(sender)

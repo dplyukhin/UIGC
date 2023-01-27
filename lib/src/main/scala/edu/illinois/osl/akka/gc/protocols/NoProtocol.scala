@@ -48,21 +48,32 @@ object NoProtocol extends Protocol {
   ): Refob[S] =
     Refob(factory(()))
 
-  def onMessage[T, Beh](
+  def onMessage[T](
     msg: GCMessage[T],
-    uponMessage: T => Beh,
     state: State,
     ctx: ContextLike[GCMessage[T]],
-  ): Protocol.TerminationDecision[Beh] =
-    Protocol.ContinueWith(uponMessage(msg.payload))
+  ): Option[T] =
+    Some(msg.payload)
 
-  def onSignal[T, Beh](
+  def onIdle[T](
+    msg: GCMessage[T],
+    state: State,
+    ctx: ContextLike[GCMessage[T]],
+  ): Protocol.TerminationDecision =
+    Protocol.ShouldContinue 
+
+  def preSignal[T](
     signal: Signal, 
-    uponSignal: Signal => Beh,
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision[Beh] =
-    Protocol.ContinueWith(uponSignal(signal))
+  ): Unit = ()
+
+  def postSignal[T](
+    signal: Signal, 
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision =
+    Protocol.ShouldContinue
 
   def createRef[S](
     target: Refob[S], owner: Refob[Nothing],

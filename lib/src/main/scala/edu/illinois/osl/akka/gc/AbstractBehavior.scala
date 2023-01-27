@@ -1,36 +1,45 @@
 package edu.illinois.osl.akka.gc
 
-import akka.actor.typed.{PostStop, Terminated, Signal}
+import akka.actor.typed.{PostStop, Terminated, Signal, ExtensibleBehavior, TypedActorContext}
 import akka.actor.typed.scaladsl
 import edu.illinois.osl.akka.gc.protocols.Protocol
 
 abstract class AbstractBehavior[T](context: ActorContext[T])
-  extends scaladsl.AbstractBehavior[protocol.GCMessage[T]](context.rawContext) {
+  extends ExtensibleBehavior[protocol.GCMessage[T]] {
 
-  def uponMessage(msg: T): Behavior[T]
+  // User API
+  def onMessage(msg: T): Behavior[T]
+  def onSignal: PartialFunction[Signal, Behavior[T]] = PartialFunction.empty
 
-  final def onMessage(msg: protocol.GCMessage[T]): Behavior[T] = {
-    val decision = 
-      protocol.onMessage(msg, this.uponMessage, context.state, context.proxyContext)
-    decision match {
+  override final def receive(ctx: TypedActorContext[protocol.GCMessage[T]], msg: protocol.GCMessage[T]): Behavior[T] = {
+    val appMsg = protocol.onMessage(msg, context.state, context.proxyContext)
+
+    val result = appMsg match {
+      case Some(msg) => onMessage(msg)
+      case None => scaladsl.Behaviors.same[protocol.GCMessage[T]]
+    }
+
+    protocol.onIdle(msg, context.state, context.proxyContext) match {
       case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
-      case _: Protocol.ShouldContinue.type => scaladsl.Behaviors.same
-      case Protocol.ContinueWith(b) => b
+      case _: Protocol.ShouldContinue.type => result
     }
   }
 
-  def uponSignal: PartialFunction[Signal, Behavior[T]] = Map.empty
+  override final def receiveSignal(ctx: TypedActorContext[protocol.GCMessage[T]], msg: Signal): Behavior[T] = {
+    protocol.preSignal(msg, context.state, context.proxyContext)
 
-  final override def onSignal: PartialFunction[Signal, Behavior[T]] = {
-    case signal => 
-      val handler = (signal: Signal) =>
-        this.uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => scaladsl.Behaviors.same)
-      val decision = 
-        protocol.onSignal(signal, handler, context.state, context.proxyContext)
-      decision match {
-        case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
-        case _: Protocol.ShouldContinue.type => scaladsl.Behaviors.same
-        case Protocol.ContinueWith(b) => b
-      }
+    val result =
+      onSignal.applyOrElse(msg, { case _ => scaladsl.Behaviors.unhandled }: PartialFunction[Signal, Behavior[T]]) 
+
+    protocol.postSignal(msg, context.state, context.proxyContext) match {
+      case _: Protocol.Unhandled.type => result
+      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Protocol.ShouldContinue.type => 
+        if (result == scaladsl.Behaviors.unhandled)
+          scaladsl.Behaviors.same
+        else 
+          result
+    }
   }
+
 }

@@ -77,7 +77,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   class ActorA(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
     var actorB: ActorRef[TestMessage] = _
     var actorC: ActorRef[TestMessage] = _
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Init =>
           actorB = context.spawn(ActorB(), "actorB")
@@ -106,7 +106,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   class ActorB(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
     var actorC: ActorRef[TestMessage]= _
     probe.ref ! Spawned(context.name)
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case GetRef(ref) =>
           actorC = ref
@@ -120,7 +120,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
         this
@@ -128,7 +128,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
   class ActorC(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
     probe.ref ! Spawned(context.name)
-    override def uponMessage(msg: TestMessage): Behavior[TestMessage] = {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Hello =>
           probe.ref ! Hello
@@ -136,7 +136,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
         this

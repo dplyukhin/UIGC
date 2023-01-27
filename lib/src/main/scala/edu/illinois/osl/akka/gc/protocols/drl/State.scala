@@ -2,20 +2,13 @@ package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
-
-object State {
-  sealed trait TerminationStatus
-  final case object NotTerminated extends TerminationStatus
-  final case object RemindMeLater extends TerminationStatus
-  final case object AmTerminated extends TerminationStatus
-}
+import edu.illinois.osl.akka.gc.protocols.Protocol
 
 class State
 (
   val self: Name,
   val spawnInfo: DRL.SpawnInfo,
 ) {
-  import State._
 
   var count: Int = 1
   
@@ -120,8 +113,7 @@ class State
   /** Assuming this actor has no inverse acquaintances besides itself, this function
    * determines whether the actor has any undelivered messages to itself.
    */
-  // TODO Can we test that this is accurate with Scalacheck?
-  private def anyPendingSelfMessages: Boolean = {
+  def anyPendingSelfMessages: Boolean = {
     // Actors can send themselves three kinds of messages:
     // - App messages
     // - Release messages
@@ -166,27 +158,6 @@ class State
         case Some(owner) => owner != self
         case None => true // In this case, an external actor has a reference to it
       }
-    }
-  }
-
-  /** Check whether this actor is ready to self-terminate due to having no inverse acquaintances and no
-   * pending messages; such an actor will never again receive a message. */
-  def tryTerminate(): TerminationStatus = {
-    if (anyInverseAcquaintances) {
-      NotTerminated
-    }
-    // No other actor has a reference to this one.
-    // Check if there are any pending messages from this actor to itself.
-    else if (anyPendingSelfMessages) {
-      // Remind this actor to try and terminate after all those messages have been delivered.
-      // This is done by sending self a SelfCheck message, so we increment the message send count.
-      incSentCount(selfRef.token)
-      RemindMeLater
-    }
-    // There are no messages to this actor remaining.
-    // Therefore it should begin the termination process; if it has any references, they should be deactivated.
-    else {
-      AmTerminated
     }
   }
 
