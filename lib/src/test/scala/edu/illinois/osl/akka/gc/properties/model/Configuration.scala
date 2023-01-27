@@ -65,19 +65,20 @@ object Configuration {
     config
   }
 
-  def execute(config: Configuration, execution: Execution): Configuration = {
+  def execute(execution: Execution): Configuration = {
+    val config = initialConfig()
+    currentConfig = config // FIXME ugly hack
     for (event <- execution) {
       config.transition(event)
     }
     config
   }
 
-  def check(depth: Int): Unit = {
+  def checkDepthFirst(depth: Int)(property: (Configuration, Execution) => Unit): Unit = {
     var total = 0
     def go(execution: Execution): Unit = {
-      val config = initialConfig()
-      currentConfig = config // FIXME ugly hack
-      val nextConfig = execute(config, execution)
+      val nextConfig = execute(execution)
+      property(nextConfig, execution)
       total += 1
       if (execution.length < depth)
         for (event <- nextConfig.legalEvents)
@@ -85,6 +86,23 @@ object Configuration {
     }
     go(Nil)
     println(s"Checked $total executions")
+  }
+
+  def check(depth: Int)(property: (Configuration, Execution) => Unit): Unit = {
+    var total = 0
+    def go(executions: List[Execution], currentDepth: Int = 1): Unit = {
+      val nextDepth = for {
+          execution <- executions
+          config = execute(execution)
+          _ = property(config, execution)
+          choice <- config.legalEvents
+        } yield 
+          execution :+ choice
+      println(s"Checked ${executions.length} executions of depth $currentDepth")
+      if (currentDepth < depth)
+        go(nextDepth, currentDepth + 1)
+    }
+    go(initialConfig().legalEvents.map(List(_)))
   }
 }
 
@@ -190,55 +208,55 @@ class Configuration {
     new Name(counter-1)
   }
 
-  def legalSpawnEvents: Iterable[Spawn] =
+  def legalSpawnEvents: List[Spawn] =
     for {
-      parent <- busyActors
+      parent <- busyActors.toList
     } yield Spawn(parent)
 
-  def legalSendEvents: Iterable[Send] = {
+  def legalSendEvents: List[Send] = {
     // The number of possible send events is unbounded; pick only the ones that 
     // send up to 3 refs in a message.
-    def powerset(n: Int, refs: List[Ref]): List[List[Ref]] =
+    def powerset[T](n: Int, refs: List[T]): List[List[T]] =
       refs match {
-        case Nil => Nil
-        case ref :: refs if n == 0 => Nil
+        case Nil => List(Nil)
+        case ref :: refs if n == 0 => List(Nil)
         case ref :: refs =>
           powerset(n, refs) ++
           powerset(n-1, refs).map(ref :: _)
       }
 
     for {
-      sender <- busyActors;
+      sender <- busyActors.toList;
       recipient <- context(sender).activeRefs;
       targetRefs <- powerset(3, context(sender).activeRefs.toList)
     } yield Send(sender, recipient, targetRefs)
   }
 
-  def legalReceiveEvents: Iterable[Receive] =
+  def legalReceiveEvents: List[Receive] =
     for {
-      recipient <- idleActors;
+      recipient <- idleActors.toList;
       msg <- mailbox(recipient).next
      } yield Receive(recipient, msg)
 
-  def legalBecomeIdleEvents: Iterable[BecomeIdle] =
-    for (actor <- busyActors) yield BecomeIdle(actor)
+  def legalBecomeIdleEvents: List[BecomeIdle] =
+    for (actor <- busyActors.toList) yield BecomeIdle(actor)
 
-  def legalDeactivateEvents: Iterable[Deactivate] =
+  def legalDeactivateEvents: List[Deactivate] =
     for {
-      actor <- busyActors;
+      actor <- busyActors.toList;
       ref <- context(actor).activeRefs
     } yield Deactivate(actor, ref)
 
-  def legalSnapshotEvents: Iterable[Snapshot] =
-    for (actor <- idleActors) yield Snapshot(actor)
+  def legalSnapshotEvents: List[Snapshot] =
+    for (actor <- idleActors.toList) yield Snapshot(actor)
 
-  def legalDroppedMessageEvents: Iterable[DroppedMessage] =
+  def legalDroppedMessageEvents: List[DroppedMessage] =
     for {
-      recipient <- idleActors;
+      recipient <- idleActors.toList;
       msg <- mailbox(recipient).next
     } yield DroppedMessage(recipient, msg)
 
-  def legalEvents: Iterable[Event] =
+  def legalEvents: List[Event] =
     legalSpawnEvents ++ legalSendEvents ++ legalReceiveEvents ++
     legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents ++
     legalDroppedMessageEvents 
