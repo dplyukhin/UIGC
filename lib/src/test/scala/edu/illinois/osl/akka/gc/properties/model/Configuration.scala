@@ -38,8 +38,10 @@ class Context(
 
   def children: Iterable[RefLike[Nothing]] = 
     config.children(self)
-  def watch[U](other: RefLike[U]): Unit = {
-    config.watchedBy(self) = config.watchedBy(self) + other.asInstanceOf[Name]
+  def watch[U](_other: RefLike[U]): Unit = {
+    val other = _other.asInstanceOf[Name]
+    config.watchers(other) = 
+      config.watchers.getOrElse(other, Set[Name]()) + self
   }
 }
 
@@ -70,7 +72,7 @@ class Configuration {
   var context: mutable.Map[Name, Context] = mutable.Map()
   var mailbox: mutable.Map[Name, Mailbox[Msg]] = mutable.Map()
   var children: mutable.Map[Name, Set[Name]] = mutable.Map()
-  var watchedBy: mutable.Map[Name, Set[Name]] = mutable.Map()
+  var watchers: mutable.Map[Name, Set[Name]] = mutable.Map()
   var terminated: mutable.Set[Name] = mutable.Set()
   var deactivated: mutable.Set[Ref] = mutable.Set()
 
@@ -240,6 +242,8 @@ class Configuration {
       // update the configuration
       context(child) = childContext
       mailbox(child) = new FIFOMailbox()
+      children(parent) = children.getOrElse(parent, Set[Name]()) + child
+      watchers(child) = Set(parent)
 
     case Send(sender, recipientRef, targetRefs) =>
       val senderCtx = context(sender)
