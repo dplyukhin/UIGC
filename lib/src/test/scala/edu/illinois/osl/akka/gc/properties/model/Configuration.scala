@@ -5,15 +5,10 @@ import edu.illinois.osl.akka.gc.interfaces._
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.protocols.Protocol
 
-class Name(
-  val id: Int, config: Configuration
-) extends RefLike[Msg] {
-  override def !(msg: Msg): Unit =
+case class Name(val id: Int) extends RefLike[Msg] {
+  override def !(msg: Msg): Unit = {
+    val config = Configuration.currentConfig  // FIXME ugly hack
     config.mailbox(this).add(msg, config.currentActor)
-
-  override def equals(that: Any): Boolean = that match {
-    case that: Name => this.id == that.id
-    case _ => false
   }
 
   override def toString(): String = {
@@ -54,6 +49,8 @@ object Configuration {
   case object Deactivated extends RefobStatus
   case object Released extends RefobStatus
 
+  var currentConfig: Configuration = null
+
   def initialConfig(): Configuration = {
     val config = new Configuration()
     val actor = config.newName()
@@ -66,6 +63,28 @@ object Configuration {
     config.children(actor) = Set()
     config.watchers(actor) = Set()
     config
+  }
+
+  def execute(config: Configuration, execution: Execution): Configuration = {
+    for (event <- execution) {
+      config.transition(event)
+    }
+    config
+  }
+
+  def check(depth: Int): Unit = {
+    var total = 0
+    def go(execution: Execution): Unit = {
+      val config = initialConfig()
+      currentConfig = config // FIXME ugly hack
+      val nextConfig = execute(config, execution)
+      total += 1
+      if (execution.length < depth)
+        for (event <- nextConfig.legalEvents)
+          go(execution :+ event)
+    }
+    go(Nil)
+    println(s"Checked $total executions")
   }
 }
 
@@ -168,7 +187,7 @@ class Configuration {
 
   def newName(): Name = {
     counter += 1
-    new Name(counter, this)
+    new Name(counter-1)
   }
 
   def legalSpawnEvents: Iterable[Spawn] =
@@ -284,6 +303,7 @@ class Configuration {
             case Protocol.ShouldContinue =>
             case Protocol.ShouldStop =>
               terminated.add(recipient)
+              // TODO Trigger watchers when actors terminate (here and elsewhere)
           }
       }
 
@@ -298,6 +318,7 @@ class Configuration {
           case Protocol.ShouldContinue =>
           case Protocol.ShouldStop =>
             terminated.add(actor)
+            // TODO Trigger watchers when actors terminate (here and elsewhere)
         }
       ctx.currentMessage = None
 
