@@ -6,4 +6,5 @@ import edu.illinois.osl.akka.gc.interfaces.RefLike
 
 case class AkkaRef[-T](ref: ActorRef[T]) extends RefLike[T] {
   override def !(msg: T): Unit = ref ! msg
+  override def pretty: String = ref.toString()
 }

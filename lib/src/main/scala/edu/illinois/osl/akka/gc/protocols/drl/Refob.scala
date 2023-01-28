@@ -9,7 +9,9 @@ import scala.annotation.unchecked.uncheckedVariance
  * @param ref The [[AkkaActorRef]] of the creator of the token
  * @param n A sequence number, unique for the creating actor
  */
-case class Token(ref: Name, n: Int)
+case class Token(ref: Name, n: Int) extends Pretty {
+  def pretty: String = s"Token#${Math.floorMod(this.hashCode(), 1000)}"
+}
 
 /**
  * A version of [[AkkaActorRef]] used to send messages to actors with GC enabled. It
@@ -35,8 +37,8 @@ case class Refob[-T](
     state.get.incSentCount(token)
   }
 
-  override def toString: String = {
-    f"ActorRef#${token.hashCode()}: ${owner.get}->${target}"
+  override def pretty: String = {
+    f"<Refob#${Math.floorMod(token.hashCode(), 1000)}: ${owner.get.pretty} -> ${target.pretty}>"
   }
 
 }

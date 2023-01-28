@@ -5,19 +5,22 @@ import edu.illinois.osl.akka.gc.interfaces._
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.protocols.Protocol
 
-case class Name(val id: Int) extends RefLike[Msg] {
+case class Name(val id: Int) extends RefLike[Msg] with Pretty {
   override def !(msg: Msg): Unit = {
     val config = Configuration.currentConfig  // FIXME ugly hack
-    config.mailbox(this).add(msg, config.currentActor)
+    val sender = config.currentActor
+    val recipient = this
+    config.log = config.log :+ Configuration.LogSend(sender, recipient, msg)
+    config.mailbox(recipient).add(msg, sender)
   }
 
-  //override def toString(): String = {
-  //  val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  //  if (id >= 0 && id < 26) 
-  //    return alpha(id).toString()
-  //  else
-  //    return s"A${id}" 
-  //}
+  override def pretty: String = {
+    val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if (id >= 0 && id < 26) 
+      return alpha(id).toString()
+    else
+      return s"A${id}" 
+  }
 }
 
 class Context(
@@ -43,12 +46,6 @@ class Context(
 }
 
 object Configuration {
-  sealed trait RefobStatus 
-  case object Pending extends RefobStatus
-  case object Active extends RefobStatus
-  case object Deactivated extends RefobStatus
-  case object Released extends RefobStatus
-
   var currentConfig: Configuration = null
 
   def initialConfig(): Configuration = {
@@ -104,6 +101,32 @@ object Configuration {
     }
     go(initialConfig().legalEvents.map(List(_)))
   }
+
+  sealed trait LogEvent extends Pretty
+  case class LogSpawn(parent: Name, child: Name) extends LogEvent {
+    def pretty: String = s"SPAWN: ${parent.pretty} spawns ${child.pretty}"
+  }
+  case class LogSend(sender: Name, recipient: Name, msg: Msg) extends LogEvent {
+    def pretty: String = s"SEND: ${sender.pretty} sends ${msg.pretty} to ${recipient.pretty}"
+  }
+  case class LogReceive(recipient: Name, msg: Msg) extends LogEvent {
+    def pretty: String = s"RECEIVE: ${recipient.pretty} receives ${msg.pretty}"
+  }
+  case class LogIdle(actor: Name) extends LogEvent {
+    def pretty: String = s"IDLE: ${actor.pretty} goes idle"
+  }
+  case class LogDeactivate(actor: Name, ref: Ref) extends LogEvent {
+    def pretty: String = s"DEACTIVATE: ${actor.pretty} deactivates ${ref.pretty}"
+  }
+  case class LogSnapshot(actor: Name, snapshot: Pretty) extends LogEvent {
+    def pretty: String = s"SNAPSHOT: ${actor.pretty} records snapshot: ${snapshot.pretty}"
+  }
+  case class LogDroppedMessage(recipient: Name, msg: Msg) extends LogEvent {
+    def pretty: String = s"DROP: Message ${msg.pretty} directed to ${recipient.pretty} is dropped"
+  }
+  case class LogTerminated(actor: Name, state: protocol.State, mailbox: Mailbox[Msg]) extends LogEvent {
+    def pretty: String = s"TERMINATE: ${actor.pretty} terminates.\n\tMailbox: ${mailbox.pretty}.\n\tState: ${state.pretty}"
+  }
 }
 
 class Configuration {
@@ -115,10 +138,14 @@ class Configuration {
   var children: mutable.Map[Name, Set[Name]] = mutable.Map()
   var watchers: mutable.Map[Name, Set[Name]] = mutable.Map()
   var terminated: mutable.Set[Name] = mutable.Set()
-  var deactivated: mutable.Set[Ref] = mutable.Set()
 
   // Ugly hack so that we can get FIFO delivery to work properly
   var currentActor: Name = null
+
+  // A log of events that triggered the execution; useful for replay
+  var execution: List[Event] = Nil
+  // A more detailed human-readable log; useful for inspection
+  var log: List[LogEvent] = Nil
 
   //// Accessor methods
 
@@ -144,7 +171,7 @@ class Configuration {
   def garbage(actor: Name): Boolean =
     !terminated(actor) && canPotentiallyReach(actor).forall(blocked)
 
-  def aliveActors: Iterable[Name] = context.keys
+  def aliveActors: Iterable[Name] = context.keys.filter(actor => !terminated.contains(actor))
   def idleActors: Iterable[Name] = aliveActors.filter(idle)
   def busyActors: Iterable[Name] = aliveActors.filter(busy)
   def blockedActors: Iterable[Name] = aliveActors.filter(blocked)
@@ -258,99 +285,114 @@ class Configuration {
 
   def legalEvents: List[Event] =
     legalSpawnEvents ++ legalSendEvents ++ legalReceiveEvents ++
-    legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents //++ legalDroppedMessageEvents 
+    legalBecomeIdleEvents ++ legalDeactivateEvents // ++ legalSnapshotEvents ++ legalDroppedMessageEvents 
 
-  def transition(event: Event): Unit = event match {
-    case Spawn(parent) => 
-      currentActor = parent
-      val child = newName()
-      var childContext: Context = null
-      def spawn(info: protocol.SpawnInfo): Name = {
-        childContext = new Context(
-          child, this, info,
-          busy = true, root = false, 
+  def transition(event: Event): Unit = {
+    execution = execution :+ event
+
+    event match {
+      case Spawn(parent) => 
+        currentActor = parent
+        val child = newName()
+        var childContext: Context = null
+        def spawn(info: protocol.SpawnInfo): Name = {
+          childContext = new Context(
+            child, this, info,
+            busy = true, root = false, 
+          )
+          child
+        }
+        // create child's state
+        val refob = protocol.spawnImpl(
+          spawn,
+          context(parent).gcState,
+          context(parent)
         )
-        child
-      }
-      // create child's state
-      val refob = protocol.spawnImpl(
-        spawn,
-        context(parent).gcState,
-        context(parent)
-      )
-      // add the new active ref to the parent's state
-      context(parent).activeRefs += refob
-      // update the configuration
-      context(child) = childContext
-      mailbox(child) = new FIFOMailbox()
-      children(child) = Set()
-      watchers(child) = Set()
-      children(parent) += child
+        // add the new active ref to the parent's state
+        context(parent).activeRefs += refob
+        // update the configuration
+        context(child) = childContext
+        mailbox(child) = new FIFOMailbox()
+        children(child) = Set()
+        watchers(child) = Set()
+        children(parent) += child
+        log = log :+ LogSpawn(parent, child)
 
-    case Send(sender, recipientRef, targetRefs) =>
-      currentActor = sender
-      val senderCtx = context(sender)
-      val senderState = context(sender).gcState
-      // Create refs
-      val createdRefs = for (target <- targetRefs) yield
-        protocol.createRef(target, recipientRef, senderState)
-      // send the message, as well as any control messages needed in the protocol
-      // re-initialize the refob, because we may be replaying an execution with fresh refobs.
-      protocol.initializeRefob(recipientRef, senderState, senderCtx)
-      recipientRef.tell(new Payload(), createdRefs)
+      case Send(sender, recipientRef, targetRefs) =>
+        currentActor = sender
+        val senderCtx = context(sender)
+        val senderState = context(sender).gcState
+        // Create refs
+        val createdRefs = for (target <- targetRefs) yield
+          protocol.createRef(target, recipientRef, senderState)
+        // send the message, as well as any control messages needed in the protocol
+        // re-initialize the refob, because we may be replaying an execution with fresh refobs.
+        protocol.initializeRefob(recipientRef, senderState, senderCtx)
+        recipientRef.tell(new Payload(), createdRefs)
 
-    case DroppedMessage(recipient, msg) =>
-      // take the next message from this sender out of the queue;
-      // don't do anything with it
-      mailbox(recipient).deliverMessage(msg)
+      case DroppedMessage(recipient, msg) =>
+        log = log :+ LogDroppedMessage(recipient, msg)
+        // take the next message from this sender out of the queue;
+        // don't do anything with it
+        mailbox(recipient).deliverMessage(msg)
 
-    case Receive(recipient, msg) =>
-      currentActor = recipient
-      // take the next message from this sender out of the queue;
-      mailbox(recipient).deliverMessage(msg)
-      val ctx = context(recipient)
-      // handle the message
-      val option = protocol.onMessage(msg, ctx.gcState, ctx)
-      option match {
-        case Some(_) =>
-          // start processing
-          ctx.busy = true
-          ctx.currentMessage = Some(msg)
-        case None =>
-          // immediately finish processing
-          ctx.busy = false
-          protocol.onIdle(msg, ctx.gcState, ctx) match {
+      case Receive(recipient, msg) =>
+        log = log :+ LogReceive(recipient, msg)
+        currentActor = recipient
+        // take the next message from this sender out of the queue;
+        mailbox(recipient).deliverMessage(msg)
+        val ctx = context(recipient)
+        val state = context(recipient).gcState
+        // handle the message
+        val option = protocol.onMessage(msg, state, ctx)
+        option match {
+          case Some(_) =>
+            // start processing
+            ctx.busy = true
+            ctx.currentMessage = Some(msg)
+          case None =>
+            // immediately finish processing
+            ctx.busy = false
+            protocol.onIdle(msg, state, ctx) match {
+              case Protocol.ShouldContinue =>
+              case Protocol.ShouldStop =>
+                terminated.add(recipient)
+                log = log :+ LogTerminated(recipient, state, mailbox(recipient))
+                // TODO Trigger watchers when actors terminate (here and elsewhere)
+            }
+        }
+
+      case BecomeIdle(actor) =>
+        log = log :+ LogIdle(actor)
+        currentActor = actor
+        val ctx = context(actor)
+        val state = context(actor).gcState
+        ctx.busy = false
+        // An actor might be busy because it's spawning a message, or because it
+        // was just spawned. We only call `onIdle` in the former case.
+        for (msg <- ctx.currentMessage)
+          protocol.onIdle(msg, state, ctx) match {
             case Protocol.ShouldContinue =>
             case Protocol.ShouldStop =>
-              terminated.add(recipient)
+              terminated.add(actor)
+              log = log :+ LogTerminated(actor, state, mailbox(actor))
               // TODO Trigger watchers when actors terminate (here and elsewhere)
           }
-      }
+        ctx.currentMessage = None
 
-    case BecomeIdle(actor) =>
-      currentActor = actor
-      val ctx = context(actor)
-      ctx.busy = false
-      // An actor might be busy because it's spawning a message, or because it
-      // was just spawned. We only call `onIdle` in the former case.
-      for (msg <- ctx.currentMessage)
-        protocol.onIdle(msg, ctx.gcState, ctx) match {
-          case Protocol.ShouldContinue =>
-          case Protocol.ShouldStop =>
-            terminated.add(actor)
-            // TODO Trigger watchers when actors terminate (here and elsewhere)
-        }
-      ctx.currentMessage = None
+      case Deactivate(actor, ref) =>
+        log = log :+ LogDeactivate(actor, ref)
+        currentActor = actor
+        val ctx = context(actor)
+        ctx.activeRefs -= ref
+        protocol.release(ref :: Nil, ctx.gcState)
 
-    case Deactivate(actor, ref) =>
-      currentActor = actor
-      val ctx = context(actor)
-      ctx.activeRefs -= ref
-      protocol.release(ref :: Nil, ctx.gcState)
+      case Snapshot(actor) =>
+        log = log :+ LogSnapshot(actor, ???)
+        currentActor = actor
+        // do nothing for now
+    }
 
-    case Snapshot(actor) =>
-      currentActor = actor
-      // do nothing for now
   }
 
 }

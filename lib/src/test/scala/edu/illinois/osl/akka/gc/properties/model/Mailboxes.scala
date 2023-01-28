@@ -1,8 +1,10 @@
 package edu.illinois.osl.akka.gc.properties.model
 
 import scala.collection.mutable
+import edu.illinois.osl.akka.gc.interfaces.Pretty
+import edu.illinois.osl.akka.gc.interfaces.Pretty._
 
-trait Mailbox[T] {
+trait Mailbox[T <: Pretty] extends Pretty {
   def add(message: T, sender: Name): Unit
   def nonEmpty: Boolean
   def isEmpty: Boolean
@@ -17,7 +19,7 @@ trait Mailbox[T] {
  * A collection of undelivered messages sent to some actor. These messages
  * have FIFO (rather than causal) semantics.
  */
-class FIFOMailbox[T] extends Mailbox[T] {
+class FIFOMailbox[T <: Pretty] extends Mailbox[T] {
 
   private var messagesFrom: Map[Name, mutable.Queue[T]] = Map()
 
@@ -61,5 +63,8 @@ class FIFOMailbox[T] extends Mailbox[T] {
       messagesFrom -= sender
   }
 
-  override def toString: String = messagesFrom.values.flatten.toString
+  override def pretty: String = 
+    "[" + messagesFrom.map{ 
+      case (sender, msgs) => s"from ${sender.pretty}: ${msgs.toList.pretty}" 
+    }.toList.mkString("; ") + "]"
 }

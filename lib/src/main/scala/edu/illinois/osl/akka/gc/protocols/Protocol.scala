@@ -12,10 +12,10 @@ object Protocol {
 }
 
 trait Protocol {
-  type GCMessage[+T] <: Message
+  type GCMessage[+T] <: Message with Pretty
   type Refob[-T] <: RefobLike[T]
   type SpawnInfo
-  type State
+  type State <: Pretty
 
   /**
    * Transform a message from a non-GC actor so that it can be understood

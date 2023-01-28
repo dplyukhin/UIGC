@@ -4,7 +4,7 @@ import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.typed.ActorRef
 import edu.illinois.osl.akka.gc.proxies.AkkaRef
 
-trait RefobLike[-T] {
+trait RefobLike[-T] extends Pretty {
   def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit
 
   private[gc] def target: RefLike[Nothing]

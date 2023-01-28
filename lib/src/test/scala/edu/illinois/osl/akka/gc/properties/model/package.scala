@@ -9,5 +9,8 @@ package object model {
   type Msg = protocol.GCMessage[Payload]
   type Ref = gc.ActorRef[Payload]
   type Execution = Seq[Event]
-  def pretty(execution: Execution): String = "\n"+execution.mkString("\n")
+  def prettyPrint(config: Configuration): String = 
+    "\n" + config.log.map(_.pretty).mkString("\n") + "\n\n" +
+    "Execution: " + config.execution + "\n\n"
+
 }
