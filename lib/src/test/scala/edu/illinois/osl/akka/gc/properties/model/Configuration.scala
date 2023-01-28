@@ -11,13 +11,13 @@ case class Name(val id: Int) extends RefLike[Msg] {
     config.mailbox(this).add(msg, config.currentActor)
   }
 
-  override def toString(): String = {
-    val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    if (id >= 0 && id < 26) 
-      return alpha(id).toString()
-    else
-      return s"A${id}" 
-  }
+  //override def toString(): String = {
+  //  val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  //  if (id >= 0 && id < 26) 
+  //    return alpha(id).toString()
+  //  else
+  //    return s"A${id}" 
+  //}
 }
 
 class Context(
@@ -258,8 +258,7 @@ class Configuration {
 
   def legalEvents: List[Event] =
     legalSpawnEvents ++ legalSendEvents ++ legalReceiveEvents ++
-    legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents ++
-    legalDroppedMessageEvents 
+    legalBecomeIdleEvents ++ legalDeactivateEvents ++ legalSnapshotEvents //++ legalDroppedMessageEvents 
 
   def transition(event: Event): Unit = event match {
     case Spawn(parent) => 
@@ -291,10 +290,13 @@ class Configuration {
     case Send(sender, recipientRef, targetRefs) =>
       currentActor = sender
       val senderCtx = context(sender)
+      val senderState = context(sender).gcState
       // Create refs
       val createdRefs = for (target <- targetRefs) yield
-        protocol.createRef(target, recipientRef, senderCtx.gcState)
+        protocol.createRef(target, recipientRef, senderState)
       // send the message, as well as any control messages needed in the protocol
+      // re-initialize the refob, because we may be replaying an execution with fresh refobs.
+      protocol.initializeRefob(recipientRef, senderState, senderCtx)
       recipientRef.tell(new Payload(), createdRefs)
 
     case DroppedMessage(recipient, msg) =>
