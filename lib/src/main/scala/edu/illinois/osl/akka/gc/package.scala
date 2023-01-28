@@ -1,11 +1,23 @@
 package edu.illinois.osl.akka
 
 import edu.illinois.osl.akka.gc.unmanaged
-import edu.illinois.osl.akka.gc.protocols.Protocol
+import edu.illinois.osl.akka.gc.protocols._
+import edu.illinois.osl.akka.gc.interfaces._
 
 package object gc {
 
-  val protocol: Protocol = protocols.drl.DRL
+  val protocol: Protocol = drl.DRL
+
+  object coerce {
+    implicit def gcmessage1[T](msg: protocol.GCMessage[T]): drl.GCMessage[T] =
+      msg.asInstanceOf[drl.GCMessage[T]]
+    implicit def gcmessage2[T](msg: drl.GCMessage[T]): protocol.GCMessage[T] =
+      msg.asInstanceOf[protocol.GCMessage[T]]
+    implicit def reflike[T](ref: RefLike[protocol.GCMessage[T]]): RefLike[drl.GCMessage[T]] =
+      ref.asInstanceOf[RefLike[drl.GCMessage[T]]]
+    implicit def refob[T](ref: drl.Refob[T]): protocol.Refob[T] =
+      ref.asInstanceOf[protocol.Refob[T]]
+  }
 
   type ActorRef[-T] = protocol.Refob[T]
 

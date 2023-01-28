@@ -89,4 +89,10 @@ object NoProtocol extends Protocol {
   def releaseEverything(
     state: State
   ): Unit = ()
+
+  def initializeRefob[T](
+    refob: Refob[Nothing],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit = ()
 }

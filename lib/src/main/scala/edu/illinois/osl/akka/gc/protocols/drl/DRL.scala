@@ -25,8 +25,11 @@ object DRL extends Protocol {
   override def initState[T](
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
-  ): State =
-    new State(context.self, spawnInfo)
+  ): State = {
+    val state = new State(context.self, spawnInfo)
+    initializeRefob(state.selfRef, state, context)
+    state
+  }
 
   def getSelfRef[T](
     state: State,
@@ -43,7 +46,7 @@ object DRL extends Protocol {
     val self = state.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    ref.initialize(state)
+    initializeRefob(ref, state, ctx)
     state.addRef(ref)
     ctx.watch(child)
     ref
@@ -56,7 +59,7 @@ object DRL extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        refs.foreach(ref => ref.initialize(state))
+        refs.foreach(ref => initializeRefob(ref, state, ctx))
         state.handleMessage(refs, token)
         Some(payload)
       case ReleaseMsg(releasing, created) =>
@@ -141,4 +144,11 @@ object DRL extends Protocol {
       case signal =>
         Protocol.Unhandled
     }
+
+  def initializeRefob[T](
+    refob: Refob[Nothing],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit =
+    refob.initialize(state)
 }

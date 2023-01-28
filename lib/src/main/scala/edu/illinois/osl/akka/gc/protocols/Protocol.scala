@@ -79,4 +79,11 @@ trait Protocol {
   ): Unit
 
   def releaseEverything(state: State): Unit
+
+  /** Idempotent function needed by DRL for model checking. */
+  def initializeRefob[T](
+    refob: Refob[Nothing],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit
 }

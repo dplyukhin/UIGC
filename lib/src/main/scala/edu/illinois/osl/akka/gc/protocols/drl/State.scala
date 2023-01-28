@@ -14,7 +14,6 @@ class State
   
   /** This actor's self reference. */
   val selfRef: Ref = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
-  selfRef.initialize(this)
 
   val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
