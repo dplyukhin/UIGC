@@ -20,15 +20,15 @@ class State
   val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
   /** References this actor owns. Starts with its self reference. */
-  val activeRefs: mutable.HashSet[Ref] = mutable.HashSet(selfRef)
+  val activeRefs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef)
   /**
    * References this actor has created for other actors.
    * Maps a key reference to a value set of references that were creating using that key. */
   val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  val owners: mutable.HashSet[Ref] = mutable.HashSet(selfRef, creatorRef)
+  val owners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef, creatorRef)
   /** References to this actor discovered when they've been released. */
-  val releasedOwners: mutable.HashSet[Ref] = mutable.HashSet()
+  val releasedOwners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
   /** Tracks how many messages are sent using each reference. */
   val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
