@@ -6,6 +6,7 @@ import akka.actor.typed.Signal
 import akka.actor.ActorPath
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable
+import akka.actor.typed.Terminated
 
 object WRC extends Protocol {
 
@@ -101,6 +102,7 @@ object WRC extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
     val actorRef = factory(NonRoot)
+    ctx.watch(actorRef)
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(actorRef) = pair
     val refob = Refob(actorRef)
@@ -118,6 +120,7 @@ object WRC extends Protocol {
         state.pendingSelfMessages -= 1
       }
       for (ref <- refs) {
+        initializeRefob(ref, state, ctx)
         val pair = state.actorMap.getOrElseUpdate(ref.target, new Pair())
         pair.numRefs = pair.numRefs + 1
         pair.weight = pair.weight + 1
@@ -131,15 +134,21 @@ object WRC extends Protocol {
       None
   }
 
+  def tryTerminate[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision =
+    if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && !ctx.anyChildren) 
+      Protocol.ShouldStop 
+    else 
+      Protocol.ShouldContinue
+
   def onIdle[T](
     msg: GCMessage[T],
     state: State,
     ctx: ContextLike[GCMessage[T]],
   ): Protocol.TerminationDecision =
-    if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0) 
-      Protocol.ShouldStop 
-    else 
-      Protocol.ShouldContinue
+    tryTerminate(state, ctx)
 
   def preSignal[T](
     signal: Signal, 
@@ -152,7 +161,12 @@ object WRC extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    Protocol.ShouldContinue
+    signal match {
+      case signal: Terminated =>
+        tryTerminate(state, ctx)
+      case signal =>
+        Protocol.Unhandled
+    }
 
   def createRef[S,T](
     target: Refob[S], 

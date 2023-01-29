@@ -81,7 +81,7 @@ object NoProtocol extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    Protocol.ShouldContinue
+    Protocol.Unhandled
 
   def createRef[S,T](
     target: Refob[S], 
