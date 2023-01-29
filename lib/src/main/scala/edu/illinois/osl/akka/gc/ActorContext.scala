@@ -63,7 +63,7 @@ class ActorContext[T](
    * @return The created reference.
    */
   def createRef[S](target: ActorRef[S], owner: ActorRef[Nothing]): ActorRef[S] = {
-    protocol.createRef(target, owner, state)
+    protocol.createRef(target, owner, state, proxyContext)
   }
 
   /**

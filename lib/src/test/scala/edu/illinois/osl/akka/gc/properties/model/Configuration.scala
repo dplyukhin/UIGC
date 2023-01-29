@@ -324,7 +324,7 @@ class Configuration {
         val senderState = context(sender).gcState
         // Create refs
         val createdRefs = for (target <- targetRefs) yield
-          protocol.createRef(target, recipientRef, senderState)
+          protocol.createRef(target, recipientRef, senderState, senderCtx)
         // send the message, as well as any control messages needed in the protocol
         // re-initialize the refob, because we may be replaying an execution with fresh refobs.
         protocol.initializeRefob(recipientRef, senderState, senderCtx)

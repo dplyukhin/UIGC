@@ -1,15 +1,15 @@
-package edu.illinois.osl.akka.gc.protocols.drl
+package edu.illinois.osl.akka.gc.protocols.monotone
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
-import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
+import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 
-object DRL extends Protocol {
+object Monotone extends Protocol {
 
-  type GCMessage[+T] = drl.GCMessage[T]
-  type Refob[-T] = drl.Refob[T]
-  type State = drl.State
+  type GCMessage[+T] = monotone.GCMessage[T]
+  type Refob[-T] = monotone.Refob[T]
+  type State = monotone.State
 
   class SpawnInfo(
     val token: Option[Token],
@@ -26,8 +26,15 @@ object DRL extends Protocol {
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
-    val state = new State(context.self, spawnInfo)
-    initializeRefob(state.selfRef, state, context)
+    val self = context.self
+    val state = new State()
+    val selfRef = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
+    val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
+    state.selfRef = selfRef
+    state.sentCount(selfRef.token.get) = 0
+    state.recvCount(selfRef.token.get) = 0
+    state.refs.append(State.Created(creatorRef), State.Created(selfRef), State.Activated(selfRef))
+    initializeRefob(selfRef, state, context)
     state
   }
 
@@ -37,18 +44,43 @@ object DRL extends Protocol {
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
+  def newToken[T](
+    state: State, 
+    ctx: ContextLike[GCMessage[T]]
+  ): Token = {
+    val count = state.count
+    val token = Token(ctx.self, count)
+    state.count += 1
+    token
+  }
+  
+  def incReceivedCount(optoken: Option[Token], state: State): Unit = {
+    if (optoken.isDefined) {
+      val token = optoken.get
+      val count = state.recvCount.getOrElse(token, 0)
+      state.recvCount(token) = count + 1
+    }
+  }
+
+  def incSentCount(optoken: Option[Token], state: State): Unit = {
+    if (optoken.isDefined) {
+      val token = optoken.get
+      val count = state.sentCount.getOrElse(token, 0)
+      state.sentCount(token) = count + 1
+    }
+  }
+
   override def spawnImpl[S, T](
     factory: SpawnInfo => RefLike[GCMessage[S]],
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val x = state.newToken()
-    val self = state.self
+    val x = newToken(state, ctx)
+    val self = ctx.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
     initializeRefob(ref, state, ctx)
-    state.addRef(ref)
-    ctx.watch(child)
+    state.refs.append(State.Activated(ref)) // The Created fact is in the child state
     ref
   }
 
@@ -60,20 +92,11 @@ object DRL extends Protocol {
     msg match {
       case AppMsg(payload, token, refs) =>
         refs.foreach(ref => initializeRefob(ref, state, ctx))
-        state.handleMessage(refs, token)
+        // activate the refs
+        state.refs.appendAll(refs.map(State.Activated))
+        // increment recv count for this token
+        incReceivedCount(token, state)
         Some(payload)
-      case ReleaseMsg(releasing, created) =>
-        state.handleRelease(releasing, created)
-        None
-      case SelfCheck =>
-        state.handleSelfCheck()
-        None
-      // case TakeSnapshot =>
-      //   // snapshotAggregator.put(context.self.target, context.snapshot())
-      //   context.snapshot()
-      //   None
-      case Kill =>
-        None
     }
 
   override def onIdle[T](
@@ -81,26 +104,7 @@ object DRL extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    msg match {
-      case Kill =>
-        Protocol.ShouldStop
-      case _ =>
-        tryTerminate(state, ctx)
-    }
-
-  /**
-   * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
-   * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
-   */
-  def tryTerminate[T](
-    state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision = {
-    if (ctx.anyChildren || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
-      Protocol.ShouldContinue
-    else
-      Protocol.ShouldStop
-  }
+    Protocol.ShouldContinue
 
   override def createRef[S,T](
     target: Refob[S], 
@@ -108,8 +112,9 @@ object DRL extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val ref = state.newRef(owner, target)
-    state.handleCreatedRef(target, ref)
+    val token = newToken(state, ctx)
+    val ref = Refob[S](Some(token), Some(owner.target), target.target)
+    state.refs.append(State.Created(ref))
     ref
   }
 
@@ -117,17 +122,12 @@ object DRL extends Protocol {
     releasing: Iterable[Refob[S]],
     state: State
   ): Unit = {
-
-    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])]
-      = state.release(releasing)
-
-    // send the release message for each target actor
-    for ((target, (targetedRefs, createdRefs)) <- targets) {
-      target ! ReleaseMsg(targetedRefs, createdRefs)
-    }
+    state.refs.appendAll(releasing.map(State.Deactivated))
   }
 
-  override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
+  override def releaseEverything(
+    state: State
+  ): Unit = ???
 
   override def preSignal[T](
     signal: Signal, 
@@ -140,12 +140,7 @@ object DRL extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    signal match {
-      case signal: Terminated =>
-        tryTerminate(state, ctx)
-      case signal =>
-        Protocol.Unhandled
-    }
+    Protocol.Unhandled
 
   def initializeRefob[T](
     refob: Refob[Nothing],

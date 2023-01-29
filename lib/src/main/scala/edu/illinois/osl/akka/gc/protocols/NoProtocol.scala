@@ -83,9 +83,11 @@ object NoProtocol extends Protocol {
   ): Protocol.TerminationDecision =
     Protocol.ShouldContinue
 
-  def createRef[S](
-    target: Refob[S], owner: Refob[Nothing],
-    state: State
+  def createRef[S,T](
+    target: Refob[S], 
+    owner: Refob[Nothing],
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = 
     Refob(target.target)
 
