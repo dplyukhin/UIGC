@@ -75,12 +75,16 @@ trait Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S]
 
-  def release[S](
+  def release[S,T](
     releasing: Iterable[Refob[S]],
-    state: State
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit
 
-  def releaseEverything(state: State): Unit
+  def releaseEverything[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit
 
   /** Idempotent function needed by DRL for model checking. */
   def initializeRefob[T](

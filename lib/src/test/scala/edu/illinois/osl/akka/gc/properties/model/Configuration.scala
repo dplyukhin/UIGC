@@ -63,12 +63,19 @@ object Configuration {
   }
 
   def execute(execution: Execution): Configuration = {
-    val config = initialConfig()
-    currentConfig = config // FIXME ugly hack
-    for (event <- execution) {
-      config.transition(event)
+    try {
+      val config = initialConfig()
+      currentConfig = config // FIXME ugly hack
+      for (event <- execution) {
+        config.transition(event)
+      }
+      config
     }
-    config
+    catch {
+      case e: Exception =>
+        println("Exception in execution.\n" + prettyPrint(currentConfig))
+        throw e
+    }
   }
 
   def checkDepthFirst(depth: Int)(property: (Configuration, Execution) => Unit): Unit = {
@@ -385,7 +392,7 @@ class Configuration {
         currentActor = actor
         val ctx = context(actor)
         ctx.activeRefs -= ref
-        protocol.release(ref :: Nil, ctx.gcState)
+        protocol.release(ref :: Nil, ctx.gcState, ctx)
 
       case Snapshot(actor) =>
         log = log :+ LogSnapshot(actor, ???)

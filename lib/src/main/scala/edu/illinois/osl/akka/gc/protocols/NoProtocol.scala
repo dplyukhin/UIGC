@@ -91,13 +91,15 @@ object NoProtocol extends Protocol {
   ): Refob[S] = 
     Refob(target.target)
 
-  def release[S](
+  def release[S,T](
     releasing: Iterable[Refob[S]],
-    state: State
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit = ()
 
-  def releaseEverything(
-    state: State
+  def releaseEverything[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit = ()
 
   def initializeRefob[T](

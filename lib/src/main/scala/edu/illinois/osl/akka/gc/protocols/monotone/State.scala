@@ -35,7 +35,8 @@ class State extends Pretty {
 
   override def pretty: String =
     s"""STATE:
-      < refs:        ${refs.pretty}
+      < count:       $count
+        refs:        ${refs.pretty}
         sent counts: ${prettifyMap(sentCount).pretty}
         recv counts: ${recvCount.pretty}
       >

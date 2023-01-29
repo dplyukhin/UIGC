@@ -118,15 +118,17 @@ object Monotone extends Protocol {
     ref
   }
 
-  override def release[S](
+  override def release[S,T](
     releasing: Iterable[Refob[S]],
-    state: State
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit = {
     state.refs.appendAll(releasing.map(State.Deactivated))
   }
 
-  override def releaseEverything(
-    state: State
+  def releaseEverything[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit = ???
 
   override def preSignal[T](

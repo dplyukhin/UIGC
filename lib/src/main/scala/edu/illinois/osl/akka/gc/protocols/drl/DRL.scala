@@ -113,9 +113,10 @@ object DRL extends Protocol {
     ref
   }
 
-  override def release[S](
+  override def release[S,T](
     releasing: Iterable[Refob[S]],
-    state: State
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
   ): Unit = {
 
     val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])]
@@ -127,7 +128,11 @@ object DRL extends Protocol {
     }
   }
 
-  override def releaseEverything(state: State): Unit = release(state.nontrivialActiveRefs, state)
+  override def releaseEverything[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit = 
+    release(state.nontrivialActiveRefs, state, ctx)
 
   override def preSignal[T](
     signal: Signal, 

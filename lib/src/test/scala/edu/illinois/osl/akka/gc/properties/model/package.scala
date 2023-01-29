@@ -10,7 +10,8 @@ package object model {
   type Ref = gc.ActorRef[Payload]
   type Execution = Seq[Event]
   def prettyPrint(config: Configuration): String = 
-    "\n" + config.log.map(_.pretty).mkString("\n") + "\n\n" +
-    "Execution: " + config.execution + "\n\n"
+    "\nDetailed log:\n" + config.log.map(_.pretty).mkString("\n") + 
+    "\n\nEvent trace:\n" + config.execution.map(_.pretty).mkString("\n") +
+    "\n\nReproduce: " + config.execution + "\n\n"
 
 }

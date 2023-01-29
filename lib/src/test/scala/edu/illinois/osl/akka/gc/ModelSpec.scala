@@ -16,12 +16,12 @@ class ModelSpec extends wordspec.AnyWordSpec {
     //   assert(???)
     // }
     "not be unblocked" in {
-      Configuration.checkDepthFirst(5){ (config, execution) => 
+      Configuration.check(5){ (config, execution) => 
         assert(config.terminated.forall(config.blocked(_)), prettyPrint(config))
       }
     }
     "not have children" in {
-      Configuration.checkDepthFirst(6){ (config, execution) => 
+      Configuration.check(5){ (config, execution) => 
         assert(config.terminated.forall(config.children(_).isEmpty), prettyPrint(config))
       }
     }

@@ -71,7 +71,7 @@ class ActorContext[T](
    * @param releasing A collection of references.
    */
   def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
-    protocol.release(releasing, state)
+    protocol.release(releasing, state, proxyContext)
   }
 
   /**
@@ -83,6 +83,6 @@ class ActorContext[T](
   /**
    * Release all references owned by this actor.
    */
-  def releaseEverything(): Unit = protocol.releaseEverything(state)
+  def releaseEverything(): Unit = protocol.releaseEverything(state, proxyContext)
 
 }
