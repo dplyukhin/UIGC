@@ -28,7 +28,7 @@ object Monotone extends Protocol {
   ): State = {
     val self = context.self
     val state = new State()
-    val selfRef = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
+    val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
     state.sentCount(selfRef.token.get) = 0
