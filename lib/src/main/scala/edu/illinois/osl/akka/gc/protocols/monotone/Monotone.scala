@@ -31,9 +31,9 @@ object Monotone extends Protocol {
     val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
-    state.sentCount(selfRef.token.get) = 0
+    state.refs(selfRef.token.get) = State.activeRefob
     state.recvCount(selfRef.token.get) = 0
-    state.refs.append(State.Created(creatorRef), State.Created(selfRef), State.Activated(selfRef))
+    state.created.append(creatorRef, selfRef)
     initializeRefob(selfRef, state, context)
     state
   }
@@ -65,8 +65,8 @@ object Monotone extends Protocol {
   def incSentCount(optoken: Option[Token], state: State): Unit = {
     if (optoken.isDefined) {
       val token = optoken.get
-      val count = state.sentCount.getOrElse(token, 0)
-      state.sentCount(token) = count + 1
+      val count = state.refs.getOrElse(token, State.activeRefob)
+      state.refs(token) = State.incSendCount(count)
     }
   }
 
@@ -80,7 +80,7 @@ object Monotone extends Protocol {
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
     initializeRefob(ref, state, ctx)
-    state.refs.append(State.Activated(ref)) // The Created fact is in the child state
+    state.refs(x) = State.activeRefob
     ref
   }
 
@@ -91,9 +91,10 @@ object Monotone extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        refs.foreach(ref => initializeRefob(ref, state, ctx))
-        // activate the refs
-        state.refs.appendAll(refs.map(State.Activated))
+        refs.foreach(ref => {
+          initializeRefob(ref, state, ctx)
+          state.refs(ref.token.get) = State.activeRefob
+        })
         // increment recv count for this token
         incReceivedCount(token, state)
         Some(payload)
@@ -114,7 +115,7 @@ object Monotone extends Protocol {
   ): Refob[S] = {
     val token = newToken(state, ctx)
     val ref = Refob[S](Some(token), Some(owner.target), target.target)
-    state.refs.append(State.Created(ref))
+    state.created.append(ref)
     ref
   }
 
@@ -123,7 +124,10 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
-    state.refs.appendAll(releasing.map(State.Deactivated))
+    for (ref <- releasing) {
+      val info = state.refs(ref.token.get)
+      state.refs(ref.token.get) = State.deactivate(info)
+    }
   }
 
   def releaseEverything[T](
