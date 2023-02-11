@@ -31,7 +31,7 @@ object Monotone extends Protocol {
     val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
-    state.refs.append(selfRef)
+    state.refs.add(selfRef)
     state.created.append(creatorRef, selfRef)
     state
   }
@@ -69,7 +69,7 @@ object Monotone extends Protocol {
     val self = ctx.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    state.refs.append(ref)
+    state.refs.add(ref)
     ref
   }
 
@@ -80,7 +80,7 @@ object Monotone extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        state.refs.appendAll(refs)
+        state.refs.addAll(refs)
         // increment recv count for this token
         incReceivedCount(token, state)
         Some(payload)

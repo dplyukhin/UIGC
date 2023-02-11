@@ -15,7 +15,7 @@ class State extends Pretty {
   /** Tracks references created by this actor */
   val created: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
   /** Tracks all the refs that have been active during this entry period */
-  val refs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
+  val refs: mutable.HashSet[Ref] = mutable.HashSet()
   /** Tracks how many messages are received using each reference. */
   val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap()
 
