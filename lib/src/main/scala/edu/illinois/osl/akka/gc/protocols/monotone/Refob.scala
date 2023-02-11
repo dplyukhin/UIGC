@@ -27,11 +27,14 @@ case class Refob[-T](
   owner: Option[RefLike[GCMessage[Nothing]]],
   target: RefLike[GCMessage[T]],
 ) extends RefobLike[T] {
-  var info: RefobInfo = RefobInfo.activeRefob
+  private var state: State = null
 
+  def initialize[S](_state: State): Unit = {
+    state = _state
+  }
   override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = {
     target ! AppMsg(msg, token, refs.asInstanceOf[Iterable[Refob[Nothing]]])
-    RefobInfo.incSendCount(info)
+    Monotone.incSentCount(token, state)
   }
 
   override def pretty: String = {
