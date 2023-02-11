@@ -31,10 +31,8 @@ object Monotone extends Protocol {
     val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
-    state.refs(selfRef.token.get) = RefobInfo.activeRefob
-    state.recvCount(selfRef.token.get) = 0
+    state.refs.append(selfRef)
     state.created.append(creatorRef, selfRef)
-    initializeRefob(selfRef, state, context)
     state
   }
 
@@ -62,14 +60,6 @@ object Monotone extends Protocol {
     }
   }
 
-  def incSentCount(optoken: Option[Token], state: State): Unit = {
-    if (optoken.isDefined) {
-      val token = optoken.get
-      val count = state.refs.getOrElse(token, RefobInfo.activeRefob)
-      state.refs(token) = RefobInfo.incSendCount(count)
-    }
-  }
-
   override def spawnImpl[S, T](
     factory: SpawnInfo => RefLike[GCMessage[S]],
     state: State,
@@ -79,8 +69,7 @@ object Monotone extends Protocol {
     val self = ctx.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    initializeRefob(ref, state, ctx)
-    state.refs(x) = RefobInfo.activeRefob
+    state.refs.append(ref)
     ref
   }
 
@@ -91,10 +80,7 @@ object Monotone extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        refs.foreach(ref => {
-          initializeRefob(ref, state, ctx)
-          state.refs(ref.token.get) = RefobInfo.activeRefob
-        })
+        state.refs.appendAll(refs)
         // increment recv count for this token
         incReceivedCount(token, state)
         Some(payload)
@@ -125,8 +111,7 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
     for (ref <- releasing) {
-      val info = state.refs(ref.token.get)
-      state.refs(ref.token.get) = RefobInfo.deactivate(info)
+      RefobInfo.deactivate(ref.info)
     }
   }
 
@@ -152,6 +137,5 @@ object Monotone extends Protocol {
     refob: Refob[Nothing],
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Unit =
-    refob.initialize(state)
+  ): Unit = ()
 }
