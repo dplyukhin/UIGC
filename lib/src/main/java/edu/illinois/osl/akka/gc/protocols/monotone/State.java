@@ -2,48 +2,31 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
 
-import java.util.HashMap;
-import java.util.Map;
-
 class State implements Pretty {
 
-    static int ARRAY_MAX = 16;
+    static int ARRAY_MAX = 8; // Use a power of 2 for the receive count
 
-    /**
-     * A sequence number used for generating unique tokens
-     */
+    /** A sequence number used for generating unique tokens */
     int count;
-    /**
-     * Where in the array to insert the next "created" refob
-     */
+    /** Where in the array to insert the next "created" refob */
     int createdIdx;
-    /**
-     * Where in the array to insert the next "updated" refob
-     */
+    /** Where in the array to insert the next "updated" refob */
     int updatedIdx;
-    /**
-     * This actor's ref to itself
-     */
+    /** This actor's ref to itself */
     Object selfRef;
-    /**
-     * Tracks references created by this actor
-     */
+    /** Tracks references created by this actor */
     Refob<?>[] created;
-    /**
-     * Tracks all the refs that have been updated in this entry period
-     */
+    /** Tracks all the refs that have been updated in this entry period */
     Refob<?>[] updated;
-    /**
-     * Tracks how many messages are received using each reference.
-     */
-    Map<Token, Integer> recvCount;
+    /** Tracks how many messages are received using each reference. */
+    ReceiveCount recvCount;
 
     public State() {
         this.count = 0;
         this.createdIdx = 0;
         this.created = new Refob<?>[ARRAY_MAX];
         this.updated = new Refob<?>[ARRAY_MAX];
-        this.recvCount = new HashMap<>();
+        this.recvCount = new ReceiveCount(ARRAY_MAX);
     }
 
     public void onCreate(Refob<?> ref) {
@@ -85,15 +68,14 @@ class State implements Pretty {
     }
 
     public void incReceiveCount(Token token) {
-        Integer count = recvCount.getOrDefault(token, 0);
-        recvCount.put(token, count + 1);
-        if (recvCount.size() >= ARRAY_MAX) {
+        recvCount.incCount(token);
+        if (recvCount.size >= ARRAY_MAX) {
             finalizeEntry();
         }
     }
 
-    public void finalizeEntry() {
-        Object[] _created = null;
+    public Entry finalizeEntry() {
+        Refob<?>[] _created = null;
         if (createdIdx > 0) {
             _created = new Refob<?>[createdIdx];
             for (int i = 0; i < createdIdx; i++) {
@@ -103,24 +85,29 @@ class State implements Pretty {
             createdIdx = 0;
         }
 
-        Map<Token, Integer> _recvCount = null;
-        if (!recvCount.isEmpty()) {
-            _recvCount = this.recvCount;
-            this.recvCount = new HashMap<>();
+        Token[] recvTokens = null;
+        short[] recvCounts = null;
+        if (recvCount.size > 0) {
+            recvTokens = new Token[recvCount.size];
+            recvCounts = new short[recvCount.size];
+            recvCount.copyOut(recvTokens, recvCounts);
         }
 
-        Token[] refTokens = null;
-        short[] refInfos = null;
+        Token[] sendTokens = null;
+        short[] sendInfos = null;
         if (updatedIdx > 0) {
-            refInfos = new short[updatedIdx];
-            refInfos = new short[updatedIdx];
+            sendTokens = new Token[updatedIdx];
+            sendInfos = new short[updatedIdx];
             for (int i = 0; i < updatedIdx; i++) {
-                refInfos[i] = this.updated[i].info();
+                sendTokens[i] = this.updated[i].token().get();
+                sendInfos[i] = this.updated[i].info();
                 this.updated[i].resetInfo();
                 updated[i] = null;
             }
             updatedIdx = 0;
         }
+
+        return new Entry(_created, recvTokens, recvCounts, sendTokens, sendInfos);
     }
 
     @Override
