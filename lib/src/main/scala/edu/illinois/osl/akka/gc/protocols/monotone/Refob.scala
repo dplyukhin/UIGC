@@ -27,7 +27,7 @@ case class Refob[-T](
   owner: Option[RefLike[GCMessage[Nothing]]],
   target: RefLike[GCMessage[T]],
 ) extends RefobLike[T] {
-  var info: RefobInfo = RefobInfo.activeRefob
+  var info: Short = RefobInfo.activeRefob
 
   override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = {
     target ! AppMsg(msg, token, refs.asInstanceOf[Iterable[Refob[Nothing]]])
