@@ -1,7 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
-import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
-import edu.illinois.osl.akka.gc.interfaces.Pretty
+import edu.illinois.osl.akka.gc.interfaces.{Message, Pretty}
 
 sealed trait GCMessage[+T] extends Message with Pretty
 

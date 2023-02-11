@@ -1,7 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
-import akka.actor.typed.{PostStop, Terminated, Signal}
-import scala.collection.mutable
+import akka.actor.typed.Signal
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 

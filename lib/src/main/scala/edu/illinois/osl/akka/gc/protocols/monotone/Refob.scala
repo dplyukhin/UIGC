@@ -1,7 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
 import edu.illinois.osl.akka.gc.interfaces._
-import scala.annotation.unchecked.uncheckedVariance
 
 /**
  * An opaque and globally unique token.
