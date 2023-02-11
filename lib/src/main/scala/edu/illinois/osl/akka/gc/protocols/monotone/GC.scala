@@ -49,81 +49,23 @@ object GC {
                 // send count.
         }
         for ((token, m) <- entry.recvCount) {
-            val shadow: Shadow = ??? // Look up this actor's shadow
-            val incoming = shadow.incoming
-            val status = incoming.getOrElse(token, initialPendingRefob)
-            val newStatus = addToRecvCount(status, m)
-            if (refobIsReleased(status)) {
-                incoming -= token
-            }
-            else {
-                incoming(token) = newStatus
-            }
+            //val shadow: Shadow = ??? // Look up this actor's shadow
+            //val incoming = shadow.incoming
+            //val status = incoming.getOrElse(token, initialPendingRefob)
+            //val newStatus = addToRecvCount(status, m)
+            //if (refobIsReleased(status)) {
+            //    incoming -= token
+            //}
+            //else {
+            //    incoming(token) = newStatus
+            //}
         }
         // Adjust this actor's outgoing refobs: add activated refobs, remove
         // released ones.
         ???
     }
 
-    // TODO Move this to Java to avoid the wrapper
-    /** 
-     * A refob's status is either:
-     * 1. Pending: Created, but not activated, with N received messages.
-     * 2. Active: Activated, with N pending messages.
-     * 3. Finishing: Deactivated, with N > 0 pending messages.
-     * 4. Released: Deactivated, with 0 pending messages.
-     * 
-     * The number of pending messages is the difference between the owner's send
-     * count and the target's receive count. If these values are not defined,
-     * then they default to zero.
-     * 
-     * Note that if a refob is active, then it may have a negative number of 
-     * pending messages. If a refob is finishing, then it can only have a
-     * positive number of pending messages.
-     * 
-     * We encode these four states with a single integer. The 31 highest-order
-     * bits encode a 31-bit integer. The lowest order bit is a marker.
-     * 1. If the marker is on and the integer is negative, then the refob is
-     *    pending. The value of the integer indicates how many messages have
-     *    been received.
-     * 2. If the marker is off, then the integer encodes the number of pending
-     *    messages.
-     * 3. If the marker is on and the integer is N > 0, then the refob is 
-     *    finishing with N pending messages.
-     * 4. If the marker is on and the integer is 0, then the refob is released.
-     * 
-     * Some conveniences of this representation:
-     * - Released refobs are represented as the integer 1.
-     * - Active, blocked refobs are represented as the integer 0.
-     * 
-     * If an actor has any unreleased refobs whose status is nonzero, then the
-     * actor is potentially unblocked in the history. Either the history is not 
-     * recent enough, not full enough, or a refob is unblocked.
-     */
     type RefobStatus = Integer
-
-    val initialPendingRefob: RefobStatus = -1
-
-    val initialActiveRefob: RefobStatus = 0
-
-    def addToSentCount(n: RefobStatus, m: Integer): RefobStatus =
-        // assumes n is an active refob
-        return n + (m << 1)
-
-    def addToRecvCount(n: RefobStatus, m: Integer): RefobStatus =
-        // n may be pending, active, or finishing
-        return n - (m << 1)
-
-    def activateRefob(n: RefobStatus): RefobStatus =
-        // assumes n is a pending refob
-        return n | 1
-
-    def deactivateRefob(n: RefobStatus): RefobStatus =
-        // assumes n is an active refob
-        return n | 1
-
-    def refobIsReleased(n: RefobStatus): Boolean =
-        return n == 1
 
     def refobStatus(n: RefobStatus): String = {
         if ((n & 1) == 0) // Status bit is off

@@ -14,14 +14,7 @@ object State {
    * whether the actor is deactivated. This is packed into a single integer 
    * whose most significant bit is on iff the refob has been deactivated.
    */
-  type RefobInfo = Integer
-  val activeRefob: RefobInfo = 0
-  def incSendCount(info: RefobInfo): RefobInfo = 
-    info + 1
-  def isActive(info: RefobInfo): Boolean =
-    info >= 0
-  def deactivate(info: RefobInfo): RefobInfo =
-    info | (1 << 31)
+  type RefobInfo = Short
 }
 
 class State extends Pretty {
