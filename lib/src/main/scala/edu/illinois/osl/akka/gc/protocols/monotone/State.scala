@@ -13,11 +13,32 @@ class State extends Pretty {
   /** This actor's refob to itself */
   var selfRef: Ref = _
   /** Tracks references created by this actor */
-  val created: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
+  var created: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
   /** Tracks all the refs that have been active during this entry period */
   val refs: mutable.HashSet[Ref] = mutable.HashSet()
   /** Tracks how many messages are received using each reference. */
-  val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap()
+  var recvCount: mutable.HashMap[Token, Int] = mutable.HashMap()
+
+  def finalizeEntry(): Unit = {
+    val _created = this.created 
+    this.created = mutable.ArrayBuffer()
+    val _recvCount = this.recvCount
+    this.recvCount = mutable.HashMap()
+
+    // Get the RefobStatus of every ref
+    val refInfos = new Array[Short](refs.size)
+    var i = 0;
+    val it = refs.iterator
+    while (it.hasNext) {
+      val ref = it.next()
+      val info = ref.info
+      refInfos(i) = info
+      i += 1
+      if (!RefobInfo.isActive(info)) {
+        refs.remove(ref)
+      }
+    }
+  }
 
   override def pretty: String =
     s"""STATE:
