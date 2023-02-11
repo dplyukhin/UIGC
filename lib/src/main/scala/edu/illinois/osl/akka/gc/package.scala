@@ -6,7 +6,7 @@ import edu.illinois.osl.akka.gc.interfaces._
 
 package object gc {
 
-  val protocol: Protocol = wrc.WRC
+  val protocol: Protocol = monotone.Monotone
 
   object coerce {
     implicit def gcmessage1[T](msg: protocol.GCMessage[T]): drl.GCMessage[T] =
