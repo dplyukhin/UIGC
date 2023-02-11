@@ -31,8 +31,9 @@ object Monotone extends Protocol {
     val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
-    state.refs.add(selfRef)
-    state.created.append(creatorRef, selfRef)
+    state.onCreate(creatorRef)
+    state.onCreate(selfRef)
+    state.onReceive(selfRef)
     state
   }
 
@@ -55,8 +56,7 @@ object Monotone extends Protocol {
   def incReceivedCount(optoken: Option[Token], state: State): Unit = {
     if (optoken.isDefined) {
       val token = optoken.get
-      val count = state.recvCount.getOrElse(token, 0)
-      state.recvCount(token) = count + 1
+      state.incReceiveCount(token)
     }
   }
 
@@ -69,7 +69,7 @@ object Monotone extends Protocol {
     val self = ctx.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    state.refs.add(ref)
+    state.onReceive(ref)
     ref
   }
 
@@ -80,7 +80,9 @@ object Monotone extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        state.refs.addAll(refs)
+        for (ref <- refs) {
+          state.onReceive(ref)
+        }
         // increment recv count for this token
         incReceivedCount(token, state)
         Some(payload)
@@ -101,7 +103,7 @@ object Monotone extends Protocol {
   ): Refob[S] = {
     val token = newToken(state, ctx)
     val ref = Refob[S](Some(token), Some(owner.target), target.target)
-    state.created.append(ref)
+    state.onCreate(ref)
     ref
   }
 
@@ -111,7 +113,7 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
     for (ref <- releasing) {
-      RefobInfo.deactivate(ref.info)
+      state.onDeactivate(ref)
     }
   }
 
@@ -137,5 +139,7 @@ object Monotone extends Protocol {
     refob: Refob[Nothing],
     state: State,
     ctx: ContextLike[GCMessage[T]]
-  ): Unit = ()
+  ): Unit = {
+    ??? // Refobs carry message counts now, so it's unclear what this means
+  }
 }
