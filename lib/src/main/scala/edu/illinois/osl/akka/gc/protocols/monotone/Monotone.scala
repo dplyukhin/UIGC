@@ -3,6 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 import akka.actor.typed.Signal
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
+import edu.illinois.osl.akka.gc.proxies.AkkaContext
 
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -166,6 +167,10 @@ object Monotone extends Protocol {
     entry: Entry,
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
-    //Bookkeeper(ctx.system)
+    ctx match {
+      case ctx: AkkaContext[GCMessage[T]] =>
+        Bookkeeper(ctx.system)
+      case _ => ???
+    }
   }
 }
