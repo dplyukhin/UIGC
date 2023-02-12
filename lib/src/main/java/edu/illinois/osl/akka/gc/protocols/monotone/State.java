@@ -2,6 +2,8 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
 
+import java.util.Arrays;
+
 class State implements Pretty {
 
     static int ARRAY_MAX = 8; // Use a power of 2 for the receive count
@@ -74,40 +76,50 @@ class State implements Pretty {
         }
     }
 
+    public Entry getEntry() {
+        Entry entry = Monotone.EntryPool().poll();
+        if (entry == null) {
+            entry = new Entry(ARRAY_MAX);
+        }
+        return entry;
+    }
+
+    public void putEntry(Entry entry) {
+        Arrays.fill(entry.created, null);
+        Arrays.fill(entry.recvTokens, null);
+        Arrays.fill(entry.recvCounts, (short) 0);
+        Arrays.fill(entry.sendTokens, null);
+        Arrays.fill(entry.sendInfos, (short) 0);
+        Monotone.EntryPool().add(entry);
+    }
+
     public Entry finalizeEntry() {
-        Refob<?>[] _created = null;
+        Entry entry = getEntry();
+
         if (createdIdx > 0) {
-            _created = new Refob<?>[createdIdx];
             for (int i = 0; i < createdIdx; i++) {
-                _created[i] = this.created[i];
+                entry.created[i] = this.created[i];
                 this.created[i] = null;
             }
             createdIdx = 0;
         }
 
-        Token[] recvTokens = null;
-        short[] recvCounts = null;
         if (recvCount.size > 0) {
-            recvTokens = new Token[recvCount.size];
-            recvCounts = new short[recvCount.size];
-            recvCount.copyOut(recvTokens, recvCounts);
+            recvCount.copyOut(entry);
         }
 
-        Token[] sendTokens = null;
-        short[] sendInfos = null;
         if (updatedIdx > 0) {
-            sendTokens = new Token[updatedIdx];
-            sendInfos = new short[updatedIdx];
             for (int i = 0; i < updatedIdx; i++) {
-                sendTokens[i] = this.updated[i].token().get();
-                sendInfos[i] = this.updated[i].info();
+                entry.sendTokens[i] = this.updated[i].token().get();
+                entry.sendInfos[i] = this.updated[i].info();
                 this.updated[i].resetInfo();
                 updated[i] = null;
             }
             updatedIdx = 0;
         }
 
-        return new Entry(_created, recvTokens, recvCounts, sendTokens, sendInfos);
+        putEntry(entry);
+        return null;
     }
 
     @Override

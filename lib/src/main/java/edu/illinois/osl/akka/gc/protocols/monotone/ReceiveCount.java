@@ -30,13 +30,13 @@ public class ReceiveCount {
         }
     }
 
-    public void copyOut(Token[] outTokens, short[] outCounts) {
+    public void copyOut(Entry entry) {
         int nextWrite = 0;
         for (int i = 0; i < ARRAY_MAX; i++) {
-            if (tokens[i] == null) continue;
-            outTokens[nextWrite] = tokens[i];
+            if (counts[i] == 0) continue;
+            entry.recvTokens[nextWrite] = tokens[i];
             tokens[i] = null;
-            outCounts[nextWrite] = counts[i];
+            entry.recvCounts[nextWrite] = counts[i];
             counts[i] = 0;
             nextWrite++;
         }

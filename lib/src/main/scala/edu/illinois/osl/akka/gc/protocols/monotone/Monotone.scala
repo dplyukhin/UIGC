@@ -4,7 +4,11 @@ import akka.actor.typed.Signal
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 
+import java.util.concurrent.ConcurrentLinkedQueue
+
 object Monotone extends Protocol {
+
+  val EntryPool: ConcurrentLinkedQueue[Entry] = new ConcurrentLinkedQueue[Entry]()
 
   type GCMessage[+T] = monotone.GCMessage[T]
   type Refob[-T] = monotone.Refob[T]
