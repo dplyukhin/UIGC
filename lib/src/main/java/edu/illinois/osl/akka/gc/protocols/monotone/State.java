@@ -88,15 +88,6 @@ class State implements Pretty {
         return entry;
     }
 
-    public void putEntry(Entry entry) {
-        Arrays.fill(entry.created, null);
-        Arrays.fill(entry.recvTokens, null);
-        Arrays.fill(entry.recvCounts, (short) 0);
-        Arrays.fill(entry.sendTokens, null);
-        Arrays.fill(entry.sendInfos, (short) 0);
-        Monotone.EntryPool().add(entry);
-    }
-
     public Entry finalizeEntry() {
         Entry entry = getEntry();
 

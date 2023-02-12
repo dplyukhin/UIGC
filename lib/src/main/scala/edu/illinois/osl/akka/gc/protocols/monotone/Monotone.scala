@@ -169,7 +169,7 @@ object Monotone extends Protocol {
   ): Unit = {
     ctx match {
       case ctx: AkkaContext[GCMessage[T]] =>
-        Bookkeeper(ctx.system)
+        ActorGC(ctx.system).Queue.add(entry)
       case _ => ???
     }
   }
