@@ -6,8 +6,6 @@ import java.util.Arrays;
 
 class State implements Pretty {
 
-    static int ARRAY_MAX = 8; // Use a power of 2 for the receive count
-
     /** A sequence number used for generating unique tokens */
     int count;
     /** Where in the array to insert the next "created" refob */
@@ -29,14 +27,14 @@ class State implements Pretty {
         this.count = 0;
         this.shadow = shadow;
         this.createdIdx = 0;
-        this.created = new Refob<?>[ARRAY_MAX];
-        this.updated = new Refob<?>[ARRAY_MAX];
-        this.recvCount = new ReceiveCount(ARRAY_MAX);
+        this.created = new Refob<?>[GC.ARRAY_MAX];
+        this.updated = new Refob<?>[GC.ARRAY_MAX];
+        this.recvCount = new ReceiveCount();
     }
 
     public Entry onCreate(Refob<?> ref) {
         created[createdIdx++] = ref;
-        if (createdIdx >= ARRAY_MAX) {
+        if (createdIdx >= GC.ARRAY_MAX) {
             return finalizeEntry();
         }
         return null;
@@ -45,7 +43,7 @@ class State implements Pretty {
     public Entry onActivate(Refob<?> ref) {
         ref.hasChangedThisPeriod_$eq(true);
         updated[updatedIdx++] = ref;
-        if (updatedIdx >= ARRAY_MAX) {
+        if (updatedIdx >= GC.ARRAY_MAX) {
             return finalizeEntry();
         }
         return null;
@@ -56,7 +54,7 @@ class State implements Pretty {
         if (!ref.hasChangedThisPeriod()) {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
-            if (updatedIdx >= ARRAY_MAX) {
+            if (updatedIdx >= GC.ARRAY_MAX) {
                 return finalizeEntry();
             }
         }
@@ -68,7 +66,7 @@ class State implements Pretty {
         if (!ref.hasChangedThisPeriod()) {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
-            if (updatedIdx >= ARRAY_MAX) {
+            if (updatedIdx >= GC.ARRAY_MAX) {
                 return finalizeEntry();
             }
         }
@@ -77,7 +75,7 @@ class State implements Pretty {
 
     public Entry incReceiveCount(Token token) {
         recvCount.incCount(token);
-        if (recvCount.size >= ARRAY_MAX) {
+        if (recvCount.size >= GC.ARRAY_MAX) {
             return finalizeEntry();
         }
         return null;
@@ -86,7 +84,7 @@ class State implements Pretty {
     public Entry getEntry() {
         Entry entry = Monotone.EntryPool().poll();
         if (entry == null) {
-            entry = new Entry(ARRAY_MAX);
+            entry = new Entry();
         }
         return entry;
     }

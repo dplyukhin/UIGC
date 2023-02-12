@@ -10,13 +10,13 @@ public class Entry {
     public Token[] sendTokens;
     public short[] sendInfos;
 
-    public Entry(int ARRAY_MAX) {
+    public Entry() {
         shadow     = null;
-        created    = new Refob<?>[ARRAY_MAX];
-        recvTokens = new Token[ARRAY_MAX];
-        recvCounts = new short[ARRAY_MAX];
-        sendTokens = new Token[ARRAY_MAX];
-        sendInfos  = new short[ARRAY_MAX];
+        created    = new Refob<?>[GC.ARRAY_MAX];
+        recvTokens = new Token[GC.ARRAY_MAX];
+        recvCounts = new short[GC.ARRAY_MAX];
+        sendTokens = new Token[GC.ARRAY_MAX];
+        sendInfos  = new short[GC.ARRAY_MAX];
     }
 
     public void clean() {

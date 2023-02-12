@@ -50,6 +50,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
+          GC.processEntry(entry)
           // Put back the entry
           entry.clean()
           Monotone.EntryPool.add(entry)
@@ -58,7 +59,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         }
         val end = System.currentTimeMillis()
         total += count
-        //println(s"Bookeeper read $count entries in ${(end - start)}ms.")
+        println(s"Bookeeper read $count entries in ${(end - start)}ms.")
         this
     }
   }

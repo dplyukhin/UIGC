@@ -9,12 +9,17 @@ class RefobInfo {
     public static short activeRefob = 0;
 
     public static short incSendCount(short info) {
+        // assumes this is active
         return info++;
     }
 
     public static short resetCount(short info) {
         // assumes this is active
         return 0;
+    }
+
+    public static short count(short info) {
+        return (short) (info & ((1 << 15) - 1));
     }
 
     public static boolean isActive(short info) {

@@ -21,7 +21,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
  *    pending. The value of the integer indicates how many messages have
  *    been received.
  * 2. If the marker is off, then the integer encodes the number of pending
- *    messages.
+ *    messages. (May be positive or negative).
  * 3. If the marker is on and the integer is N > 0, then the refob is 
  *    finishing with N pending messages.
  * 4. If the marker is on and the integer is 0, then the refob is released.
@@ -38,8 +38,6 @@ class RefobStatus {
   
     public static int initialPendingRefob = -1;
 
-    public static int initialActiveRefob = 0;
-
     public static int addToSentCount(int status, int m) {
         // assumes n is an active refob
         return status + (m << 1);
@@ -52,12 +50,16 @@ class RefobStatus {
 
     public static int activateRefob(int status) {
         // assumes n is a pending refob
-        return status | 1;
+        return status & (Integer.MAX_VALUE - 1);
     }
 
     public static int deactivateRefob(int status) {
         // assumes n is an active refob
         return status | 1;
+    }
+
+    public static boolean isPending(int status) {
+        return status < 0;
     }
 
     public static boolean refobIsReleased(int status) {
