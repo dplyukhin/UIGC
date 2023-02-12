@@ -10,18 +10,6 @@ object GC {
         val recvCount: mutable.HashMap[Token, Int]
     )
     type History
-    class Shadow {
-        /** A shadow is marked if it is potentially unblocked in the current history */
-        val isMarked: Boolean = false
-        /** 
-         * A list of unreleased refobs pointing to this actor.
-         */
-        val incoming: mutable.HashMap[Token,RefobStatus] = mutable.HashMap()
-        /**
-         * A list of unreleased refobs pointing from this actor.
-         */
-        val outgoing: mutable.HashMap[Ref, Shadow] = mutable.HashMap()
-    }
 
     def onEntry(entry: Entry, history: History): Unit = {
         for (fact <- entry.created) {

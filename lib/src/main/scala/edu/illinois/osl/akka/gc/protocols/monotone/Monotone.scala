@@ -17,22 +17,24 @@ object Monotone extends Protocol {
 
   class SpawnInfo(
     val token: Option[Token],
-    val creator: Option[Name]
+    val creator: Option[Name],
+    val shadow: Shadow
   )
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, None, refs.asInstanceOf[Iterable[Refob[Nothing]]])
 
   override def rootSpawnInfo(): SpawnInfo = 
-    new SpawnInfo(None, None)
+    new SpawnInfo(None, None, new Shadow())
 
   override def initState[T](
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val state = new State()
-    val selfRef = Refob[Nothing](Some(newToken(state, context)), Some(self), self)
+    val shadow = spawnInfo.shadow
+    val state = new State(shadow)
+    val selfRef = Refob[Nothing](Some(newToken(shadow, state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
     state.selfRef = selfRef
     state.onCreate(creatorRef)
@@ -57,12 +59,13 @@ object Monotone extends Protocol {
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
-  def newToken[T](
-    state: State, 
+  def newToken[T,S](
+    targetShadow: Shadow,
+    state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Token = {
     val count = state.count
-    val token = Token(ctx.self, count)
+    val token = new Token(ctx.self, count, targetShadow)
     state.count += 1
     token
   }
@@ -72,9 +75,11 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val x = newToken(state, ctx)
+    val shadow = new Shadow()
+    val x = newToken(shadow, state, ctx)
     val self = ctx.self
-    val child = factory(new SpawnInfo(Some(x), Some(self)))
+    val spawnInfo = new SpawnInfo(Some(x), Some(self), shadow)
+    val child = factory(spawnInfo)
     val ref = new Refob[S](Some(x), Some(self), child)
     activate(ref, state, ctx)
     ref
@@ -119,7 +124,8 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val token = newToken(state, ctx)
+    val targetShadow = target.token.get.targetShadow
+    val token = newToken(targetShadow, state, ctx)
     val ref = Refob[S](Some(token), Some(owner.target), target.target)
     val entry = state.onCreate(ref)
     if (entry != null) sendEntry(entry, ctx)

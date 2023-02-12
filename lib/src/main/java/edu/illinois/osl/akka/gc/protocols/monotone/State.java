@@ -14,6 +14,8 @@ class State implements Pretty {
     int createdIdx;
     /** Where in the array to insert the next "updated" refob */
     int updatedIdx;
+    /** This actor's shadow */
+    Shadow shadow;
     /** This actor's ref to itself */
     Object selfRef;
     /** Tracks references created by this actor */
@@ -23,8 +25,9 @@ class State implements Pretty {
     /** Tracks how many messages are received using each reference. */
     ReceiveCount recvCount;
 
-    public State() {
+    public State(Shadow shadow) {
         this.count = 0;
+        this.shadow = shadow;
         this.createdIdx = 0;
         this.created = new Refob<?>[ARRAY_MAX];
         this.updated = new Refob<?>[ARRAY_MAX];
@@ -90,6 +93,7 @@ class State implements Pretty {
 
     public Entry finalizeEntry() {
         Entry entry = getEntry();
+        entry.shadow = shadow;
 
         if (createdIdx > 0) {
             for (int i = 0; i < createdIdx; i++) {

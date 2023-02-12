@@ -38,7 +38,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   var total: Int = 0
 
   println("Bookkeeper started!")
-  timers.startTimerWithFixedDelay(Wakeup, 50.millis)
+  timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
 
   override def onMessage(msg: Msg): Behavior[Msg] = {
     msg match {
@@ -66,6 +66,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
     case PostStop =>
       println(s"Bookkeeper stopped! Read $total entries in total.")
+      timers.cancel(Wakeup)
       this
   }
 }

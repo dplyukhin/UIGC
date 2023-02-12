@@ -3,6 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 import java.util.Arrays;
 
 public class Entry {
+    public Shadow shadow;
     public Refob<?>[] created;
     public Token[] recvTokens;
     public short[] recvCounts;
@@ -10,6 +11,7 @@ public class Entry {
     public short[] sendInfos;
 
     public Entry(int ARRAY_MAX) {
+        shadow     = null;
         created    = new Refob<?>[ARRAY_MAX];
         recvTokens = new Token[ARRAY_MAX];
         recvCounts = new short[ARRAY_MAX];
@@ -18,6 +20,7 @@ public class Entry {
     }
 
     public void clean() {
+        shadow = null;
         Arrays.fill(created, null);
         Arrays.fill(recvTokens, null);
         Arrays.fill(recvCounts, (short) 0);

@@ -4,11 +4,13 @@ import edu.illinois.osl.akka.gc.interfaces._
 
 /**
  * An opaque and globally unique token.
- *
- * @param ref The [[AkkaActorRef]] of the creator of the token
- * @param n A sequence number, unique for the creating actor
  */
-case class Token(ref: Name, n: Int) extends Pretty {
+class Token(val creator: Name, val seqnum: Int, val targetShadow: Shadow) extends Pretty {
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case other: Token => this.creator == other.creator && this.seqnum == other.seqnum
+    }
+  }
   def pretty: String = s"Token#${Math.floorMod(this.hashCode(), 1000)}"
 }
 
