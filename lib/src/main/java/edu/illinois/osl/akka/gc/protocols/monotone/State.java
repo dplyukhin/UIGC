@@ -31,49 +31,53 @@ class State implements Pretty {
         this.recvCount = new ReceiveCount(ARRAY_MAX);
     }
 
-    public void onCreate(Refob<?> ref) {
+    public Entry onCreate(Refob<?> ref) {
         created[createdIdx++] = ref;
         if (createdIdx >= ARRAY_MAX) {
-            finalizeEntry();
+            return finalizeEntry();
         }
+        return null;
     }
 
-    public void onReceive(Refob<?> ref) {
-        ref.initialize(this);
+    public Entry onActivate(Refob<?> ref) {
         ref.hasChangedThisPeriod_$eq(true);
         updated[updatedIdx++] = ref;
         if (updatedIdx >= ARRAY_MAX) {
-            finalizeEntry();
+            return finalizeEntry();
         }
+        return null;
     }
 
-    public void onDeactivate(Refob<?> ref) {
+    public Entry onDeactivate(Refob<?> ref) {
         ref.info_$eq(RefobInfo.deactivate(ref.info()));
         if (!ref.hasChangedThisPeriod()) {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
             if (updatedIdx >= ARRAY_MAX) {
-                finalizeEntry();
+                return finalizeEntry();
             }
         }
+        return null;
     }
 
-    public void onSend(Refob<?> ref) {
+    public Entry onSend(Refob<?> ref) {
         ref.info_$eq(RefobInfo.incSendCount(ref.info()));
         if (!ref.hasChangedThisPeriod()) {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
             if (updatedIdx >= ARRAY_MAX) {
-                finalizeEntry();
+                return finalizeEntry();
             }
         }
+        return null;
     }
 
-    public void incReceiveCount(Token token) {
+    public Entry incReceiveCount(Token token) {
         recvCount.incCount(token);
         if (recvCount.size >= ARRAY_MAX) {
-            finalizeEntry();
+            return finalizeEntry();
         }
+        return null;
     }
 
     public Entry getEntry() {
@@ -118,8 +122,7 @@ class State implements Pretty {
             updatedIdx = 0;
         }
 
-        putEntry(entry);
-        return null;
+        return entry;
     }
 
     @Override

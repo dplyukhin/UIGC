@@ -27,7 +27,8 @@ case class Refob[-T](
   target: RefLike[GCMessage[T]],
 ) extends RefobLike[T] {
 
-  var state: State = null
+  var state: State = _
+  var ctx: ContextLike[GCMessage[_]] = _
   var hasChangedThisPeriod: Boolean = false
   var info: Short = RefobInfo.activeRefob
 
@@ -36,13 +37,14 @@ case class Refob[-T](
     hasChangedThisPeriod = false
   }
   
-  def initialize(state: State): Unit = {
+  def initialize[T](state: State, ctx: ContextLike[GCMessage[T]]): Unit = {
     this.state = state
+    this.ctx = ctx.asInstanceOf[ContextLike[GCMessage[_]]]
   }
 
   override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = {
+    Monotone.onSend(this, this.state, this.ctx)
     target ! AppMsg(msg, token, refs.asInstanceOf[Iterable[Refob[Nothing]]])
-    state.onSend(this)
   }
 
   override def pretty: String = {

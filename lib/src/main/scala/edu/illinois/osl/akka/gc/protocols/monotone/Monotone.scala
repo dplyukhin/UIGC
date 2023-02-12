@@ -36,8 +36,18 @@ object Monotone extends Protocol {
     state.selfRef = selfRef
     state.onCreate(creatorRef)
     state.onCreate(selfRef)
-    state.onReceive(selfRef)
+    activate(selfRef, state, context)
     state
+  }
+
+  def activate[T,S](
+    ref: Refob[T],
+    state: State,
+    ctx: ContextLike[GCMessage[S]]
+  ): Unit = {
+    ref.initialize(state, ctx)
+    val entry = state.onActivate(ref)
+    if (entry != null) sendEntry(entry, ctx)
   }
 
   def getSelfRef[T](
@@ -56,13 +66,6 @@ object Monotone extends Protocol {
     token
   }
   
-  def incReceivedCount(optoken: Option[Token], state: State): Unit = {
-    if (optoken.isDefined) {
-      val token = optoken.get
-      state.incReceiveCount(token)
-    }
-  }
-
   override def spawnImpl[S, T](
     factory: SpawnInfo => RefLike[GCMessage[S]],
     state: State,
@@ -72,8 +75,17 @@ object Monotone extends Protocol {
     val self = ctx.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    state.onReceive(ref)
+    activate(ref, state, ctx)
     ref
+  }
+
+  def onSend(
+    ref: Refob[_],
+    state: State,
+    ctx: ContextLike[GCMessage[_]]
+  ): Unit = {
+    val entry = state.onSend(ref)
+    if (entry != null) sendEntry(entry, ctx)
   }
 
   override def onMessage[T](
@@ -84,10 +96,12 @@ object Monotone extends Protocol {
     msg match {
       case AppMsg(payload, token, refs) =>
         for (ref <- refs) {
-          state.onReceive(ref)
+          activate(ref, state, ctx)
         }
-        // increment recv count for this token
-        incReceivedCount(token, state)
+        for (t <- token) {
+          val entry = state.incReceiveCount(t)
+          if (entry != null) sendEntry(entry, ctx)
+        }
         Some(payload)
     }
 
@@ -106,7 +120,8 @@ object Monotone extends Protocol {
   ): Refob[S] = {
     val token = newToken(state, ctx)
     val ref = Refob[S](Some(token), Some(owner.target), target.target)
-    state.onCreate(ref)
+    val entry = state.onCreate(ref)
+    if (entry != null) sendEntry(entry, ctx)
     ref
   }
 
@@ -116,7 +131,8 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
     for (ref <- releasing) {
-      state.onDeactivate(ref)
+      val entry = state.onDeactivate(ref)
+      if (entry != null) sendEntry(entry, ctx)
     }
   }
 
@@ -144,5 +160,12 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
     ??? // Refobs carry message counts now, so it's unclear what this means
+  }
+
+  def sendEntry[T](
+    entry: Entry,
+    ctx: ContextLike[GCMessage[T]]
+  ): Unit = {
+    //Bookkeeper(ctx.system)
   }
 }
