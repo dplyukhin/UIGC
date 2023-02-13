@@ -2,7 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 public class GC {
     /** The size of each array in an entry */
-    static int ARRAY_MAX = 16; // Use a power of 2 for the receive count
+    static int ARRAY_MAX = 16; // Need to use a power of 2 for the receive count
 
     public static void processEntry(Entry entry) {
         // Created refs
@@ -25,28 +25,35 @@ public class GC {
         for (int i = 0; i < ARRAY_MAX; i++) {
             if (entry.sendTokens[i] == null) break;
             Token token = entry.sendTokens[i];
-
             short info = entry.sendInfos[i];
+
             boolean isActive = RefobInfo.isActive(info);
+            boolean isDeactivated = !isActive;
             short sendCount = RefobInfo.count(info);
 
             Shadow targetShadow = token.targetShadow();
             int status = targetShadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
             boolean wasPending = RefobStatus.isPending(status);
-            if (isActive && wasPending)
-                status = RefobStatus.activate(status);
+            status = RefobStatus.addToSentCount(status, sendCount);
+            if (isActive)
+                status = RefobStatus.activate(status); // idempotent
             else
                 status = RefobStatus.deactivate(status);
-            status = RefobStatus.addToSentCount(status, sendCount);
+            boolean isReleased = RefobStatus.isReleased(status);
 
             // Adjust this actor's outgoing refobs: add activated refobs, remove released ones.
             if (isActive && wasPending) {
-                entry.shadow.outgoing.put(token, targetShadow);
+                // This entry must be the first one that mentions the refob
+                Shadow prev = entry.shadow.outgoing.put(token, targetShadow);
+                assert(prev == null);
             }
-            if (RefobStatus.isReleased(status)) {
-                // delete it from the set. // TODO Maybe we only need outgoing *active* refs?
+            else if (isDeactivated) {
+                // This entry must be the one that deactivated the refob
+                Shadow prev = entry.shadow.outgoing.remove(token);
+                assert(prev == null);
+            }
+            if (isReleased) {
                 targetShadow.incoming.remove(token);
-                entry.shadow.outgoing.remove(token);
             }
         }
         // Receive counts
@@ -58,7 +65,6 @@ public class GC {
             int status = shadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
             int newStatus = RefobStatus.addToRecvCount(status, count);
             if (RefobStatus.isReleased(newStatus)) {
-                // TODO Update the other actor too?
                 shadow.incoming.remove(token);
             }
             else {
