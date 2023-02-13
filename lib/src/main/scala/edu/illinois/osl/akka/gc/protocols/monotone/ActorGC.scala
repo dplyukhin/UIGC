@@ -59,7 +59,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         }
         val end = System.currentTimeMillis()
         total += count
-        println(s"Bookeeper read $count entries in ${(end - start)}ms.")
+        //println(s"Bookeeper read $count entries in ${(end - start)}ms.")
         this
     }
   }

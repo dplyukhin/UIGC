@@ -2,7 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 public class GC {
     /** The size of each array in an entry */
-    static int ARRAY_MAX = 8; // Use a power of 2 for the receive count
+    static int ARRAY_MAX = 16; // Use a power of 2 for the receive count
 
     public static void processEntry(Entry entry) {
         // Created refs
@@ -34,16 +34,16 @@ public class GC {
             int status = targetShadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
             boolean wasPending = RefobStatus.isPending(status);
             if (isActive && wasPending)
-                status = RefobStatus.activateRefob(status);
+                status = RefobStatus.activate(status);
             else
-                status = RefobStatus.deactivateRefob(status);
+                status = RefobStatus.deactivate(status);
             status = RefobStatus.addToSentCount(status, sendCount);
 
             // Adjust this actor's outgoing refobs: add activated refobs, remove released ones.
             if (isActive && wasPending) {
                 entry.shadow.outgoing.put(token, targetShadow);
             }
-            if (RefobStatus.refobIsReleased(status)) {
+            if (RefobStatus.isReleased(status)) {
                 // delete it from the set. // TODO Maybe we only need outgoing *active* refs?
                 targetShadow.incoming.remove(token);
                 entry.shadow.outgoing.remove(token);
@@ -57,7 +57,7 @@ public class GC {
             Shadow shadow = entry.shadow;
             int status = shadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
             int newStatus = RefobStatus.addToRecvCount(status, count);
-            if (RefobStatus.refobIsReleased(newStatus)) {
+            if (RefobStatus.isReleased(newStatus)) {
                 // TODO Update the other actor too?
                 shadow.incoming.remove(token);
             }

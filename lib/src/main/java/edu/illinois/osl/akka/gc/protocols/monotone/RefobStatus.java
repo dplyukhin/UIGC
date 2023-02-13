@@ -1,68 +1,82 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
-/** 
+/**
  * A refob's status is either:
- * 1. Pending: Created, but not activated, with N received messages.
+ * 1. Pending: Created, but not activated, with N <= 0 pending messages.
  * 2. Active: Activated, with N pending messages.
  * 3. Finishing: Deactivated, with N > 0 pending messages.
  * 4. Released: Deactivated, with 0 pending messages.
- * 
+ *
  * The number of pending messages is the difference between the owner's send
- * count and the target's receive count. If these values are not defined,
- * then they default to zero.
- * 
- * Note that if a refob is active, then it may have a negative number of 
- * pending messages. If a refob is finishing, then it can only have a
+ * count and the target's receive count. Note that this value may be negative.
+ * The send count and the receive count each default to zero if they are not
+ * defined.
+ *
+ * Note that if a refob is active or pending, then it may have a negative number
+ * of pending messages. If a refob is finishing, then it can only have a
  * positive number of pending messages.
- * 
- * We encode these four states with a single integer. The 31 highest-order
- * bits encode a 31-bit integer. The lowest order bit is a marker.
- * 1. If the marker is on and the integer is negative, then the refob is
- *    pending. The value of the integer indicates how many messages have
- *    been received.
- * 2. If the marker is off, then the integer encodes the number of pending
- *    messages. (May be positive or negative).
- * 3. If the marker is on and the integer is N > 0, then the refob is 
- *    finishing with N pending messages.
- * 4. If the marker is on and the integer is 0, then the refob is released.
- * 
- * Some conveniences of this representation:
- * - Released refobs are represented as the integer 1.
- * - Active, blocked refobs are represented as the integer 0.
- * 
- * If an actor has any unreleased refobs whose status is nonzero, then the
- * actor is potentially unblocked in the history. Either the history is not 
- * recent enough, not full enough, or a refob is unblocked.
+ *
+ * We encode these four states with a single integer. The 30 highest-order
+ * bits encode a 30-bit integer. The two lowest bits encode the status:
+ * 1. Status 00 indicates active.
+ * 2. Status 01 indicates pending.
+ * 3. Status 10 indicates deactivated, i.e. finishing or released.
+ *    a. A refob is finishing if it is deactivated with a nonzero count.
+ *    b. A refob is released if it is deactivated with a zero coung.
+ *
+ * Active, blocked refobs are represented as the integer 0, making it easy to
+ * check if an actor is blocked.
  */
 class RefobStatus {
-  
-    public static int initialPendingRefob = -1;
+
+    private static int STATUS_BITS = 3;
+    private static int ACTIVE_MASK = 0;
+    private static int PENDING_MASK = 1;
+    private static int DEACTIVATED_MASK = 2;
+
+    public static int initialPendingRefob = 1;
 
     public static int addToSentCount(int status, int m) {
-        // assumes n is an active refob
-        return status + (m << 1);
+        return status + (m << 2);
     }
 
     public static int addToRecvCount(int status, int m) {
-        // n may be pending, active, or finishing
-        return status - (m << 1);
+        return status - (m << 2);
     }
 
-    public static int activateRefob(int status) {
-        // assumes n is a pending refob
-        return status & (Integer.MAX_VALUE - 1);
+    public static int activate(int status) {
+        return (status & ~STATUS_BITS) | ACTIVE_MASK;
     }
 
-    public static int deactivateRefob(int status) {
-        // assumes n is an active refob
-        return status | 1;
+    public static int deactivate(int status) {
+        return (status & ~STATUS_BITS) | DEACTIVATED_MASK;
+    }
+
+    public static int count(int status) {
+        return status >> 2;
     }
 
     public static boolean isPending(int status) {
-        return status < 0;
+        return (status & STATUS_BITS) == PENDING_MASK;
     }
 
-    public static boolean refobIsReleased(int status) {
-        return status == 1;
+    public static boolean hasBeenActivated(int status) {
+        return !isPending(status);
+    }
+
+    public static boolean isActive(int status) {
+        return (status & STATUS_BITS) == ACTIVE_MASK;
+    }
+
+    public static boolean hasBeenDeactivated(int status) {
+        return (status & STATUS_BITS) == DEACTIVATED_MASK;
+    }
+
+    public static boolean isFinishing(int status) {
+        return hasBeenDeactivated(status) && count(status) != 0;
+    }
+
+    public static boolean isReleased(int status) {
+        return status == DEACTIVATED_MASK;
     }
 }
