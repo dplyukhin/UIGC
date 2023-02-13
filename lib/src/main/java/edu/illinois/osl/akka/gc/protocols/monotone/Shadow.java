@@ -1,5 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
+
 import java.util.HashMap;
 
 public class Shadow {
@@ -11,6 +13,8 @@ public class Shadow {
     boolean isRoot;
     /** Indicates whether the GC has received a copy of this shadow yet. */
     boolean isLocal;
+    /** A reference to the actor. Only initialized if isLocal is true. */
+    RefLike<GCMessage<Object>> ref;
 
     public Shadow() {
         incoming = new HashMap<>();

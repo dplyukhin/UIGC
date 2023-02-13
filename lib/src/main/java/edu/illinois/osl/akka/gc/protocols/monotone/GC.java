@@ -104,5 +104,11 @@ public class GC {
                 }
             }
         }
+
+        for (Shadow shadow : shadows.values()) {
+            if (shadow.mark != MARKED && shadow.isLocal) {
+                shadow.ref.$bang(new StopMsg());
+            }
+        }
     }
 }

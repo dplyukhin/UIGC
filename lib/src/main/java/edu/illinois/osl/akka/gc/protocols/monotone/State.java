@@ -10,6 +10,8 @@ public class State implements Pretty {
     int createdIdx;
     /** Where in the array to insert the next "updated" refob */
     int updatedIdx;
+    /** True if the GC has asked this actor to stop */
+    boolean stopRequested;
     /** This actor's shadow */
     Shadow shadow;
     /** This actor's ref to itself */

@@ -1,6 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
-import akka.actor.typed.Signal
+import akka.actor.typed.{Signal, Terminated}
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 import edu.illinois.osl.akka.gc.proxies.AkkaContext
@@ -109,6 +109,8 @@ object Monotone extends Protocol {
           if (entry != null) sendEntry(entry, ctx)
         }
         Some(payload)
+      case _ =>
+        None
     }
 
   override def onIdle[T](
@@ -116,7 +118,23 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    Protocol.ShouldContinue
+    msg match {
+      case StopMsg() =>
+        state.stopRequested = true
+        tryTerminate(state, ctx)
+      case _ =>
+        Protocol.ShouldContinue
+    }
+
+  def tryTerminate[T](
+    state: State,
+    ctx: ContextLike[GCMessage[T]]
+  ): Protocol.TerminationDecision = {
+    if (state.stopRequested && !ctx.anyChildren)
+      Protocol.ShouldStop
+    else
+      Protocol.ShouldContinue
+  }
 
   override def createRef[S,T](
     target: Refob[S], 
@@ -159,7 +177,12 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    Protocol.Unhandled
+    signal match {
+      case signal: Terminated =>
+        tryTerminate(state, ctx)
+      case signal =>
+        Protocol.Unhandled
+    }
 
   def initializeRefob[T](
     refob: Refob[Nothing],

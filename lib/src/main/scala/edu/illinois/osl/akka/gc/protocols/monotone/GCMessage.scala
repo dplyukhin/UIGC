@@ -12,3 +12,8 @@ final case class AppMsg[+T](
     case Some(t) => s"AppMsg(${t.pretty}, $payload, ${refs.toList.pretty})"
   }
 }
+
+case class StopMsg() extends GCMessage[Any] {
+  override def pretty: String = "STOP"
+  override def refs: Iterable[Refob[Nothing]] = Nil
+}
