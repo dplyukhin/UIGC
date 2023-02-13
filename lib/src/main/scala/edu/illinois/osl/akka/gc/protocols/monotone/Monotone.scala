@@ -36,7 +36,7 @@ object Monotone extends Protocol {
     val state = new State(shadow)
     val selfRef = Refob[Nothing](Some(newToken(shadow, state, context)), Some(self), self)
     val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
-    state.selfRef = selfRef
+    state.selfRef = selfRef.asInstanceOf[Refob[AnyRef]]
     state.onCreate(creatorRef)
     state.onCreate(selfRef)
     activate(selfRef, state, context)

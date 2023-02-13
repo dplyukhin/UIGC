@@ -7,14 +7,16 @@ public class Shadow {
     HashMap<Token, Integer> incoming;
     /** A list of active refobs pointing from this actor. */
     HashMap<Token, Shadow> outgoing;
-    /** A shadow is marked if it is potentially unblocked in the current history */
-    boolean isMarked;
+    boolean mark;
     boolean isRoot;
+    /** Indicates whether the GC has received a copy of this shadow yet. */
+    boolean isLocal;
 
     public Shadow() {
         incoming = new HashMap<>();
         outgoing = new HashMap<>();
-        isMarked = false;
+        mark = false;
         isRoot = false;
+        isLocal = false;
     }
 }

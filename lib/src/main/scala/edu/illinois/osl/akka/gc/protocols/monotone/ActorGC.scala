@@ -36,6 +36,8 @@ class Bookkeeper(timers: TimerScheduler[Bookkeeper.Msg], ctx: ActorContext[Bookk
 extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   import Bookkeeper._
   var total: Int = 0
+  var MARKED: Boolean = false
+  val shadows: java.util.HashMap[Name, Shadow] = new java.util.HashMap()
 
   println("Bookkeeper started!")
   timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
@@ -50,6 +52,8 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
+          shadows.put(entry.self, entry.shadow)
+          entry.shadow.isLocal = true
           GC.processEntry(entry)
           // Put back the entry
           entry.clean()
@@ -59,8 +63,12 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         }
         val end = System.currentTimeMillis()
         total += count
-        //println(s"Bookeeper read $count entries in ${(end - start)}ms.")
-        this
+        // println(s"Bookeeper read $count entries in ${(end - start)}ms.")
+
+        GC.trace(shadows, MARKED)
+        MARKED = !MARKED
+
+        Behaviors.same
     }
   }
 

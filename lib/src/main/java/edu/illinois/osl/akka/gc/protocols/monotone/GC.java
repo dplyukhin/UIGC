@@ -1,5 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import java.util.*;
+
 public class GC {
     /** The size of each array in an entry */
     static int ARRAY_MAX = 16; // Need to use a power of 2 for the receive count
@@ -69,6 +71,37 @@ public class GC {
             }
             else {
                 shadow.incoming.put(token, newStatus);
+            }
+        }
+    }
+
+    private static boolean isUnblocked(Shadow shadow) {
+        for (int status : shadow.incoming.values()) {
+            if (RefobStatus.isUnblocked(status)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void trace(HashMap<?, Shadow> shadows, boolean MARKED) {
+        Shadow[] queue = new Shadow[shadows.size()];
+        int allocptr = 0;
+        for (Shadow shadow : shadows.values()) {
+            if (isUnblocked(shadow)) {
+                queue[allocptr] = shadow;
+                allocptr++;
+                shadow.mark = MARKED;
+            }
+        }
+        for (int scanptr = 0; scanptr < allocptr; scanptr++) {
+            Shadow owner = queue[scanptr];
+            for (Shadow target : owner.outgoing.values()) {
+                if (target.mark != MARKED && target.isLocal) {
+                    queue[allocptr] = target;
+                    allocptr++;
+                    target.mark = MARKED;
+                }
             }
         }
     }

@@ -79,4 +79,8 @@ public class RefobStatus {
     public static boolean isReleased(int status) {
         return status == DEACTIVATED_MASK;
     }
+
+    public static boolean isUnblocked(int status) {
+        return status != 0;
+    }
 }

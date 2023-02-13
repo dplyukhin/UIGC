@@ -13,7 +13,7 @@ public class State implements Pretty {
     /** This actor's shadow */
     Shadow shadow;
     /** This actor's ref to itself */
-    Object selfRef;
+    Refob<Object> selfRef;
     /** Tracks references created by this actor */
     Refob<?>[] created;
     /** Tracks all the refs that have been updated in this entry period */
@@ -89,6 +89,7 @@ public class State implements Pretty {
 
     public Entry finalizeEntry() {
         Entry entry = getEntry();
+        entry.self = selfRef.target();
         entry.shadow = shadow;
 
         if (createdIdx > 0) {

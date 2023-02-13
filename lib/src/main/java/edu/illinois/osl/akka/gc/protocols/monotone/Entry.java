@@ -1,8 +1,11 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
+
 import java.util.Arrays;
 
 public class Entry {
+    public RefLike<GCMessage<Object>> self;
     public Shadow shadow;
     public Refob<?>[] created;
     public Token[] recvTokens;
@@ -11,6 +14,7 @@ public class Entry {
     public short[] sendInfos;
 
     public Entry() {
+        self       = null;
         shadow     = null;
         created    = new Refob<?>[GC.ARRAY_MAX];
         recvTokens = new Token[GC.ARRAY_MAX];
@@ -20,6 +24,7 @@ public class Entry {
     }
 
     public void clean() {
+        self   = null;
         shadow = null;
         Arrays.fill(created, null);
         Arrays.fill(recvTokens, null);
