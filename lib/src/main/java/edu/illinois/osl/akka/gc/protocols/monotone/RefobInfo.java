@@ -5,18 +5,18 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
  * whether the refob is deactivated. This is packed into a short
  * whose least significant bit is on iff the refob has been deactivated.
  */
-class RefobInfo {
+public class RefobInfo {
     public static short activeRefob = 0;
 
     public static short incSendCount(short info) {
         // assumes this is active
-        assert(info >= 0);
+        assert(isActive(info));
         return (short) (info + 2);
     }
 
     public static short resetCount(short info) {
         // assumes this is active
-        assert(info >= 0);
+        assert(isActive(info));
         return 0;
     }
 

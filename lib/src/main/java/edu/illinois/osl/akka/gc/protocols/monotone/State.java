@@ -2,9 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
 
-import java.util.Arrays;
-
-class State implements Pretty {
+public class State implements Pretty {
 
     /** A sequence number used for generating unique tokens */
     int count;

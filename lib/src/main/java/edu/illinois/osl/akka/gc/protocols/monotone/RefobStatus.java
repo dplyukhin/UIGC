@@ -27,12 +27,12 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
  * Active, blocked refobs are represented as the integer 0, making it easy to
  * check if an actor is blocked.
  */
-class RefobStatus {
+public class RefobStatus {
 
-    private static int STATUS_BITS = 3;
-    private static int ACTIVE_MASK = 0;
-    private static int PENDING_MASK = 1;
-    private static int DEACTIVATED_MASK = 2;
+    final private static int STATUS_BITS = 3;
+    final private static int ACTIVE_MASK = 0;
+    final private static int PENDING_MASK = 1;
+    final private static int DEACTIVATED_MASK = 2;
 
     public static int initialPendingRefob = 1;
 
