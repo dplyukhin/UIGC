@@ -123,6 +123,9 @@ object Monotone extends Protocol {
         state.stopRequested = true
         tryTerminate(state, ctx)
       case _ =>
+        if (!ctx.asInstanceOf[AkkaContext[GCMessage[T]]].queue.hasMessages) {
+          sendEntry(state.finalizeEntry(), ctx)
+        }
         Protocol.ShouldContinue
     }
 
