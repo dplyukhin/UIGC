@@ -310,7 +310,7 @@ class Configuration {
           child
         }
         // create child's state
-        val refob = protocol.spawnImpl(
+        val refob = protocol.spawnImpl[Payload, Payload](
           spawn,
           context(parent).gcState,
           context(parent)
