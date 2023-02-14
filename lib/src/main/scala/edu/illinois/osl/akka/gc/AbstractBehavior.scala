@@ -7,6 +7,8 @@ import edu.illinois.osl.akka.gc.protocols.Protocol
 abstract class AbstractBehavior[T](context: ActorContext[T])
   extends ExtensibleBehavior[protocol.GCMessage[T]] {
 
+  implicit val _context: ActorContext[T] = context
+
   // User API
   def onMessage(msg: T): Behavior[T]
   def onSignal: PartialFunction[Signal, Behavior[T]] = PartialFunction.empty

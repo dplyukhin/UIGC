@@ -2,10 +2,11 @@ package edu.illinois.osl.akka.gc
 
 import akka.actor.typed
 import akka.actor.typed.scaladsl
+import edu.illinois.osl.akka.gc.interfaces.RefobLike
 import edu.illinois.osl.akka.gc.proxies._
 
 /**
- * A version of [[AkkaActorContext]] used by garbage-collected actors. Provides
+ * A version of [[scaladsl.ActorContext]] used by garbage-collected actors. Provides
  * methods for spawning garbage-collected actors, creating new references, and
  * releasing references. Also stores GC-related local state of the actor. By
  * keeping GC state in the [[ActorContext]], garbage-collected actors can safely
@@ -19,7 +20,7 @@ class ActorContext[T](
 
   private[gc] val proxyContext = AkkaContext(rawContext)
 
-  val state = protocol.initState(proxyContext, spawnInfo)
+  private[gc] val state: protocol.State = protocol.initState(proxyContext, spawnInfo)
 
   val self: ActorRef[T] = protocol.getSelfRef(state, proxyContext)
 
@@ -39,6 +40,13 @@ class ActorContext[T](
       state, proxyContext)
   }
 
+  def sendMessage[S](ref: RefobLike[S], msg: S, refs: Iterable[RefobLike[Nothing]]): Unit =
+    protocol.sendMessage(
+      ref.asInstanceOf[protocol.Refob[S]],
+      msg,
+      refs.asInstanceOf[Iterable[protocol.Refob[Nothing]]],
+      state, proxyContext)
+
   /**
    * Spawn a new anonymous actor into the GC system.
    *
@@ -51,7 +59,6 @@ class ActorContext[T](
       info => AkkaRef(rawContext.spawnAnonymous(factory(info))), 
       state, proxyContext)
   }
-
 
   /**
    * Creates a reference to an actor to be sent to another actor and adds it to the created collection.
@@ -67,8 +74,7 @@ class ActorContext[T](
   }
 
   /**
-   * Releases a collection of references from an actor, sending batches [[ReleaseMsg]] to each targeted actor.
-   * @param releasing A collection of references.
+   * Releases a collection of references from an actor.
    */
   def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
     protocol.release(releasing, state, proxyContext)

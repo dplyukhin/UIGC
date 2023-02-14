@@ -15,20 +15,6 @@ object WRC extends Protocol {
   val RC_INC: Long = 255
 
   case class Refob[-T](target: RefLike[GCMessage[T]]) extends RefobLike[T] {
-    private var state: State = _
-
-    def initialize[S](_state: State): Unit = {
-      state = _state
-    }
-
-    override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = {
-      val isSelfMsg = (target == state.self.target)
-      if (isSelfMsg) {
-        state.pendingSelfMessages += 1
-      }
-      target ! AppMsg(msg, refs.asInstanceOf[Iterable[Refob[Nothing]]], isSelfMsg)
-    }
-
     override def pretty: String = target.pretty
   }
 
@@ -72,7 +58,7 @@ object WRC extends Protocol {
    * by a GC actor. Necessarily, the recipient is a root actor.
    */
   def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] = 
-    AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]], false)
+    AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]], isSelfMsg = false)
 
   /** 
    * Produces SpawnInfo indicating to the actor that it is a root actor.
@@ -86,7 +72,6 @@ object WRC extends Protocol {
     val state = new State(Refob(context.self), spawnInfo)
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(context.self) = pair
-    initializeRefob(state.self, state, context)
     state
   }
 
@@ -106,7 +91,6 @@ object WRC extends Protocol {
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(actorRef) = pair
     val refob = Refob(actorRef)
-    initializeRefob(refob, state, ctx)
     refob
   }
 
@@ -120,7 +104,6 @@ object WRC extends Protocol {
         state.pendingSelfMessages -= 1
       }
       for (ref <- refs) {
-        initializeRefob(ref, state, ctx)
         val pair = state.actorMap.getOrElseUpdate(ref.target, new Pair())
         pair.numRefs = pair.numRefs + 1
         pair.weight = pair.weight + 1
@@ -218,11 +201,17 @@ object WRC extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = ???
 
-  def initializeRefob[T](
-    refob: Refob[Nothing],
+  override def sendMessage[T, S](
+    ref: Refob[T],
+    msg: T,
+    refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ContextLike[GCMessage[S]]
   ): Unit = {
-    refob.initialize(state)
+    val isSelfMsg = ref.target == state.self.target
+    if (isSelfMsg) {
+      state.pendingSelfMessages += 1
+    }
+    ref.target ! AppMsg(msg, refs, isSelfMsg)
   }
 }

@@ -27,7 +27,6 @@ object DRL extends Protocol {
     spawnInfo: SpawnInfo,
   ): State = {
     val state = new State(context.self, spawnInfo)
-    initializeRefob(state.selfRef, state, context)
     state
   }
 
@@ -46,7 +45,6 @@ object DRL extends Protocol {
     val self = state.self
     val child = factory(new SpawnInfo(Some(x), Some(self)))
     val ref = new Refob[S](Some(x), Some(self), child)
-    initializeRefob(ref, state, ctx)
     state.addRef(ref)
     ctx.watch(child)
     ref
@@ -59,7 +57,6 @@ object DRL extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
-        refs.foreach(ref => initializeRefob(ref, state, ctx))
         state.handleMessage(refs, token)
         Some(payload)
       case ReleaseMsg(releasing, created) =>
@@ -90,7 +87,6 @@ object DRL extends Protocol {
 
   /**
    * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
-   * @return Either [[AkkaBehaviors.stopped]] or [[AkkaBehaviors.same]].
    */
   def tryTerminate[T](
     state: State,
@@ -152,10 +148,14 @@ object DRL extends Protocol {
         Protocol.Unhandled
     }
 
-  def initializeRefob[T](
-    refob: Refob[Nothing],
+  override def sendMessage[T, S](
+    ref: Refob[T],
+    msg: T,
+    refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Unit =
-    refob.initialize(state)
+    ctx: ContextLike[GCMessage[S]]
+  ): Unit = {
+    ref.target ! AppMsg(msg, ref.token, refs)
+    state.incSentCount(ref.token)
+  }
 }

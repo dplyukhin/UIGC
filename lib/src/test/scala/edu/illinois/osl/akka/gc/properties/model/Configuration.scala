@@ -2,10 +2,13 @@ package edu.illinois.osl.akka.gc.properties.model
 
 import edu.illinois.osl.akka.gc.protocol
 import edu.illinois.osl.akka.gc.interfaces._
+
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.protocols.Protocol
 
-case class Name(val id: Int) extends RefLike[Msg] with Pretty {
+import scala.annotation.tailrec
+
+case class Name(id: Int) extends RefLike[Msg] with Pretty {
   override def !(msg: Msg): Unit = {
     val config = Configuration.currentConfig  // FIXME ugly hack
     val sender = config.currentActor
@@ -17,9 +20,9 @@ case class Name(val id: Int) extends RefLike[Msg] with Pretty {
   override def pretty: String = {
     val alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     if (id >= 0 && id < 26) 
-      return alpha(id).toString()
+      alpha(id).toString
     else
-      return s"A${id}" 
+      s"A$id"
   }
 }
 
@@ -46,13 +49,13 @@ class Context(
 }
 
 object Configuration {
-  var currentConfig: Configuration = null
+  var currentConfig: Configuration = _
 
   def initialConfig(): Configuration = {
     val config = new Configuration()
     val actor = config.newName()
     val ctx = new Context(
-      actor, config, protocol.rootSpawnInfo,
+      actor, config, protocol.rootSpawnInfo(),
       busy = true, root = true, 
     )
     config.context(actor) = ctx
@@ -94,7 +97,7 @@ object Configuration {
 
   def check(depth: Int)(property: (Configuration, Execution) => Unit): Unit = {
     var total = 0
-    def go(executions: List[Execution], currentDepth: Int = 1): Unit = {
+    @tailrec def go(executions: List[Execution], currentDepth: Int = 1): Unit = {
       val nextDepth = for {
           execution <- executions
           config = execute(execution)
@@ -147,7 +150,7 @@ class Configuration {
   var terminated: mutable.Set[Name] = mutable.Set()
 
   // Ugly hack so that we can get FIFO delivery to work properly
-  var currentActor: Name = null
+  var currentActor: Name = _
 
   // A log of events that triggered the execution; useful for replay
   var execution: List[Event] = Nil
@@ -196,15 +199,15 @@ class Configuration {
     // Search every mailbox for refobs. If a refob points to the actor, add the
     // recipient as an inverse acquaintance.
     val pendingInverseAcquaintances = for {
-        recipient <- mailbox.keys;
-        msg <- mailbox(recipient).toIterable;
-        ref <- msg.refs;
+        recipient <- mailbox.keys
+        msg <- mailbox(recipient).toIterable
+        ref <- msg.refs
         if ref.target == actor
       } yield recipient
 
     // Search every actor's local state for active refs.
     val activeInverseAcquaintances = for {
-        owner <- aliveActors;
+        owner <- aliveActors
         ref <- context(owner).activeRefs
         if ref.target == actor
       } yield owner
@@ -239,7 +242,7 @@ class Configuration {
 
   def newName(): Name = {
     counter += 1
-    new Name(counter-1)
+    Name(counter-1)
   }
 
   def legalSpawnEvents: List[Spawn] =
@@ -260,15 +263,15 @@ class Configuration {
       }
 
     for {
-      sender <- busyActors.toList;
-      recipient <- context(sender).activeRefs;
+      sender <- busyActors.toList
+      recipient <- context(sender).activeRefs
       targetRefs <- powerset(3, context(sender).activeRefs.toList)
     } yield Send(sender, recipient, targetRefs)
   }
 
   def legalReceiveEvents: List[Receive] =
     for {
-      recipient <- idleActors.toList;
+      recipient <- idleActors.toList
       msg <- mailbox(recipient).next
      } yield Receive(recipient, msg)
 
@@ -277,7 +280,7 @@ class Configuration {
 
   def legalDeactivateEvents: List[Deactivate] =
     for {
-      actor <- busyActors.toList;
+      actor <- busyActors.toList
       ref <- context(actor).activeRefs
     } yield Deactivate(actor, ref)
 
@@ -286,7 +289,7 @@ class Configuration {
 
   def legalDroppedMessageEvents: List[DroppedMessage] =
     for {
-      recipient <- idleActors.toList;
+      recipient <- idleActors.toList
       msg <- mailbox(recipient).next
     } yield DroppedMessage(recipient, msg)
 
@@ -334,8 +337,7 @@ class Configuration {
           protocol.createRef(target, recipientRef, senderState, senderCtx)
         // send the message, as well as any control messages needed in the protocol
         // re-initialize the refob, because we may be replaying an execution with fresh refobs.
-        protocol.initializeRefob(recipientRef, senderState, senderCtx)
-        recipientRef.tell(new Payload(), createdRefs)
+        protocol.sendMessage(recipientRef, Payload(), createdRefs, senderState, senderCtx)
 
       case DroppedMessage(recipient, msg) =>
         log = log :+ LogDroppedMessage(recipient, msg)

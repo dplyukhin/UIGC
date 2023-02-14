@@ -7,13 +7,10 @@ import akka.actor.ActorPath
 
 object NoProtocol extends Protocol {
   case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message with Pretty {
-    def pretty: String = payload.toString()
+    def pretty: String = payload.toString
   }
 
   case class Refob[-T](target: RefLike[GCMessage[T]]) extends RefobLike[T] {
-    override def !(msg: T, refs: Iterable[RefobLike[Nothing]]): Unit = 
-      target ! GCMessage(msg, refs.asInstanceOf[Iterable[Refob[Nothing]]])
-
     override def pretty: String = target.pretty
   }
 
@@ -102,9 +99,12 @@ object NoProtocol extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Unit = ()
 
-  def initializeRefob[T](
-    refob: Refob[Nothing],
+  override def sendMessage[T, S](
+    ref: Refob[T],
+    msg: T,
+    refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Unit = ()
+    ctx: ContextLike[GCMessage[S]]
+  ): Unit =
+    ref.target ! GCMessage(msg, refs)
 }

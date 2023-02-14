@@ -43,23 +43,22 @@ object Monotone extends Protocol {
     state
   }
 
-  def activate[T,S](
+  private def activate[T,S](
     ref: Refob[T],
     state: State,
     ctx: ContextLike[GCMessage[S]]
   ): Unit = {
-    ref.initialize(state, ctx)
     val entry = state.onActivate(ref)
     if (entry != null) sendEntry(entry, ctx)
   }
 
-  def getSelfRef[T](
+  override def getSelfRef[T](
     state: State,
     context: ContextLike[GCMessage[T]]
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
-  def newToken[T,S](
+  private def newToken[T,S](
     targetShadow: Shadow,
     state: State,
     ctx: ContextLike[GCMessage[T]]
@@ -83,15 +82,6 @@ object Monotone extends Protocol {
     val ref = new Refob[S](Some(x), Some(self), child)
     activate(ref, state, ctx)
     ref
-  }
-
-  def onSend(
-    ref: Refob[_],
-    state: State,
-    ctx: ContextLike[GCMessage[_]]
-  ): Unit = {
-    val entry = state.onSend(ref)
-    if (entry != null) sendEntry(entry, ctx)
   }
 
   override def onMessage[T](
@@ -129,7 +119,7 @@ object Monotone extends Protocol {
         Protocol.ShouldContinue
     }
 
-  def tryTerminate[T](
+  private def tryTerminate[T](
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision = {
@@ -164,7 +154,7 @@ object Monotone extends Protocol {
     }
   }
 
-  def releaseEverything[T](
+  override def releaseEverything[T](
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Unit = ???
@@ -187,15 +177,7 @@ object Monotone extends Protocol {
         Protocol.Unhandled
     }
 
-  def initializeRefob[T](
-    refob: Refob[Nothing],
-    state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Unit = {
-    ??? // Refobs carry message counts now, so it's unclear what this means
-  }
-
-  def sendEntry[T](
+  private def sendEntry[T](
     entry: Entry,
     ctx: ContextLike[GCMessage[T]]
   ): Unit = {
@@ -204,5 +186,17 @@ object Monotone extends Protocol {
         ActorGC(ctx.system).Queue.add(entry)
       case _ => ???
     }
+  }
+
+  override def sendMessage[T, S](
+    ref: Refob[T],
+    msg: T,
+    refs: Iterable[Refob[Nothing]],
+    state: State,
+    ctx: ContextLike[GCMessage[S]]
+  ): Unit = {
+    val entry = state.onSend(ref)
+    if (entry != null) sendEntry(entry, ctx)
+    ref.target ! AppMsg(msg, ref.token, refs)
   }
 }
