@@ -7,6 +7,7 @@ import scala.collection.mutable
 import edu.illinois.osl.akka.gc.protocols.Protocol
 
 import scala.annotation.tailrec
+import scala.util.Random
 
 case class Name(id: Int) extends RefLike[Msg] with Pretty {
   override def !(msg: Msg): Unit = {
@@ -63,6 +64,30 @@ object Configuration {
     config.children(actor) = Set()
     config.watchers(actor) = Set()
     config
+  }
+
+  def randomUpTo(depth: Int, numExecs: Int)(prop: (Configuration, Execution) => Unit): Unit = {
+    for (d <- 1 to depth) {
+      random(d, numExecs)(prop)
+    }
+  }
+
+  def random(depth: Int, numExecs: Int)(prop: (Configuration, Execution) => Unit): Unit = {
+    for (i <- 1 to numExecs) {
+      val (config, exec) = randomExecution(depth)
+      prop(config, exec)
+    }
+  }
+
+  def randomExecution(depth: Int, config: Configuration = initialConfig()): (Configuration, Execution) = {
+    currentConfig = config // FIXME ugly hack
+    val events = config.legalEvents
+    if (depth <= 0 || events.isEmpty) return (config, Nil)
+    val n = Random.nextInt(events.length)
+    val event = events(n)
+    config.transition(event)
+    val (config2, exec) = randomExecution(depth-1, config)
+    (config2, Seq(event) ++ exec)
   }
 
   def execute(execution: Execution): Configuration = {

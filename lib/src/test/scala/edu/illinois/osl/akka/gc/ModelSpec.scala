@@ -16,7 +16,7 @@ class ModelSpec extends wordspec.AnyWordSpec {
     //   assert(???)
     // }
     "not be unblocked" in {
-      Configuration.check(5){ (config, execution) => 
+      Configuration.randomUpTo(20, numExecs = 1000){ (config, execution) =>
         assert(config.terminated.forall(config.blocked(_)), prettyPrint(config))
       }
     }
