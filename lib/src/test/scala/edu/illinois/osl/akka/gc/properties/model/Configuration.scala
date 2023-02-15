@@ -40,13 +40,15 @@ class Context(
   var activeRefs: Set[Ref] = Set(selfRef)
   var currentMessage: Option[Msg] = None
 
-  def anyChildren: Boolean = 
+  override def anyChildren: Boolean =
     config.children(self).nonEmpty
-  def watch[U](_other: RefLike[U]): Unit = {
+  override def watch[U](_other: RefLike[U]): Unit = {
     val other = _other.asInstanceOf[Name]
     config.watchers(other) = 
       config.watchers.getOrElse(other, Set[Name]()) + self
   }
+  override def hasMessages: Boolean =
+    config.mailbox(self).nonEmpty
 }
 
 object Configuration {
