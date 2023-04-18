@@ -76,6 +76,8 @@ public class GC {
     }
 
     private static boolean isUnblocked(Shadow shadow) {
+        if (shadow.isBusy)
+            return true;
         for (int status : shadow.incoming.values()) {
             if (RefobStatus.isUnblocked(status)) {
                 return true;

@@ -13,6 +13,8 @@ public class Shadow {
     boolean isRoot;
     /** Indicates whether the GC has received a copy of this shadow yet. */
     boolean isLocal;
+    /** Whether this actor was busy in its latest entry. */
+    boolean isBusy;
     /** A reference to the actor. Only initialized if isLocal is true. */
     RefLike<GCMessage<Object>> ref;
 
@@ -22,5 +24,6 @@ public class Shadow {
         mark = false;
         isRoot = false;
         isLocal = false;
+        isBusy = false;
     }
 }

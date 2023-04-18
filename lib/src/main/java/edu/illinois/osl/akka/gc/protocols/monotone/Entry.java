@@ -12,6 +12,7 @@ public class Entry {
     public short[] recvCounts;
     public Token[] sendTokens;
     public short[] sendInfos;
+    public boolean isBusy;
 
     public Entry() {
         self       = null;
@@ -21,6 +22,7 @@ public class Entry {
         recvCounts = new short[GC.ARRAY_MAX];
         sendTokens = new Token[GC.ARRAY_MAX];
         sendInfos  = new short[GC.ARRAY_MAX];
+        isBusy     = false;
     }
 
     public void clean() {
@@ -31,5 +33,6 @@ public class Entry {
         Arrays.fill(recvCounts, (short) 0);
         Arrays.fill(sendTokens, null);
         Arrays.fill(sendInfos, (short) 0);
+        isBusy = false;
     }
 }

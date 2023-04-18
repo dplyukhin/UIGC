@@ -35,7 +35,7 @@ public class State implements Pretty {
     public Entry onCreate(Refob<?> ref) {
         created[createdIdx++] = ref;
         if (createdIdx >= GC.ARRAY_MAX) {
-            return finalizeEntry();
+            return finalizeEntry(true);
         }
         return null;
     }
@@ -44,7 +44,7 @@ public class State implements Pretty {
         ref.hasChangedThisPeriod_$eq(true);
         updated[updatedIdx++] = ref;
         if (updatedIdx >= GC.ARRAY_MAX) {
-            return finalizeEntry();
+            return finalizeEntry(true);
         }
         return null;
     }
@@ -55,7 +55,7 @@ public class State implements Pretty {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
             if (updatedIdx >= GC.ARRAY_MAX) {
-                return finalizeEntry();
+                return finalizeEntry(true);
             }
         }
         return null;
@@ -67,7 +67,7 @@ public class State implements Pretty {
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
             if (updatedIdx >= GC.ARRAY_MAX) {
-                return finalizeEntry();
+                return finalizeEntry(true);
             }
         }
         return null;
@@ -76,7 +76,7 @@ public class State implements Pretty {
     public Entry incReceiveCount(Token token) {
         recvCount.incCount(token);
         if (recvCount.size >= GC.ARRAY_MAX) {
-            return finalizeEntry();
+            return finalizeEntry(true);
         }
         return null;
     }
@@ -89,10 +89,11 @@ public class State implements Pretty {
         return entry;
     }
 
-    public Entry finalizeEntry() {
+    public Entry finalizeEntry(boolean isBusy) {
         Entry entry = getEntry();
         entry.self = selfRef.target();
         entry.shadow = shadow;
+        entry.isBusy = isBusy;
 
         if (createdIdx > 0) {
             for (int i = 0; i < createdIdx; i++) {

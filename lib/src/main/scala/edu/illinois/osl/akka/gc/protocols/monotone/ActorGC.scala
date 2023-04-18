@@ -54,6 +54,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           count += 1
           shadows.put(entry.self, entry.shadow)
           entry.shadow.isLocal = true
+          entry.shadow.isBusy = entry.isBusy
           entry.shadow.ref = entry.self
           GC.processEntry(entry)
           // Put back the entry

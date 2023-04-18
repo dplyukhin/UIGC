@@ -114,7 +114,7 @@ object Monotone extends Protocol {
         tryTerminate(state, ctx)
       case _ =>
         if (!ctx.hasMessages) {
-          sendEntry(state.finalizeEntry(), ctx)
+          sendEntry(state.finalizeEntry(false), ctx)
         }
         Protocol.ShouldContinue
     }
