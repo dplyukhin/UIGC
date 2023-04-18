@@ -33,52 +33,57 @@ public class State implements Pretty {
     }
 
     public Entry onCreate(Refob<?> ref) {
+        Entry oldEntry =
+            createdIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
         created[createdIdx++] = ref;
-        if (createdIdx >= GC.ARRAY_MAX) {
-            return finalizeEntry(true);
-        }
-        return null;
+        return oldEntry;
     }
 
     public Entry onActivate(Refob<?> ref) {
+        Entry oldEntry =
+            updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
         ref.hasChangedThisPeriod_$eq(true);
         updated[updatedIdx++] = ref;
-        if (updatedIdx >= GC.ARRAY_MAX) {
-            return finalizeEntry(true);
-        }
-        return null;
+        return oldEntry;
     }
 
     public Entry onDeactivate(Refob<?> ref) {
         ref.info_$eq(RefobInfo.deactivate(ref.info()));
-        if (!ref.hasChangedThisPeriod()) {
+        if (ref.hasChangedThisPeriod()) {
+            // This change will automatically be reflected in the entry
+            return null;
+        }
+        else {
+            // We'll need to add to the entry; finalize first if need be
+            Entry oldEntry =
+                updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
-            if (updatedIdx >= GC.ARRAY_MAX) {
-                return finalizeEntry(true);
-            }
+            return oldEntry;
         }
-        return null;
     }
 
     public Entry onSend(Refob<?> ref) {
         ref.info_$eq(RefobInfo.incSendCount(ref.info()));
-        if (!ref.hasChangedThisPeriod()) {
+        if (ref.hasChangedThisPeriod()) {
+            // This change will automatically be reflected in the entry
+            return null;
+        }
+        else {
+            // We'll need to add to the entry; finalize first if need be
+            Entry oldEntry =
+                updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
             ref.hasChangedThisPeriod_$eq(true);
             updated[updatedIdx++] = ref;
-            if (updatedIdx >= GC.ARRAY_MAX) {
-                return finalizeEntry(true);
-            }
+            return oldEntry;
         }
-        return null;
     }
 
     public Entry incReceiveCount(Token token) {
+        Entry oldEntry =
+            recvCount.size >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
         recvCount.incCount(token);
-        if (recvCount.size >= GC.ARRAY_MAX) {
-            return finalizeEntry(true);
-        }
-        return null;
+        return oldEntry;
     }
 
     public Entry getEntry() {
