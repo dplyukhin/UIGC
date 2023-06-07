@@ -30,7 +30,7 @@ object Monotone extends Protocol {
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val state = new State(self)
+    val state = new State(new Refob[Nothing](self))
     state.onCreate(self, self)
     spawnInfo.creator match {
       case Some(creator) =>
@@ -45,7 +45,7 @@ object Monotone extends Protocol {
     state: State,
     context: ContextLike[GCMessage[T]]
   ): Refob[T] =
-    state.selfRef.asInstanceOf[Refob[T]]
+    state.self.asInstanceOf[Refob[T]]
 
   override def spawnImpl[S, T](
     factory: SpawnInfo => RefLike[GCMessage[S]],

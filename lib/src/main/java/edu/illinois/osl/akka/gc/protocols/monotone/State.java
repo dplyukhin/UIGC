@@ -6,7 +6,7 @@ import edu.illinois.osl.akka.gc.interfaces.RefLike;
 public class State implements Pretty {
 
     /** This actor's ref to itself */
-    RefLike<?> selfRef;
+    Refob<?> self;
     /** Tracks references created by this actor */
     RefLike<?>[] createdOwners;
     RefLike<?>[] createdTargets;
@@ -23,8 +23,8 @@ public class State implements Pretty {
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
 
-    public State(RefLike<?> selfRef) {
-        this.selfRef = selfRef;
+    public State(Refob<?> self) {
+        this.self = self;
         this.createdOwners = new RefLike<?>[GC.ARRAY_MAX];
         this.createdTargets = new RefLike<?>[GC.ARRAY_MAX];
         this.updatedRefobs = new Refob<?>[GC.ARRAY_MAX];
@@ -88,7 +88,7 @@ public class State implements Pretty {
 
     public Entry finalizeEntry(boolean isBusy) {
         Entry entry = getEntry();
-        entry.self = selfRef;
+        entry.self = self.target();
         entry.isBusy = isBusy;
         entry.becameRoot = isRoot;
 
