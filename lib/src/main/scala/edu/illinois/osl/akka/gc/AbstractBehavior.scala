@@ -1,66 +1,47 @@
 package edu.illinois.osl.akka.gc
 
-import akka.actor.typed.scaladsl.{AbstractBehavior => AkkaAbstractBehavior, Behaviors => AkkaBehaviors}
-import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
-import aggregator.SnapshotAggregator
-import akka.actor.typed.Terminated
+import akka.actor.typed.{PostStop, Terminated, Signal, ExtensibleBehavior, TypedActorContext}
+import akka.actor.typed.scaladsl
+import edu.illinois.osl.akka.gc.protocols.Protocol
 
+abstract class AbstractBehavior[T](context: ActorContext[T])
+  extends ExtensibleBehavior[protocol.GCMessage[T]] {
 
-/**
- * Parent class for behaviors that implement the GC message protocol.
- */
-abstract class AbstractBehavior[T <: Message](context: ActorContext[T])
-  extends AkkaAbstractBehavior[GCMessage[T]](context.context) {
+  implicit val _context: ActorContext[T] = context
 
-  // private val snapshotAggregator: SnapshotAggregator =
-  //   SnapshotAggregator(context.context.system)
-
-  // snapshotAggregator.register(context.self.target)
-
+  // User API
   def onMessage(msg: T): Behavior[T]
+  def onSignal: PartialFunction[Signal, Behavior[T]] = PartialFunction.empty
 
-  final def onMessage(msg: GCMessage[T]): AkkaBehavior[GCMessage[T]] =
-    msg match {
-      case ReleaseMsg(releasing, created) =>
-        context.handleRelease(releasing, created)
-        if (context.tryTerminate())
-          AkkaBehaviors.stopped
-        else 
-          AkkaBehaviors.same
-      case AppMsg(payload, token) =>
-        context.handleMessage(payload.refs, token)
-        onMessage(payload)
-      case SelfCheck =>
-        context.handleSelfCheck()
-        if (context.tryTerminate())
-          AkkaBehaviors.stopped
-        else 
-          AkkaBehaviors.same
-      case TakeSnapshot =>
-        // snapshotAggregator.put(context.self.target, context.snapshot())
-        context.snapshot()
-        this
-      case Kill =>
-        AkkaBehaviors.stopped
+  override final def receive(ctx: TypedActorContext[protocol.GCMessage[T]], msg: protocol.GCMessage[T]): Behavior[T] = {
+    val appMsg = protocol.onMessage(msg, context.state, context.proxyContext)
+
+    val result = appMsg match {
+      case Some(msg) => onMessage(msg)
+      case None => scaladsl.Behaviors.same[protocol.GCMessage[T]]
     }
 
-  def uponSignal: PartialFunction[Signal, Behavior[T]] = Map.empty
-
-  final override def onSignal: PartialFunction[Signal, Behavior[T]] = {
-    case PostStop =>
-      // snapshotAggregator.unregister(context.self.target)
-      // Forward the signal to the user level if there's a handler; else do nothing.
-      this.uponSignal.applyOrElse[Signal, Behavior[T]](PostStop, _ => AkkaBehaviors.same)
-
-    case signal: Terminated =>
-      // Try handling the termination signal first
-      val result = this.uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => AkkaBehaviors.same)
-      // Now see if we can terminate
-      if (context.tryTerminate())  
-        AkkaBehaviors.stopped
-      else
-        result
-    case signal =>
-      this.uponSignal.applyOrElse[Signal, Behavior[T]](signal, _ => AkkaBehaviors.same)
+    protocol.onIdle(msg, context.state, context.proxyContext) match {
+      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Protocol.ShouldContinue.type => result
+    }
   }
+
+  override final def receiveSignal(ctx: TypedActorContext[protocol.GCMessage[T]], msg: Signal): Behavior[T] = {
+    protocol.preSignal(msg, context.state, context.proxyContext)
+
+    val result =
+      onSignal.applyOrElse(msg, { case _ => scaladsl.Behaviors.unhandled }: PartialFunction[Signal, Behavior[T]]) 
+
+    protocol.postSignal(msg, context.state, context.proxyContext) match {
+      case _: Protocol.Unhandled.type => result
+      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Protocol.ShouldContinue.type => 
+        if (result == scaladsl.Behaviors.unhandled)
+          scaladsl.Behaviors.same
+        else 
+          result
+    }
+  }
+
 }

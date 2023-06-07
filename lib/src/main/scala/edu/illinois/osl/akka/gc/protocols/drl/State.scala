@@ -1,50 +1,64 @@
-package edu.illinois.osl.akka.gc
+package edu.illinois.osl.akka.gc.protocols.drl
 
-import edu.illinois.osl.akka.gc.detector.{AbstractRef, AbstractSnapshot}
-
+import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
+import edu.illinois.osl.akka.gc.protocols.Protocol
+import edu.illinois.osl.akka.gc.interfaces.Pretty
+import edu.illinois.osl.akka.gc.interfaces.Pretty._
 
-
-class ActorState[
-  Name,
-  Token,
-  Ref <: AbstractRef[Name, Token],
-  Snapshot <: AbstractSnapshot[Name, Token, Ref]
-]
+class State
 (
-  val selfRef: Ref,
-  val creatorRef: Ref,
-  val newSnapshot: (Iterable[Ref], Iterable[Ref], Iterable[Ref], Iterable[Ref], Map[Token, Int], Map[Token, Int]) => Snapshot
-) {
-  import ActorState._
+  val self: Name,
+  val spawnInfo: DRL.SpawnInfo,
+) extends Pretty {
 
-  val self: Name = selfRef.target
+  var count: Int = 1
+  
+  /** This actor's self reference. */
+  val selfRef: Ref = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
+
+  val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
   /** References this actor owns. Starts with its self reference. */
-  var activeRefs: Set[Ref] = Set(selfRef)
+  val activeRefs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef)
   /**
    * References this actor has created for other actors.
    * Maps a key reference to a value set of references that were creating using that key. */
-  val createdUsing: mutable.Map[Ref, Seq[Ref]] = mutable.Map()
+  val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  var owners: Set[Ref] = Set(selfRef, creatorRef)
+  val owners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef, creatorRef)
   /** References to this actor discovered when they've been released. */
-  var releasedOwners: Set[Ref] = Set()
+  val releasedOwners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
   /** Tracks how many messages are sent using each reference. */
-  val sentCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
+  val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
-  val recvCount: mutable.Map[Token, Int] = mutable.Map(selfRef.token.get -> 0)
+  val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
+
+  override def pretty: String =
+    s"""DRL STATE:
+      < self:        ${selfRef.pretty}
+        owners:      ${owners.pretty}
+        released:    ${releasedOwners.pretty}
+        sent counts: ${prettifyMap(sentCount).pretty}
+        recv counts: ${recvCount.pretty}
+      >
+      """
 
   /** The set of refs that this actor owns that point to this actor itself */
-  def trivialActiveRefs: Set[Ref] = activeRefs filter { _.target == self }
+  def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }
   /** The set of refs that this actor owns that do not point to itself */
-  def nontrivialActiveRefs: Set[Ref] = activeRefs filter { _.target != self }
+  def nontrivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target != self }
 
   /**
    * Adds the given ref to this actor's collection of active refs
    */
   def addRef(ref: Ref): Unit = {
     activeRefs += ref
+  }
+
+  def newRef[S](owner: Refob[Nothing], target: Refob[S]): Refob[S] = {
+    val token = newToken()
+    Refob[S](Some(token), Some(owner.target), target.target)
   }
 
   /**
@@ -69,7 +83,7 @@ class ActorState[
     assert(releasing.nonEmpty)
     val sender = releasing.head.owner
 
-    if (sender == self) {
+    if (sender.get == self) {
       numPendingReleaseMessagesToSelf -= 1
     }
 
@@ -110,8 +124,7 @@ class ActorState[
   /** Assuming this actor has no inverse acquaintances besides itself, this function
    * determines whether the actor has any undelivered messages to itself.
    */
-  // TODO Can we test that this is accurate with Scalacheck?
-  private def anyPendingSelfMessages: Boolean = {
+  def anyPendingSelfMessages: Boolean = {
     // Actors can send themselves three kinds of messages:
     // - App messages
     // - Release messages
@@ -159,27 +172,6 @@ class ActorState[
     }
   }
 
-  /** Check whether this actor is ready to self-terminate due to having no inverse acquaintances and no
-   * pending messages; such an actor will never again receive a message. */
-  def tryTerminate(): TerminationStatus = {
-    if (anyInverseAcquaintances) {
-      NotTerminated
-    }
-    // No other actor has a reference to this one.
-    // Check if there are any pending messages from this actor to itself.
-    else if (anyPendingSelfMessages) {
-      // Remind this actor to try and terminate after all those messages have been delivered.
-      // This is done by sending self a SelfCheck message, so we increment the message send count.
-      incSentCount(selfRef.token)
-      RemindMeLater
-    }
-    // There are no messages to this actor remaining.
-    // Therefore it should begin the termination process; if it has any references, they should be deactivated.
-    else {
-      Terminated
-    }
-  }
-
   /**
    * Updates this actor's state to indicate that the new ref `newRef` was created using `target`.
    * The target of `target` should be the same as the target of `newRef`.
@@ -208,11 +200,11 @@ class ActorState[
    * @param releasing A collection of references.
    * @return A map from actors to the refs to them being released and refs to them that have been created for other actors.
    */
-  def release(releasing: Iterable[Ref]): Map[Name, (Seq[Ref], Seq[Ref])] = {
+  def release(releasing: Iterable[Ref]): mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = {
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
-    val targets: mutable.Map[Name, (Seq[Ref], Seq[Ref])] = mutable.Map()
+    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = mutable.HashMap()
     // process the references that are actually in the refs set
-    for (ref <- releasing if nontrivialActiveRefs contains ref) {
+    for (ref <- releasing if nontrivialActiveRefs exists (_ == ref)) {
       // remove each released reference's sent count
       sentCount remove ref.token.get
       // get the reference's target for grouping
@@ -234,7 +226,7 @@ class ActorState[
     // But do not deactivate the `self` ref, because it is always accessible from
     // the ActorContext.
     var refsToSelf: Seq[Ref] = Seq()
-    for (ref <- releasing if (trivialActiveRefs contains ref) && (ref != selfRef)) {
+    for (ref <- releasing if (trivialActiveRefs exists (_ == ref)) && (ref != selfRef)) {
       sentCount remove ref.token.get
       activeRefs -= ref
       refsToSelf :+= ref
@@ -251,7 +243,7 @@ class ActorState[
 
     // send the release message for each target actor
     // TODO: just leave this mutable?
-    targets.toMap
+    targets
   }
 
   /**
@@ -260,17 +252,17 @@ class ActorState[
    */
   def release(releasing: Ref*): Unit = release(releasing)
 
-  /**
-   * Gets the current [[ActorSnapshot]].
-   * @return The current snapshot.
-   */
-  def snapshot(): Snapshot = {
-    // get immutable copies
-    val sent: Map[Token, Int] = sentCount.toMap
-    val recv: Map[Token, Int] = recvCount.toMap
-    val created: Seq[Ref] = createdUsing.values.toSeq.flatten
-    newSnapshot(activeRefs, owners, created, releasedOwners, sent, recv)
-  }
+  // /**
+  //  * Gets the current [[ActorSnapshot]].
+  //  * @return The current snapshot.
+  //  */
+  // def snapshot(): ActorSnapshot = {
+  //   // get immutable copies
+  //   val sent: Map[Token, Int] = sentCount.toMap
+  //   val recv: Map[Token, Int] = recvCount.toMap
+  //   val created: Seq[Ref] = createdUsing.values.toSeq.flatten
+  //   newSnapshot(activeRefs, owners, created, releasedOwners, sent, recv)
+  // }
 
   /**
    * Increments the received count of the given reference token, assuming it exists.
@@ -293,12 +285,10 @@ class ActorState[
       sentCount(token) = count + 1
     }
   }
-}
 
-object ActorState {
-
-  sealed trait TerminationStatus
-  final case object NotTerminated extends TerminationStatus
-  final case object RemindMeLater extends TerminationStatus
-  final case object Terminated extends TerminationStatus
+  def newToken() = { 
+    val token = Token(self, count)
+    count += 1
+    token
+  }
 }

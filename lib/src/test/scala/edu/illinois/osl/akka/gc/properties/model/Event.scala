@@ -1,47 +1,48 @@
 package edu.illinois.osl.akka.gc.properties.model
 
-sealed trait Event
+import edu.illinois.osl.akka.gc.interfaces.Pretty
+
+sealed trait Event extends Pretty
 
 /** An actor spawns a child. */
-case class Spawn(parent: DummyName, child: DummyName, creatorRef: DummyRef, selfRef: DummyRef) extends Event {
-  override def toString: String = {
-    s"SPAWN: $parent spawns $child using $creatorRef"
+case class Spawn(parent: Name) extends Event {
+  override def pretty: String = {
+    s"SPAWN: ${parent.pretty} spawns an actor"
   }
 }
 
 /** An actor sends an application-level message. */
-case class Send(sender: DummyName,
-                recipientRef: DummyRef,
-                createdRefs: Iterable[DummyRef],
-                createdUsingRefs: Iterable[DummyRef]) extends Event {
-  override def toString: String = {
-    s"SEND: $sender sends a message along $recipientRef containing $createdRefs"
+case class Send(sender: Name,
+                recipientRef: Ref,
+                targetRefs: Iterable[Ref]) extends Event {
+  override def pretty: String = {
+    s"SEND: ${sender.pretty} sends a message along ${recipientRef.pretty} containing refs to ${targetRefs.toList.pretty}"
   }
 }
 
 /** An actor receives an application-level message */
-case class Receive(recipient: DummyName, sender: DummyName) extends Event {
-  override def toString: String = s"RECV: $recipient receives a message from $sender"
+case class Receive(recipient: Name, msg: Msg) extends Event {
+  override def pretty: String = s"RECV: ${recipient.pretty} receives ${msg.pretty}"
 }
 
 /** An actor goes idle. */
-case class BecomeIdle(actor: DummyName) extends Event {
-  override def toString: String = s"IDLE: $actor goes idle"
+case class BecomeIdle(actor: Name) extends Event {
+  override def pretty: String = s"IDLE: ${actor.pretty} goes idle"
 }
 
-/** An actor deactivates references and sends a release message. */
-case class Deactivate(actor: DummyName, ref: DummyRef) extends Event {
-  override def toString: String = s"DEACTIVATE: $actor deactivates $ref"
+/** An actor deactivates references. */
+case class Deactivate(actor: Name, ref: Ref) extends Event {
+  override def pretty: String = s"DEACTIVATE: ${actor.pretty} deactivates ${ref.pretty}"
 }
 
 /** An actor takes a snapshot. */
-case class Snapshot(actor: DummyName) extends Event {
-  override def toString: String = s"SNAPSHOT: $actor takes a snapshot"
+case class Snapshot(actor: Name) extends Event {
+  override def pretty: String = s"SNAPSHOT: ${actor.pretty} takes a snapshot"
 }
 
 /**
  * Drop the next message from `sender` to `recipient`.
  */
-case class DroppedMessage(recipient: DummyName, sender: DummyName) extends Event {
-  override def toString: String = s"DROPPED MESSAGE: next message from $sender to $recipient dropped"
+case class DroppedMessage(recipient: Name, msg: Msg) extends Event {
+  override def pretty: String = s"DROPPED MESSAGE: message ${msg.pretty}, sent to ${recipient.pretty}, dropped"
 }

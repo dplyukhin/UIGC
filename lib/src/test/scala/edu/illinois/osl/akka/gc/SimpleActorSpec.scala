@@ -1,38 +1,31 @@
 package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
-import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-import edu.illinois.osl.akka.gc.aggregator.SnapshotAggregator
+import akka.actor.typed.{PostStop, Signal}
 import org.scalatest.wordspec.AnyWordSpecLike
-
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
-
-  trait NoRefsMessage extends Message {
-    override def refs: Iterable[AnyActorRef] = Seq()
+  sealed trait TestMessage extends Message
+  case object Init extends TestMessage with NoRefs
+  case class SendC(msg: TestMessage) extends TestMessage with NoRefs
+  case class SendB(msg: TestMessage) extends TestMessage with NoRefs
+  case object TellBAboutC extends TestMessage with NoRefs
+  case object ReleaseC extends TestMessage with NoRefs
+  case object ReleaseB extends TestMessage with NoRefs
+  case object Hello extends TestMessage with NoRefs
+  case class Spawned(name: ActorName) extends TestMessage with NoRefs
+  case object Terminated extends TestMessage with NoRefs
+  case class GetRef(ref: ActorRef[TestMessage]) extends TestMessage with Message {
+    override def refs: Iterable[ActorRef[Nothing]] = Iterable(ref)
   }
 
-  sealed trait testMessage extends Message
-  case object Init extends testMessage with NoRefsMessage
-  case class SendC(msg: testMessage) extends testMessage with NoRefsMessage
-  case class SendB(msg: testMessage) extends testMessage with NoRefsMessage
-  case object TellBAboutC extends testMessage with NoRefsMessage
-  case object ReleaseC extends testMessage with NoRefsMessage
-  case object ReleaseB extends testMessage with NoRefsMessage
-  case object Hello extends testMessage with NoRefsMessage
-  case class Spawned(name: AkkaActorRef[Nothing]) extends testMessage with NoRefsMessage
-  case object Terminated extends testMessage with NoRefsMessage
-  case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-    override def refs: Iterable[AnyActorRef] = Iterable(ref)
-  }
-
-
-  val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
+  val probe: TestProbe[TestMessage] = testKit.createTestProbe[TestMessage]()
 
   "GC Actors" must {
     val actorA = testKit.spawn(ActorA(), "actorA")
-    var children: Set[AkkaActorRef[Nothing]] = Set()
+    var children: Set[ActorName] = Set()
 
     "be able to spawn actors" in {
       actorA ! Init
@@ -67,23 +60,24 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   object ActorA {
-    def apply(): AkkaBehavior[testMessage] = Behaviors.setupReceptionist(context => new ActorA(context))
+    def apply(): unmanaged.Behavior[TestMessage] = 
+      Behaviors.setupRoot(context => new ActorA(context))
   }
   object ActorB {
-    def apply(): ActorFactory[testMessage] = {
+    def apply(): ActorFactory[TestMessage] = {
       Behaviors.setup(context => new ActorB(context))
     }
   }
   object ActorC {
-    def apply(): ActorFactory[testMessage] = {
+    def apply(): ActorFactory[TestMessage] = {
       Behaviors.setup(context => new ActorC(context))
     }
   }
 
-  class ActorA(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorB: ActorRef[testMessage] = _
-    var actorC: ActorRef[testMessage] = _
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class ActorA(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    var actorB: ActorRef[TestMessage] = _
+    var actorC: ActorRef[TestMessage] = _
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Init =>
           actorB = context.spawn(ActorB(), "actorB")
@@ -109,10 +103,10 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       }
     }
   }
-  class ActorB(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorC: ActorRef[testMessage]= _
-    probe.ref ! Spawned(context.self.target)
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class ActorB(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    var actorC: ActorRef[TestMessage]= _
+    probe.ref ! Spawned(context.name)
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case GetRef(ref) =>
           actorC = ref
@@ -126,15 +120,15 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
         this
     }
   }
-  class ActorC(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    probe.ref ! Spawned(context.self.target)
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class ActorC(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    probe.ref ! Spawned(context.name)
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Hello =>
           probe.ref ! Hello
@@ -142,7 +136,7 @@ class SimpleActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated
         this

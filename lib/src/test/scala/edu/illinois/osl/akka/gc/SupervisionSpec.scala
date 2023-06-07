@@ -2,9 +2,9 @@ package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, ActorRef => AkkaActorRef, Behavior => AkkaBehavior}
-import edu.illinois.osl.akka.gc.aggregator.SnapshotAggregator
 import org.scalatest.wordspec.AnyWordSpecLike
 import scala.concurrent.duration._
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 
 /** 
@@ -14,31 +14,26 @@ import scala.concurrent.duration._
  */ 
 class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
-
-  trait NoRefsMessage extends Message {
-    override def refs: Iterable[AnyActorRef] = Seq()
-  }
-
-  sealed trait testMessage extends Message
-  case object Init extends testMessage with NoRefsMessage
-  case object Initialized extends testMessage with NoRefsMessage
-  case object ReleaseChild2 extends testMessage with NoRefsMessage
-  case object ReleaseChild1 extends testMessage with NoRefsMessage
-  case object ReleaseParent extends testMessage with NoRefsMessage
-  case class Spawned(name: AkkaActorRef[Nothing]) extends testMessage with NoRefsMessage
-  case class Terminated(name: AkkaActorRef[Nothing]) extends testMessage with NoRefsMessage
-  case class GetRef(ref: ActorRef[testMessage]) extends testMessage with Message {
-    override def refs: Iterable[AnyActorRef] = Iterable(ref)
+  sealed trait TestMessage extends Message
+  case object Init extends TestMessage with NoRefs
+  case object Initialized extends TestMessage with NoRefs
+  case object ReleaseChild2 extends TestMessage with NoRefs
+  case object ReleaseChild1 extends TestMessage with NoRefs
+  case object ReleaseParent extends TestMessage with NoRefs
+  case class Spawned(name: ActorName) extends TestMessage with NoRefs
+  case class Terminated(name: ActorName) extends TestMessage with NoRefs
+  case class GetRef(ref: ActorRef[TestMessage]) extends TestMessage with Message {
+    override def refs: Iterable[ActorRef[Nothing]] = Iterable(ref)
   }
 
 
-  val probe: TestProbe[testMessage] = testKit.createTestProbe[testMessage]()
+  val probe: TestProbe[TestMessage] = testKit.createTestProbe[TestMessage]()
 
   "GC Actors" must {
     val root = testKit.spawn(RootActor(), "root")
-    var parent: AkkaActorRef[Nothing] = null
-    var child1: AkkaActorRef[Nothing] = null
-    var child2: AkkaActorRef[Nothing] = null
+    var parent: ActorName = null
+    var child1: ActorName = null
+    var child2: ActorName = null
 
     root ! Init
     parent = probe.expectMessageType[Spawned].name
@@ -62,24 +57,24 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
   }
 
   object RootActor {
-    def apply(): AkkaBehavior[testMessage] = 
-      Behaviors.setupReceptionist(context => new RootActor(context))
+    def apply(): AkkaBehavior[TestMessage] = 
+      Behaviors.setupRoot(context => new RootActor(context))
   }
   object Parent {
-    def apply(): ActorFactory[testMessage] = 
+    def apply(): ActorFactory[TestMessage] = 
       Behaviors.setup(context => new Parent(context))
   }
   object Child {
-    def apply(): ActorFactory[testMessage] = {
+    def apply(): ActorFactory[TestMessage] = {
       Behaviors.setup(context => new Child(context))
     }
   }
 
-  class RootActor(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    var actorA: ActorRef[testMessage] = _
-    var actorB: ActorRef[testMessage] = null
-    var actorC: ActorRef[testMessage] = null
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class RootActor(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    var actorA: ActorRef[TestMessage] = _
+    var actorB: ActorRef[TestMessage] = _
+    var actorC: ActorRef[TestMessage] = _
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case Init =>
           actorA = context.spawn(Parent(), "parent")
@@ -107,13 +102,13 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       }
     }
   }
-  class Parent(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    probe.ref ! Spawned(context.self.target)
-    var actorB: ActorRef[testMessage] = context.spawn(Child(), "child1")
-    var actorC: ActorRef[testMessage] = context.spawn(Child(), "child2")
-    probe.ref ! Spawned(actorB.target)
-    probe.ref ! Spawned(actorC.target)
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class Parent(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    probe.ref ! Spawned(context.name)
+    var actorB: ActorRef[TestMessage] = context.spawn(Child(), "child1")
+    var actorC: ActorRef[TestMessage] = context.spawn(Child(), "child2")
+    probe.ref ! Spawned(actorB.rawActorRef)
+    probe.ref ! Spawned(actorC.rawActorRef)
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case GetRef(root) =>
           root ! GetRef(context.createRef(actorB, root))
@@ -123,19 +118,19 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
         this
     }
   }
-  class Child(context: ActorContext[testMessage]) extends AbstractBehavior[testMessage](context) {
-    override def onMessage(msg: testMessage): Behavior[testMessage] = {
+  class Child(context: ActorContext[TestMessage]) extends AbstractBehavior[TestMessage](context) {
+    override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case _ => this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[testMessage]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[TestMessage]] = {
       case PostStop =>
         probe.ref ! Terminated(context.name)
         this

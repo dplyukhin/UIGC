@@ -3,18 +3,15 @@ package edu.illinois.osl.akka.gc
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.{PostStop, Signal, Behavior => AkkaBehavior}
 import org.scalatest.wordspec.AnyWordSpecLike
+import edu.illinois.osl.akka.gc.interfaces.{Message, NoRefs}
 
 
 object SelfMessagingSpec {
-  trait NoRefsMessage extends Message {
-    override def refs: Iterable[AnyActorRef] = Seq()
-  }
-
   sealed trait SelfRefMsg extends Message
 
-  final case class Countdown(n: Int) extends SelfRefMsg with NoRefsMessage
-  final case class SelfRefTestInit(n: Int) extends SelfRefMsg with NoRefsMessage
-  final case class SelfRefTerminated(n: Int) extends SelfRefMsg with NoRefsMessage
+  final case class Countdown(n: Int) extends SelfRefMsg with NoRefs
+  final case class SelfRefTestInit(n: Int) extends SelfRefMsg with NoRefs
+  final case class SelfRefTerminated(n: Int) extends SelfRefMsg with NoRefs
 }
 
 class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
@@ -38,7 +35,8 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
 
   object ActorA {
-    def apply(): AkkaBehavior[SelfRefMsg] = Behaviors.setupReceptionist(context => new ActorA(context))
+    def apply(): AkkaBehavior[SelfRefMsg] = 
+      Behaviors.setupRoot(context => new ActorA(context))
   }
   class ActorA(context: ActorContext[SelfRefMsg]) extends AbstractBehavior[SelfRefMsg](context) {
     val actorB: ActorRef[SelfRefMsg] = context.spawn(ActorB(), "actorB")
@@ -74,7 +72,7 @@ class SelfMessagingSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
           this
       }
     }
-    override def uponSignal: PartialFunction[Signal, Behavior[SelfRefMsg]] = {
+    override def onSignal: PartialFunction[Signal, Behavior[SelfRefMsg]] = {
       case PostStop =>
         probe.ref ! SelfRefTerminated(count)
         this
