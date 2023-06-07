@@ -7,6 +7,7 @@ import java.util.HashMap;
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<RefLike<?>, Integer> outgoing;
+    RefLike<?> self;
     int recvCount;
     boolean mark;
     boolean isRoot;
@@ -14,11 +15,10 @@ public class Shadow {
     boolean isLocal;
     /** Whether this actor was busy in its latest entry. */
     boolean isBusy;
-    /** A reference to the actor. Only initialized if isLocal is true. */
-    RefLike<GCMessage<Object>> ref;
 
-    public Shadow(boolean isLocal) {
+    public Shadow(RefLike<?> self, boolean isLocal) {
         this.outgoing = new HashMap<>();
+        this.self = self;
         this.recvCount = 0;
         this.mark = false;
         this.isRoot = false;

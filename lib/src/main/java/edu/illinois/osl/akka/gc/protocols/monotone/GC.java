@@ -11,10 +11,11 @@ public class GC {
     /** Fetch the actor's shadow. If it doesn't exist, create one and mark it as external. */
     private static Shadow getShadow(Map<RefLike<?>, Shadow> shadows, RefLike<?> actor) {
         Shadow s = shadows.get(actor);
-        if (s != null)
-            return s;
-        else
-            return new Shadow(false);
+        if (s == null) {
+            s = new Shadow(actor, false);
+            shadows.put(actor, s);
+        }
+        return s;
     }
 
     public static void processEntry(Map<RefLike<?>, Shadow> shadows, Entry entry) {
@@ -75,12 +76,15 @@ public class GC {
     private static boolean isUnblocked(Shadow shadow) {
         return shadow.isBusy || shadow.recvCount != 0;
     }
+    private static boolean isExternal(Shadow shadow) {
+        return !shadow.isLocal;
+    }
 
     public static void trace(HashMap<RefLike<?>, Shadow> shadows, boolean MARKED) {
         Shadow[] queue = new Shadow[shadows.size()];
         int allocptr = 0;
         for (Shadow shadow : shadows.values()) {
-            if (isUnblocked(shadow)) {
+            if (isUnblocked(shadow) || isExternal(shadow)) {
                 queue[allocptr] = shadow;
                 allocptr++;
                 shadow.mark = MARKED;
@@ -100,7 +104,7 @@ public class GC {
 
         for (Shadow shadow : shadows.values()) {
             if (shadow.mark != MARKED && shadow.isLocal) {
-                shadow.ref.$bang(new StopMsg());
+                shadow.self.unsafeUpcast().$bang(new StopMsg());
             }
         }
     }
