@@ -30,7 +30,7 @@ object Monotone extends Protocol {
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val state = new State(self.asInstanceOf[RefLike[GCMessage[AnyRef]]])
+    val state = new State(self)
     state.onCreate(self, self)
     spawnInfo.creator match {
       case Some(creator) =>

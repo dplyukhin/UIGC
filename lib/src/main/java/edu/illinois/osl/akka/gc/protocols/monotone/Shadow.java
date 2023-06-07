@@ -5,10 +5,9 @@ import edu.illinois.osl.akka.gc.interfaces.RefLike;
 import java.util.HashMap;
 
 public class Shadow {
-    /** A list of unreleased refobs pointing to this actor. */
-    HashMap<Token, Integer> incoming;
     /** A list of active refobs pointing from this actor. */
-    HashMap<Token, Shadow> outgoing;
+    HashMap<RefLike<?>, Integer> outgoing;
+    int recvCount;
     boolean mark;
     boolean isRoot;
     /** Indicates whether the GC has received a copy of this shadow yet. */
@@ -18,12 +17,12 @@ public class Shadow {
     /** A reference to the actor. Only initialized if isLocal is true. */
     RefLike<GCMessage<Object>> ref;
 
-    public Shadow() {
-        incoming = new HashMap<>();
-        outgoing = new HashMap<>();
-        mark = false;
-        isRoot = false;
-        isLocal = false;
-        isBusy = false;
+    public Shadow(boolean isLocal) {
+        this.outgoing = new HashMap<>();
+        this.recvCount = 0;
+        this.mark = false;
+        this.isRoot = false;
+        this.isLocal = isLocal;
+        this.isBusy = false;
     }
 }

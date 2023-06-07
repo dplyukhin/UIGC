@@ -1,92 +1,82 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
+
 import java.util.*;
 
 public class GC {
     /** The size of each array in an entry */
     static int ARRAY_MAX = 16; // Need to use a power of 2 for the receive count
 
-    public static void processEntry(Entry entry) {
-        // Created refs
-        for (int i = 0; i < ARRAY_MAX; i++) {
-            if (entry.created[i] == null) break;
-            if (entry.created[i].token().isDefined()) {
-                Token token = entry.created[i].token().get();
-                // Update the target actor's shadow.
-                Shadow shadow = token.targetShadow();
-                // If the token doesn't already exist, create the initial pending refob.
-                // If it does, do nothing.
-                shadow.incoming.putIfAbsent(token, RefobStatus.initialPendingRefob);
-            }
-            else {
-                entry.shadow.isRoot = true;
-                // TODO I'm assuming actors only create root refs to themselves
-            }
-        }
-        // Sent info
-        for (int i = 0; i < ARRAY_MAX; i++) {
-            if (entry.sendTokens[i] == null) break;
-            Token token = entry.sendTokens[i];
-            short info = entry.sendInfos[i];
+    /** Fetch the actor's shadow. If it doesn't exist, create one and mark it as external. */
+    private static Shadow getShadow(Map<RefLike<?>, Shadow> shadows, RefLike<?> actor) {
+        Shadow s = shadows.get(actor);
+        if (s != null)
+            return s;
+        else
+            return new Shadow(false);
+    }
 
+    public static void processEntry(Map<RefLike<?>, Shadow> shadows, Entry entry) {
+        // Created refs.
+        for (int i = 0; i < ARRAY_MAX; i++) {
+            if (entry.createdOwners[i] == null) break;
+            RefLike<?> owner = entry.createdOwners[i];
+            RefLike<?> target = entry.createdTargets[i];
+
+            // Increment the number of outgoing refs to the target
+            Shadow shadow = getShadow(shadows, owner);
+            int count = shadow.outgoing.getOrDefault(target, 0);
+            shadow.outgoing.put(target, count + 1);
+        }
+
+        // Local information.
+        Shadow selfShadow = getShadow(shadows, entry.self);
+        selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
+        selfShadow.recvCount += entry.recvCount;
+        selfShadow.isBusy = entry.isBusy;
+        if (entry.becameRoot) {
+            selfShadow.isRoot = true;
+        }
+
+        // Deactivate refs.
+        for (int i = 0; i < ARRAY_MAX; i++) {
+            if (entry.updatedRefs[i] == null) break;
+            RefLike<?> target = entry.updatedRefs[i];
+            short info = entry.updatedInfos[i];
             boolean isActive = RefobInfo.isActive(info);
             boolean isDeactivated = !isActive;
-            short sendCount = RefobInfo.count(info);
 
-            Shadow targetShadow = token.targetShadow();
-            int status = targetShadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
-            boolean wasPending = RefobStatus.isPending(status);
-            status = RefobStatus.addToSentCount(status, sendCount);
-            if (isActive)
-                status = RefobStatus.activate(status); // idempotent
-            else
-                status = RefobStatus.deactivate(status);
-            boolean isReleased = RefobStatus.isReleased(status);
-
-            // Adjust this actor's outgoing refobs: add activated refobs, remove released ones.
-            if (isActive && wasPending) {
-                // This entry must be the first one that mentions the refob
-                Shadow prev = entry.shadow.outgoing.put(token, targetShadow);
-                assert(prev == null);
-            }
-            else if (isDeactivated) {
-                // This entry must be the one that deactivated the refob
-                Shadow prev = entry.shadow.outgoing.remove(token);
-                assert(prev == null);
-            }
-            if (isReleased) {
-                targetShadow.incoming.remove(token);
+            // Update the owner's outgoing references
+            if (isDeactivated) {
+                int count = selfShadow.outgoing.getOrDefault(target, 0);
+                if (count == 1)
+                    selfShadow.outgoing.remove(target);
+                else
+                    selfShadow.outgoing.put(target, count - 1); // may be negative!
             }
         }
-        // Receive counts
+
+        // Update send counts
         for (int i = 0; i < ARRAY_MAX; i++) {
-            if (entry.recvTokens[i] == null) break;
-            Token token = entry.recvTokens[i];
-            short count = entry.recvCounts[i];
-            Shadow shadow = entry.shadow;
-            int status = shadow.incoming.getOrDefault(token, RefobStatus.initialPendingRefob);
-            int newStatus = RefobStatus.addToRecvCount(status, count);
-            if (RefobStatus.isReleased(newStatus)) {
-                shadow.incoming.remove(token);
-            }
-            else {
-                shadow.incoming.put(token, newStatus);
+            if (entry.updatedRefs[i] == null) break;
+            RefLike<?> target = entry.updatedRefs[i];
+            short info = entry.updatedInfos[i];
+            short sendCount = RefobInfo.count(info);
+
+            // Update the target's receive count
+            if (sendCount > 0) {
+                Shadow targetShadow = getShadow(shadows, target);
+                targetShadow.recvCount -= sendCount; // may be negative!
             }
         }
     }
 
     private static boolean isUnblocked(Shadow shadow) {
-        if (shadow.isBusy)
-            return true;
-        for (int status : shadow.incoming.values()) {
-            if (RefobStatus.isUnblocked(status)) {
-                return true;
-            }
-        }
-        return false;
+        return shadow.isBusy || shadow.recvCount != 0;
     }
 
-    public static void trace(HashMap<?, Shadow> shadows, boolean MARKED) {
+    public static void trace(HashMap<RefLike<?>, Shadow> shadows, boolean MARKED) {
         Shadow[] queue = new Shadow[shadows.size()];
         int allocptr = 0;
         for (Shadow shadow : shadows.values()) {
@@ -98,7 +88,8 @@ public class GC {
         }
         for (int scanptr = 0; scanptr < allocptr; scanptr++) {
             Shadow owner = queue[scanptr];
-            for (Shadow target : owner.outgoing.values()) {
+            for (RefLike<?> targetName : owner.outgoing.keySet()) {
+                Shadow target = getShadow(shadows, targetName);
                 if (target.mark != MARKED && target.isLocal) {
                     queue[allocptr] = target;
                     allocptr++;

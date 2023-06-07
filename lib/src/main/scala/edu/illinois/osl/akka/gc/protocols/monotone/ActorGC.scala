@@ -2,6 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed._
+import edu.illinois.osl.akka.gc.interfaces.RefLike
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.duration.DurationInt
@@ -37,7 +38,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   import Bookkeeper._
   var total: Int = 0
   var MARKED: Boolean = false
-  val shadows: java.util.HashMap[Name, Shadow] = new java.util.HashMap()
+  val shadows: java.util.HashMap[RefLike[_], Shadow] = new java.util.HashMap()
 
   println("Bookkeeper started!")
   timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
@@ -52,11 +53,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
-          shadows.put(entry.self, entry.shadow)
-          entry.shadow.isLocal = true
-          entry.shadow.isBusy = entry.isBusy
-          entry.shadow.ref = entry.self
-          GC.processEntry(entry)
+          GC.processEntry(shadows, entry)
           // Put back the entry
           entry.clean()
           Monotone.EntryPool.add(entry)
