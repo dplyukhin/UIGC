@@ -8,6 +8,7 @@ public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<RefLike<?>, Integer> outgoing;
     RefLike<?> self;
+    RefLike<?> supervisor;
     int recvCount;
     boolean mark;
     boolean isRoot;
@@ -19,6 +20,7 @@ public class Shadow {
     public Shadow(RefLike<?> self, boolean isLocal) {
         this.outgoing = new HashMap<>();
         this.self = self;
+        this.supervisor = null;
         this.recvCount = 0;
         this.mark = false;
         this.isRoot = false;

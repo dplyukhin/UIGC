@@ -8,6 +8,7 @@ public class Entry {
     public RefLike<?> self;
     public RefLike<?>[] createdOwners;
     public RefLike<?>[] createdTargets;
+    public RefLike<?>[] spawnedActors;
     public RefLike<?>[] updatedRefs;
     public short[] updatedInfos;
     public short recvCount;
@@ -18,6 +19,7 @@ public class Entry {
         self           = null;
         createdOwners  = new RefLike<?>[GC.ARRAY_MAX];
         createdTargets = new RefLike<?>[GC.ARRAY_MAX];
+        spawnedActors  = new RefLike<?>[GC.ARRAY_MAX];
         updatedRefs    = new RefLike<?>[GC.ARRAY_MAX];
         updatedInfos   = new short[GC.ARRAY_MAX];
         isBusy         = false;
@@ -28,6 +30,7 @@ public class Entry {
         self = null;
         Arrays.fill(createdOwners, null);
         Arrays.fill(createdTargets, null);
+        Arrays.fill(spawnedActors, null);
         Arrays.fill(updatedRefs, null);
         Arrays.fill(updatedInfos, (short) 0);
         isBusy = false;

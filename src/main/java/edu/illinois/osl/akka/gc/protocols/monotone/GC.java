@@ -31,6 +31,17 @@ public class GC {
             shadow.outgoing.put(target, count + 1);
         }
 
+        // Spawned actors.
+        for (int i = 0; i < ARRAY_MAX; i++) {
+            if (entry.spawnedActors[i] == null) break;
+            RefLike<?> child = entry.spawnedActors[i];
+
+            // Set the child's supervisor field
+            Shadow childShadow = getShadow(shadows, child);
+            childShadow.supervisor = entry.self;
+            // NB: We don't increase the parent's created count; that info is in the child snapshot.
+        }
+
         // Local information.
         Shadow selfShadow = getShadow(shadows, entry.self);
         selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
@@ -92,6 +103,7 @@ public class GC {
         }
         for (int scanptr = 0; scanptr < allocptr; scanptr++) {
             Shadow owner = queue[scanptr];
+            // Mark the outgoing references
             for (RefLike<?> targetName : owner.outgoing.keySet()) {
                 Shadow target = getShadow(shadows, targetName);
                 if (target.mark != MARKED && target.isLocal) {
@@ -100,8 +112,19 @@ public class GC {
                     target.mark = MARKED;
                 }
             }
+            // Mark the actors that are monitoring or supervising this one
+            if (owner.supervisor != null) {
+                Shadow supervisor = getShadow(shadows, owner.supervisor);
+                if (supervisor.mark != MARKED && supervisor.isLocal) {
+                    queue[allocptr] = supervisor;
+                    allocptr++;
+                    supervisor.mark = MARKED;
+                }
+            }
         }
 
+        // Unmarked actors are garbage. Due to supervision, an actor will only be garbage if all its descendants
+        // are also garbage.
         int count = 0;
         Iterator<HashMap.Entry<RefLike<?>, Shadow>> it = shadows.entrySet().iterator();
         while (it.hasNext()) {

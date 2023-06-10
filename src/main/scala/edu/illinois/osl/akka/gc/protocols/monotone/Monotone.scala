@@ -56,6 +56,7 @@ object Monotone extends Protocol {
     val child = factory(new SpawnInfo(Some(self)))
     val ref = new Refob[S](child)
       // NB: "onCreate" is only updated at the child, not the parent.
+    state.onSpawn(child)
     ref
   }
 

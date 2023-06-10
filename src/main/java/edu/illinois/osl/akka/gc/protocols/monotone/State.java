@@ -10,10 +10,14 @@ public class State implements Pretty {
     /** Tracks references created by this actor */
     RefLike<?>[] createdOwners;
     RefLike<?>[] createdTargets;
+    /** Tracks actors spawned by this actor */
+    RefLike<?>[] spawnedActors;
     /** Tracks all the refobs that have been updated in this entry period */
     Refob<?>[] updatedRefobs;
-    /** Where in the array to insert the next "created" refob */
+    /** Where in the array to insert the next "created" ref */
     int createdIdx;
+    /** Where in the array to insert the next "spawned" ref */
+    int spawnedIdx;
     /** Where in the array to insert the next "updated" refob */
     int updatedIdx;
     /** Tracks how many messages are received using each reference. */
@@ -27,8 +31,10 @@ public class State implements Pretty {
         this.self = self;
         this.createdOwners = new RefLike<?>[GC.ARRAY_MAX];
         this.createdTargets = new RefLike<?>[GC.ARRAY_MAX];
+        this.spawnedActors = new RefLike<?>[GC.ARRAY_MAX];
         this.updatedRefobs = new Refob<?>[GC.ARRAY_MAX];
         this.createdIdx = 0;
+        this.spawnedIdx = 0;
         this.updatedIdx = 0;
         this.recvCount = (short) 0;
         this.isRoot = false;
@@ -45,6 +51,14 @@ public class State implements Pretty {
         int i = createdIdx++;
         createdOwners[i] = owner;
         createdTargets[i] = target;
+        return oldEntry;
+    }
+
+    public Entry onSpawn(RefLike<?> child) {
+        Entry oldEntry =
+                spawnedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
+        int i = spawnedIdx++;
+        spawnedActors[i] = child;
         return oldEntry;
     }
 
@@ -99,6 +113,12 @@ public class State implements Pretty {
             this.createdTargets[i] = null;
         }
         createdIdx = 0;
+
+        for (int i = 0; i < spawnedIdx; i++) {
+            entry.spawnedActors[i] = this.spawnedActors[i];
+            this.spawnedActors[i] = null;
+        }
+        spawnedIdx = 0;
 
         entry.recvCount = recvCount;
         recvCount = (short) 0;
