@@ -6,7 +6,7 @@ ThisBuild / scalaVersion     := "2.13.8"
 ThisBuild / version          := libVersion
 ThisBuild / organization     := org
 
-lazy val lib = project
+lazy val lib = (project in file("."))
   .settings(
     name := "akka-gc",
     libraryDependencies ++= Seq(
@@ -18,17 +18,6 @@ lazy val lib = project
     ),
     scalacOptions in Compile ++= Seq(
       "-optimise", 
-      "-Xdisable-assertions")
-  )
-
-lazy val bench = project
-  .dependsOn(lib)
-  .settings(
-    name := "akka-gc-bench",
-
-    libraryDependencies ++= Seq(
-        org %% "akka-gc" % libVersion,
-        "org.scalatest" %% "scalatest" % "3.1.1" % "test",
-        "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % "test",
+      "-Xdisable-assertions"
     )
   )
