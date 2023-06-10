@@ -102,9 +102,13 @@ public class GC {
             }
         }
 
-        for (Shadow shadow : shadows.values()) {
+        Iterator<HashMap.Entry<RefLike<?>, Shadow>> it = shadows.entrySet().iterator();
+        while (it.hasNext()) {
+            HashMap.Entry<RefLike<?>, Shadow> entry = it.next();
+            Shadow shadow = entry.getValue();
             if (shadow.mark != MARKED && shadow.isLocal) {
                 shadow.self.unsafeUpcast().$bang(new StopMsg());
+                it.remove();
             }
         }
     }
