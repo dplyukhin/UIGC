@@ -16,71 +16,46 @@ object Monotone extends Protocol {
   type State = monotone.State
 
   class SpawnInfo(
-    val token: Option[Token],
     val creator: Option[Name],
-    val shadow: Shadow
   )
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
-    AppMsg(payload, None, refs.asInstanceOf[Iterable[Refob[Nothing]]])
+    AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])
 
   override def rootSpawnInfo(): SpawnInfo = 
-    new SpawnInfo(None, None, new Shadow())
+    new SpawnInfo(None)
 
   override def initState[T](
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val shadow = spawnInfo.shadow
-    val state = new State(shadow)
-    val selfRef = Refob[Nothing](Some(newToken(shadow, state, context)), Some(self), self)
-    val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
-    state.selfRef = selfRef.asInstanceOf[Refob[AnyRef]]
-    state.onCreate(creatorRef)
-    state.onCreate(selfRef)
-    activate(selfRef, state, context)
+    val state = new State(new Refob[Nothing](self))
+    state.onCreate(self, self)
+    spawnInfo.creator match {
+      case Some(creator) =>
+        state.onCreate(creator, self)
+      case None =>
+        state.markAsRoot()
+    }
     state
-  }
-
-  private def activate[T,S](
-    ref: Refob[T],
-    state: State,
-    ctx: ContextLike[GCMessage[S]]
-  ): Unit = {
-    val entry = state.onActivate(ref)
-    if (entry != null) sendEntry(entry, ctx)
   }
 
   override def getSelfRef[T](
     state: State,
     context: ContextLike[GCMessage[T]]
   ): Refob[T] =
-    state.selfRef.asInstanceOf[Refob[T]]
+    state.self.asInstanceOf[Refob[T]]
 
-  private def newToken[T,S](
-    targetShadow: Shadow,
-    state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Token = {
-    val count = state.count
-    val token = new Token(ctx.self, count, targetShadow)
-    state.count += 1
-    token
-  }
-  
   override def spawnImpl[S, T](
     factory: SpawnInfo => RefLike[GCMessage[S]],
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val shadow = new Shadow()
-    val x = newToken(shadow, state, ctx)
     val self = ctx.self
-    val spawnInfo = new SpawnInfo(Some(x), Some(self), shadow)
-    val child = factory(spawnInfo)
-    val ref = new Refob[S](Some(x), Some(self), child)
-    activate(ref, state, ctx)
+    val child = factory(new SpawnInfo(Some(self)))
+    val ref = new Refob[S](child)
+      // NB: "onCreate" is only updated at the child, not the parent.
     ref
   }
 
@@ -90,14 +65,8 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Option[T] =
     msg match {
-      case AppMsg(payload, token, refs) =>
-        for (ref <- refs) {
-          activate(ref, state, ctx)
-        }
-        for (t <- token) {
-          val entry = state.incReceiveCount(t)
-          if (entry != null) sendEntry(entry, ctx)
-        }
+      case AppMsg(payload, _) =>
+        state.incReceiveCount()
         Some(payload)
       case _ =>
         None
@@ -130,15 +99,13 @@ object Monotone extends Protocol {
   }
 
   override def createRef[S,T](
-    target: Refob[S], 
+    target: Refob[S],
     owner: Refob[Nothing],
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val targetShadow = target.token.get.targetShadow
-    val token = newToken(targetShadow, state, ctx)
-    val ref = Refob[S](Some(token), Some(owner.target), target.target)
-    val entry = state.onCreate(ref)
+    val ref = Refob[S](target.target)
+    val entry = state.onCreate(owner.target, target.target)
     if (entry != null) sendEntry(entry, ctx)
     ref
   }
@@ -171,9 +138,9 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
     signal match {
-      case signal: Terminated =>
+      case _: Terminated =>
         tryTerminate(state, ctx)
-      case signal =>
+      case _ =>
         Protocol.Unhandled
     }
 
@@ -197,6 +164,6 @@ object Monotone extends Protocol {
   ): Unit = {
     val entry = state.onSend(ref)
     if (entry != null) sendEntry(entry, ctx)
-    ref.target ! AppMsg(msg, ref.token, refs)
+    ref.target ! AppMsg(msg, refs)
   }
 }

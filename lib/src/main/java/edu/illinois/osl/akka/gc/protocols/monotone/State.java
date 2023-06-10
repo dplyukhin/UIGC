@@ -1,88 +1,80 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
 
 public class State implements Pretty {
 
-    /** A sequence number used for generating unique tokens */
-    int count;
+    /** This actor's ref to itself */
+    Refob<?> self;
+    /** Tracks references created by this actor */
+    RefLike<?>[] createdOwners;
+    RefLike<?>[] createdTargets;
+    /** Tracks all the refobs that have been updated in this entry period */
+    Refob<?>[] updatedRefobs;
     /** Where in the array to insert the next "created" refob */
     int createdIdx;
     /** Where in the array to insert the next "updated" refob */
     int updatedIdx;
+    /** Tracks how many messages are received using each reference. */
+    short recvCount;
+    /** True iff the actor is a root (i.e. manually collected) */
+    boolean isRoot;
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
-    /** This actor's shadow */
-    Shadow shadow;
-    /** This actor's ref to itself */
-    Refob<Object> selfRef;
-    /** Tracks references created by this actor */
-    Refob<?>[] created;
-    /** Tracks all the refs that have been updated in this entry period */
-    Refob<?>[] updated;
-    /** Tracks how many messages are received using each reference. */
-    ReceiveCount recvCount;
 
-    public State(Shadow shadow) {
-        this.count = 0;
-        this.shadow = shadow;
+    public State(Refob<?> self) {
+        this.self = self;
+        this.createdOwners = new RefLike<?>[GC.ARRAY_MAX];
+        this.createdTargets = new RefLike<?>[GC.ARRAY_MAX];
+        this.updatedRefobs = new Refob<?>[GC.ARRAY_MAX];
         this.createdIdx = 0;
-        this.created = new Refob<?>[GC.ARRAY_MAX];
-        this.updated = new Refob<?>[GC.ARRAY_MAX];
-        this.recvCount = new ReceiveCount();
+        this.updatedIdx = 0;
+        this.recvCount = (short) 0;
+        this.isRoot = false;
+        this.stopRequested = false;
     }
 
-    public Entry onCreate(Refob<?> ref) {
+    public void markAsRoot() {
+        this.isRoot = true;
+    }
+
+    public Entry onCreate(RefLike<?> owner, RefLike<?> target) {
         Entry oldEntry =
             createdIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
-        created[createdIdx++] = ref;
+        int i = createdIdx++;
+        createdOwners[i] = owner;
+        createdTargets[i] = target;
         return oldEntry;
     }
 
-    public Entry onActivate(Refob<?> ref) {
+    public Entry onDeactivate(Refob<?> refob) {
+        refob.info_$eq(RefobInfo.deactivate(refob.info()));
+        return updateRefob(refob);
+    }
+
+    public Entry onSend(Refob<?> refob) {
+        refob.info_$eq(RefobInfo.incSendCount(refob.info()));
+        return updateRefob(refob);
+    }
+
+    private Entry updateRefob(Refob<?> refob) {
+        if (refob.hasChangedThisPeriod()) {
+            // This change will automatically be reflected in the entry
+            return null;
+        }
+        // We'll need to add to the entry; finalize first if need be
         Entry oldEntry =
             updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
-        ref.hasChangedThisPeriod_$eq(true);
-        updated[updatedIdx++] = ref;
+        refob.hasChangedThisPeriod_$eq(true);
+        updatedRefobs[updatedIdx++] = refob;
         return oldEntry;
     }
 
-    public Entry onDeactivate(Refob<?> ref) {
-        ref.info_$eq(RefobInfo.deactivate(ref.info()));
-        if (ref.hasChangedThisPeriod()) {
-            // This change will automatically be reflected in the entry
-            return null;
-        }
-        else {
-            // We'll need to add to the entry; finalize first if need be
-            Entry oldEntry =
-                updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
-            ref.hasChangedThisPeriod_$eq(true);
-            updated[updatedIdx++] = ref;
-            return oldEntry;
-        }
-    }
-
-    public Entry onSend(Refob<?> ref) {
-        ref.info_$eq(RefobInfo.incSendCount(ref.info()));
-        if (ref.hasChangedThisPeriod()) {
-            // This change will automatically be reflected in the entry
-            return null;
-        }
-        else {
-            // We'll need to add to the entry; finalize first if need be
-            Entry oldEntry =
-                updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
-            ref.hasChangedThisPeriod_$eq(true);
-            updated[updatedIdx++] = ref;
-            return oldEntry;
-        }
-    }
-
-    public Entry incReceiveCount(Token token) {
+    public Entry incReceiveCount() {
         Entry oldEntry =
-            recvCount.size >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
-        recvCount.incCount(token);
+            recvCount == Short.MAX_VALUE ? finalizeEntry(true) : null;
+        recvCount++;
         return oldEntry;
     }
 
@@ -96,31 +88,28 @@ public class State implements Pretty {
 
     public Entry finalizeEntry(boolean isBusy) {
         Entry entry = getEntry();
-        entry.self = selfRef.target();
-        entry.shadow = shadow;
+        entry.self = self.target();
         entry.isBusy = isBusy;
+        entry.becameRoot = isRoot;
 
-        if (createdIdx > 0) {
-            for (int i = 0; i < createdIdx; i++) {
-                entry.created[i] = this.created[i];
-                this.created[i] = null;
-            }
-            createdIdx = 0;
+        for (int i = 0; i < createdIdx; i++) {
+            entry.createdOwners[i] = this.createdOwners[i];
+            entry.createdTargets[i] = this.createdTargets[i];
+            this.createdOwners[i] = null;
+            this.createdTargets[i] = null;
         }
+        createdIdx = 0;
 
-        if (recvCount.size > 0) {
-            recvCount.copyOut(entry);
-        }
+        entry.recvCount = recvCount;
+        recvCount = (short) 0;
 
-        if (updatedIdx > 0) {
-            for (int i = 0; i < updatedIdx; i++) {
-                entry.sendTokens[i] = this.updated[i].token().get();
-                entry.sendInfos[i] = this.updated[i].info();
-                this.updated[i].resetInfo();
-                updated[i] = null;
-            }
-            updatedIdx = 0;
+        for (int i = 0; i < updatedIdx; i++) {
+            entry.updatedRefs[i] = this.updatedRefobs[i].target();
+            entry.updatedInfos[i] = this.updatedRefobs[i].info();
+            this.updatedRefobs[i].resetInfo();
+            this.updatedRefobs[i] = null;
         }
+        updatedIdx = 0;
 
         return entry;
     }
