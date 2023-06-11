@@ -63,7 +63,6 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         }
         val end = System.currentTimeMillis()
         totalEntries += count
-        println(s"Bookeeper read $count entries in ${(end - start)}ms.")
 
         stopCount += GC.trace(shadows, MARKED)
         MARKED = !MARKED

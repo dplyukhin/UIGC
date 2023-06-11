@@ -3,6 +3,7 @@ package edu.illinois.osl.akka.gc
 import akka.actor.typed
 import akka.actor.typed.scaladsl
 import akka.actor.typed.BehaviorInterceptor.ReceiveTarget
+import akka.actor.typed.scaladsl.TimerScheduler
 import akka.actor.typed.{BehaviorInterceptor, TypedActorContext}
 import edu.illinois.osl.akka.gc.interfaces.Message
 
@@ -45,6 +46,13 @@ object Behaviors {
 
     scaladsl.Behaviors.intercept(() => new RootAdapter[T]())(b)
   }
+
+  /**
+   * Allows an actor to schedule messages to itself, like [[scaladsl.Behaviors.withTimers]].
+   * However, this API is only allowed for root actors---see [[setupRoot]].
+   */
+  def withTimers[T <: Message](factory: TimerScheduler[T] => typed.Behavior[T]): typed.Behavior[T] =
+    scaladsl.Behaviors.withTimers(factory)
 
   /**
    * Returns a behavior that releases all its references, ignores all messages,
