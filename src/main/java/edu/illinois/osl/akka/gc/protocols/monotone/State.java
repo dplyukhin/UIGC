@@ -1,17 +1,16 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
-import edu.illinois.osl.akka.gc.interfaces.RefLike;
 
 public class State implements Pretty {
 
     /** This actor's ref to itself */
     Refob<?> self;
     /** Tracks references created by this actor */
-    RefLike<?>[] createdOwners;
-    RefLike<?>[] createdTargets;
+    Refob<?>[] createdOwners;
+    Refob<?>[] createdTargets;
     /** Tracks actors spawned by this actor */
-    RefLike<?>[] spawnedActors;
+    Refob<?>[] spawnedActors;
     /** Tracks all the refobs that have been updated in this entry period */
     Refob<?>[] updatedRefobs;
     /** Where in the array to insert the next "created" ref */
@@ -29,9 +28,9 @@ public class State implements Pretty {
 
     public State(Refob<?> self) {
         this.self = self;
-        this.createdOwners = new RefLike<?>[GC.ARRAY_MAX];
-        this.createdTargets = new RefLike<?>[GC.ARRAY_MAX];
-        this.spawnedActors = new RefLike<?>[GC.ARRAY_MAX];
+        this.createdOwners = new Refob<?>[GC.ARRAY_MAX];
+        this.createdTargets = new Refob<?>[GC.ARRAY_MAX];
+        this.spawnedActors = new Refob<?>[GC.ARRAY_MAX];
         this.updatedRefobs = new Refob<?>[GC.ARRAY_MAX];
         this.createdIdx = 0;
         this.spawnedIdx = 0;
@@ -45,7 +44,7 @@ public class State implements Pretty {
         this.isRoot = true;
     }
 
-    public Entry onCreate(RefLike<?> owner, RefLike<?> target) {
+    public Entry onCreate(Refob<?> owner, Refob<?> target) {
         Entry oldEntry =
             createdIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
         int i = createdIdx++;
@@ -54,7 +53,7 @@ public class State implements Pretty {
         return oldEntry;
     }
 
-    public Entry onSpawn(RefLike<?> child) {
+    public Entry onSpawn(Refob<?> child) {
         Entry oldEntry =
                 spawnedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
         int i = spawnedIdx++;
@@ -102,7 +101,7 @@ public class State implements Pretty {
 
     public Entry finalizeEntry(boolean isBusy) {
         Entry entry = getEntry();
-        entry.self = self.target();
+        entry.self = self;
         entry.isBusy = isBusy;
         entry.becameRoot = isRoot;
 
@@ -124,7 +123,7 @@ public class State implements Pretty {
         recvCount = (short) 0;
 
         for (int i = 0; i < updatedIdx; i++) {
-            entry.updatedRefs[i] = this.updatedRefobs[i].target();
+            entry.updatedRefs[i] = this.updatedRefobs[i];
             entry.updatedInfos[i] = this.updatedRefobs[i].info();
             this.updatedRefobs[i].resetInfo();
             this.updatedRefobs[i] = null;

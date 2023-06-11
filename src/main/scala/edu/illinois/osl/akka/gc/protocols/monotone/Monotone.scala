@@ -16,25 +16,27 @@ object Monotone extends Protocol {
   type State = monotone.State
 
   class SpawnInfo(
-    val creator: Option[Name],
+    val creator: Option[Refob[Nothing]],
+    val shadow: Shadow
   )
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])
 
   override def rootSpawnInfo(): SpawnInfo = 
-    new SpawnInfo(None)
+    new SpawnInfo(None, new Shadow())
 
   override def initState[T](
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val state = new State(new Refob[Nothing](self))
-    state.onCreate(self, self)
+    val selfRefob = new Refob[Nothing](self, spawnInfo.shadow)
+    val state = new State(selfRefob)
+    state.onCreate(selfRefob, selfRefob)
     spawnInfo.creator match {
       case Some(creator) =>
-        state.onCreate(creator, self)
+        state.onCreate(creator, selfRefob)
       case None =>
         state.markAsRoot()
     }
@@ -52,11 +54,11 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val self = ctx.self
-    val child = factory(new SpawnInfo(Some(self)))
-    val ref = new Refob[S](child)
+    val shadow = new Shadow()
+    val child = factory(new SpawnInfo(Some(state.self), shadow))
+    val ref = new Refob[S](child, shadow)
       // NB: "onCreate" is only updated at the child, not the parent.
-    state.onSpawn(child)
+    state.onSpawn(ref)
     ref
   }
 
@@ -103,8 +105,8 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val ref = Refob[S](target.target)
-    val entry = state.onCreate(owner.target, target.target)
+    val ref = Refob[S](target.target, target.targetShadow)
+    val entry = state.onCreate(owner, target)
     if (entry != null) sendEntry(entry, ctx)
     ref
   }

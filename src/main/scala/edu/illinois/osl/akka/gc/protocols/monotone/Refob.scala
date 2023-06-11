@@ -4,6 +4,7 @@ import edu.illinois.osl.akka.gc.interfaces._
 
 case class Refob[-T](
   target: RefLike[GCMessage[T]],
+  targetShadow: Shadow,
 ) extends RefobLike[T] {
 
   var hasChangedThisPeriod: Boolean = false

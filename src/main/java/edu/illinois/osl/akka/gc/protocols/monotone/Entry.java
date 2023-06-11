@@ -1,15 +1,13 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
-import edu.illinois.osl.akka.gc.interfaces.RefLike;
-
 import java.util.Arrays;
 
 public class Entry {
-    public RefLike<?> self;
-    public RefLike<?>[] createdOwners;
-    public RefLike<?>[] createdTargets;
-    public RefLike<?>[] spawnedActors;
-    public RefLike<?>[] updatedRefs;
+    public Refob<?> self;
+    public Refob<?>[] createdOwners;
+    public Refob<?>[] createdTargets;
+    public Refob<?>[] spawnedActors;
+    public Refob<?>[] updatedRefs;
     public short[] updatedInfos;
     public short recvCount;
     public boolean isBusy;
@@ -17,10 +15,10 @@ public class Entry {
 
     public Entry() {
         self           = null;
-        createdOwners  = new RefLike<?>[GC.ARRAY_MAX];
-        createdTargets = new RefLike<?>[GC.ARRAY_MAX];
-        spawnedActors  = new RefLike<?>[GC.ARRAY_MAX];
-        updatedRefs    = new RefLike<?>[GC.ARRAY_MAX];
+        createdOwners  = new Refob<?>[GC.ARRAY_MAX];
+        createdTargets = new Refob<?>[GC.ARRAY_MAX];
+        spawnedActors  = new Refob<?>[GC.ARRAY_MAX];
+        updatedRefs    = new Refob<?>[GC.ARRAY_MAX];
         updatedInfos   = new short[GC.ARRAY_MAX];
         isBusy         = false;
         becameRoot     = false;
