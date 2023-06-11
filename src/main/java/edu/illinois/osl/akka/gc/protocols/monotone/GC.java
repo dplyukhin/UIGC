@@ -6,7 +6,7 @@ import java.util.*;
 
 public class GC {
     /** The size of each array in an entry */
-    static int ARRAY_MAX = 16; // Need to use a power of 2 for the receive count
+    static int ARRAY_MAX = 4;
 
     /** Fetch the actor's shadow. If it doesn't exist, create one and mark it as external. */
     private static Shadow getShadow(Map<RefLike<?>, Shadow> shadows, RefLike<?> actor) {

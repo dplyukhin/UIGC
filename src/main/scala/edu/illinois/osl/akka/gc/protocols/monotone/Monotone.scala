@@ -83,9 +83,7 @@ object Monotone extends Protocol {
         state.stopRequested = true
         tryTerminate(state, ctx)
       case _ =>
-        if (!ctx.hasMessages) {
-          sendEntry(state.finalizeEntry(false), ctx)
-        }
+        sendEntry(state.finalizeEntry(false), ctx)
         Protocol.ShouldContinue
     }
 
