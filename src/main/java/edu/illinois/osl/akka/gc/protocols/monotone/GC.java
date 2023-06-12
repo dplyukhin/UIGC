@@ -148,6 +148,7 @@ public class GC {
             }
         }
         from = to;
+        MARKED = !MARKED;
         return count;
     }
 }
