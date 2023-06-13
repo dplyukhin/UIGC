@@ -61,17 +61,17 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           entry = queue.poll()
         }
         var end = System.currentTimeMillis()
-        println(s"Scanned $count entries in ${end - start}ms.")
+        //println(s"Scanned $count entries in ${end - start}ms.")
         totalEntries += count
 
         start = System.currentTimeMillis()
         count = gc.trace()
         end = System.currentTimeMillis()
-        println(s"Found $count garbage actors in ${end - start}ms.")
+        //println(s"Found $count garbage actors in ${end - start}ms.")
 
         stopCount += count
 
-        println(s"Found $stopCount garbage actors so far.")
+        //println(s"Found $stopCount garbage actors so far.")
 
         Behaviors.same
     }

@@ -110,7 +110,7 @@ public class GC {
     }
 
     public int trace() {
-        System.out.println("Scanning " + from.size() + " actors...");
+        //System.out.println("Scanning " + from.size() + " actors...");
         ArrayList<Shadow> to = new ArrayList<>();
         // 0. Assume all shadows in `from` are in the UNMARKED state.
         //    Also assume that, if an actor has an incoming external actor, that external has a snapshot in `from`.
