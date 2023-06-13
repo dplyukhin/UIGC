@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.TimerScheduler
 import edu.illinois.osl.akka.gc.interfaces.Message
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.Random
@@ -16,8 +16,8 @@ import scala.util.Random
   * the test will time out.
   */
 class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-  val MAX_ACTORS = 10
-  val PING_FREQUENCY: FiniteDuration = 1000.millis
+  val MAX_ACTORS = 1000
+  val PING_FREQUENCY: FiniteDuration = 1.millis
   val SpawnCounter: AtomicInteger = new AtomicInteger()
   val TerminateCounter: CountDownLatch = new CountDownLatch(MAX_ACTORS)
 
@@ -55,7 +55,7 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         if (timers != null) {
           // Root actor stops the timer and releases all acquaintances, allowing them to become garbage
           // once they stop receiving messages.
-          println("Shutting down...")
+          println(s"Spawned $MAX_ACTORS actors. Releasing all acquaintances...")
           context.release(acquaintances)
           acquaintances = Set()
           timers.cancelAll()
@@ -72,7 +72,6 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
         val count = SpawnCounter.incrementAndGet()
         if (count <= MAX_ACTORS) {
           acquaintances += context.spawnAnonymous(RandomActor())
-          println(s"Spawned $count actors.")
         }
       } else if (p < 0.4 && acquaintances.nonEmpty) {
         val owner = randomItem(acquaintances)
@@ -96,7 +95,6 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
       case PostStop =>
         TerminateCounter.countDown()
-        println(TerminateCounter.getCount + " actors remaining...")
         this
     }
   }

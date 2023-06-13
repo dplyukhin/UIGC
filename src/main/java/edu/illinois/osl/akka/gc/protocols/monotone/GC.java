@@ -5,7 +5,7 @@ import java.util.*;
 public class GC {
     /** The size of each array in an entry */
     static int ARRAY_MAX = 4;
-    boolean MARKED = false;
+    boolean MARKED = true;
     ArrayList<Shadow> from;
 
     public GC() {

@@ -40,6 +40,7 @@ object Monotone extends Protocol {
       case None =>
         state.markAsRoot()
     }
+    sendEntry(state.finalizeEntry(false), context)
     state
   }
 
@@ -82,22 +83,11 @@ object Monotone extends Protocol {
   ): Protocol.TerminationDecision =
     msg match {
       case StopMsg() =>
-        state.stopRequested = true
-        tryTerminate(state, ctx)
+        Protocol.ShouldStop
       case _ =>
         sendEntry(state.finalizeEntry(false), ctx)
         Protocol.ShouldContinue
     }
-
-  private def tryTerminate[T](
-    state: State,
-    ctx: ContextLike[GCMessage[T]]
-  ): Protocol.TerminationDecision = {
-    if (state.stopRequested && !ctx.anyChildren)
-      Protocol.ShouldStop
-    else
-      Protocol.ShouldContinue
-  }
 
   override def createRef[S,T](
     target: Refob[S],
@@ -138,12 +128,7 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    signal match {
-      case _: Terminated =>
-        tryTerminate(state, ctx)
-      case _ =>
-        Protocol.Unhandled
-    }
+    Protocol.Unhandled
 
   private def sendEntry[T](
     entry: Entry,
