@@ -38,8 +38,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   import Bookkeeper._
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
-  private var MARKED: Boolean = false
-  private val shadows: java.util.HashMap[RefLike[_], Shadow] = new java.util.HashMap()
+  private val gc = new GC()
 
   println("Bookkeeper started!")
   timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
@@ -48,24 +47,31 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
     msg match {
       case Wakeup =>
         //println("Bookkeeper woke up!")
-        val start = System.currentTimeMillis()
+        var start = System.currentTimeMillis()
         val queue = ActorGC(ctx.system).Queue
         var count = 0
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
-          GC.processEntry(shadows, entry)
+          gc.processEntry(entry)
           // Put back the entry
           entry.clean()
           Monotone.EntryPool.add(entry)
           // Try and get another one
           entry = queue.poll()
         }
-        val end = System.currentTimeMillis()
+        var end = System.currentTimeMillis()
+        //println(s"Scanned $count entries in ${end - start}ms.")
         totalEntries += count
 
-        stopCount += GC.trace(shadows, MARKED)
-        MARKED = !MARKED
+        start = System.currentTimeMillis()
+        count = gc.trace()
+        end = System.currentTimeMillis()
+        //println(s"Found $count garbage actors in ${end - start}ms.")
+
+        stopCount += count
+
+        //println(s"Found $stopCount garbage actors so far.")
 
         Behaviors.same
     }
