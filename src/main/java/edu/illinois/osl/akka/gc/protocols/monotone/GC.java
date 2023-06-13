@@ -103,7 +103,7 @@ public class GC {
     }
 
     private static boolean isUnblocked(Shadow shadow) {
-        return shadow.isBusy || shadow.recvCount != 0;
+        return shadow.isRoot || shadow.isBusy || shadow.recvCount != 0;
     }
     private static boolean isExternal(Shadow shadow) {
         return !shadow.isLocal;
