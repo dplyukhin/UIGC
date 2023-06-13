@@ -37,7 +37,13 @@ public class GC {
             Shadow shadow = owner.targetShadow();
             intern(owner, shadow);
             int count = shadow.outgoing.getOrDefault(target, 0);
-            shadow.outgoing.put(target, count + 1);
+            if (count == -1) {
+                // Instead of writing zero, we delete the count.
+                shadow.outgoing.remove(target);
+            }
+            else {
+                shadow.outgoing.put(target, count + 1);
+            }
         }
 
         // Spawned actors.
@@ -120,10 +126,10 @@ public class GC {
         }
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
             Shadow owner = to.get(scanptr);
-            // Mark the outgoing references
-            for (Refob<?> targetRefob : owner.outgoing.keySet()) {
-                Shadow target = targetRefob.targetShadow();
-                if (target.mark != MARKED) {
+            // Mark the outgoing references whose count is greater than zero
+            for (Map.Entry<Refob<?>, Integer> entry : owner.outgoing.entrySet()) {
+                Shadow target = entry.getKey().targetShadow();
+                if (entry.getValue() > 0 && target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
                 }
