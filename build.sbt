@@ -13,6 +13,8 @@ lazy val lib = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.1.1" % "test",
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+      "com.typesafe.akka" %% "akka-remote" % akkaVersion,
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "org.scalacheck" %% "scalacheck" % "1.14.1" % "test",
     ),
