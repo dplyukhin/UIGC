@@ -26,6 +26,7 @@ class ActorGC(system: ActorSystem[_]) extends Extension {
 object Bookkeeper {
   trait Msg
   case object Wakeup extends Msg
+  case object StartWave extends Msg
   def apply(): Behavior[Msg] = {
     Behaviors.withTimers(timers =>
       Behaviors.setup(ctx => new Bookkeeper(timers, ctx))
@@ -40,14 +41,19 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var stopCount: Int = 0
   private val gc = new GC()
 
+
   println("Bookkeeper started!")
   timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
+  if (Monotone.collectionStyle == Monotone.Wave) {
+    val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+    timers.startTimerWithFixedDelay(StartWave, StartWave, waveFrequency.millis)
+  }
 
   override def onMessage(msg: Msg): Behavior[Msg] = {
     msg match {
       case Wakeup =>
         //println("Bookkeeper woke up!")
-        var start = System.currentTimeMillis()
+        //var start = System.currentTimeMillis()
         val queue = ActorGC(ctx.system).Queue
         var count = 0
         var entry: Entry = queue.poll()
@@ -60,19 +66,23 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           // Try and get another one
           entry = queue.poll()
         }
-        var end = System.currentTimeMillis()
+        //var end = System.currentTimeMillis()
         //println(s"Scanned $count entries in ${end - start}ms.")
         totalEntries += count
 
-        start = System.currentTimeMillis()
+        //start = System.currentTimeMillis()
         count = gc.trace()
-        end = System.currentTimeMillis()
+        //end = System.currentTimeMillis()
         //println(s"Found $count garbage actors in ${end - start}ms.")
 
         stopCount += count
 
         //println(s"Found $stopCount garbage actors so far.")
 
+        Behaviors.same
+
+      case StartWave =>
+        gc.startWave()
         Behaviors.same
     }
   }

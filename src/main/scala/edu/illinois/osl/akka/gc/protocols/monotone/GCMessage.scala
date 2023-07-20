@@ -10,7 +10,12 @@ final case class AppMsg[+T](
   def pretty: String = s"AppMsg($payload, ${refs.toList.pretty})"
 }
 
-case class StopMsg() extends GCMessage[Any] {
+case object StopMsg extends GCMessage[Any] {
   override def pretty: String = "STOP"
+  override def refs: Iterable[Refob[Nothing]] = Nil
+}
+
+case object WaveMsg extends GCMessage[Any] {
+  override def pretty: String = "WAVE"
   override def refs: Iterable[Refob[Nothing]] = Nil
 }

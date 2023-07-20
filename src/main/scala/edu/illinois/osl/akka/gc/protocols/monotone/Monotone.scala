@@ -1,13 +1,26 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
 import akka.actor.typed.{Signal, Terminated}
+import com.typesafe.config.ConfigFactory
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 import edu.illinois.osl.akka.gc.proxies.AkkaContext
 
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 object Monotone extends Protocol {
+  trait CollectionStyle
+  case object Wave extends CollectionStyle
+  case object OnBlock extends CollectionStyle
+  case object OnIdle extends CollectionStyle
+  val config = ConfigFactory.load("application.conf")
+  val collectionStyle: CollectionStyle =
+    config.getString("gc.crgc.collection-style") match {
+      case "wave" => Wave
+      case "on-block" => OnBlock
+      case "on-idle" => OnIdle
+    }
 
   val EntryPool: ConcurrentLinkedQueue[Entry] = new ConcurrentLinkedQueue[Entry]()
 
@@ -40,7 +53,8 @@ object Monotone extends Protocol {
       case None =>
         state.markAsRoot()
     }
-    sendEntry(state.finalizeEntry(false), context)
+    if ((collectionStyle == Wave && state.isRoot) || !context.hasMessages)
+      sendEntry(state.finalizeEntry(false), context)
     state
   }
 
@@ -83,10 +97,17 @@ object Monotone extends Protocol {
     ctx: ContextLike[GCMessage[T]]
   ): Protocol.TerminationDecision =
     msg match {
-      case StopMsg() =>
+      case StopMsg =>
         Protocol.ShouldStop
-      case _ =>
+      case WaveMsg =>
         sendEntry(state.finalizeEntry(false), ctx)
+        for (child <- ctx.asInstanceOf[AkkaContext[T]].ctx.children) {
+          child.unsafeUpcast[GCMessage[Any]].tell(WaveMsg)
+        }
+        Protocol.ShouldContinue
+      case _ =>
+        if (collectionStyle == OnIdle || (collectionStyle == OnBlock && !ctx.hasMessages))
+          sendEntry(state.finalizeEntry(false), ctx)
         Protocol.ShouldContinue
     }
 

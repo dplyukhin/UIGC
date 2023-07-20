@@ -150,11 +150,21 @@ public class GC {
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED) {
                 count++;
-                shadow.self.target().unsafeUpcast().$bang(new StopMsg());
+                shadow.self.target().unsafeUpcast().$bang(StopMsg$.MODULE$);
             }
         }
         from = to;
         MARKED = !MARKED;
         return count;
+    }
+
+    public void startWave() {
+        int count = 0;
+        for (Shadow shadow : from) {
+            if (shadow.isRoot) {
+                count++;
+                shadow.self.target().unsafeUpcast().$bang(WaveMsg$.MODULE$);
+            }
+        }
     }
 }
