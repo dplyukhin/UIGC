@@ -67,8 +67,18 @@ public class State implements Pretty {
     }
 
     public Entry onSend(Refob<?> refob) {
-        refob.info_$eq(RefobInfo.incSendCount(refob.info()));
-        return updateRefob(refob);
+        if (RefobInfo.canIncrement(refob.info())) {
+            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
+            return updateRefob(refob);
+        }
+        else {
+            Entry oldEntry = finalizeEntry(true);
+                // Now the counter has been reset
+            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
+            updateRefob(refob);
+                // We know this will not overflow because we have a fresh entry.
+            return oldEntry;
+        }
     }
 
     private Entry updateRefob(Refob<?> refob) {

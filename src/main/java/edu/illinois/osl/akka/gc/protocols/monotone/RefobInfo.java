@@ -8,15 +8,15 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 public class RefobInfo {
     public static short activeRefob = 0;
 
+    public static boolean canIncrement(short info) {
+        return info <= Short.MAX_VALUE - 2;
+    }
+
     public static short incSendCount(short info) {
-        // assumes this is active
-        assert(isActive(info));
         return (short) (info + 2);
     }
 
     public static short resetCount(short info) {
-        // assumes this is active
-        assert(isActive(info));
         return 0;
     }
 
