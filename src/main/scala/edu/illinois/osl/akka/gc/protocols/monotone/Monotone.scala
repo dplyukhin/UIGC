@@ -70,7 +70,8 @@ object Monotone extends Protocol {
   ): Option[T] =
     msg match {
       case AppMsg(payload, _) =>
-        state.incReceiveCount()
+        val entry = state.incReceiveCount()
+        if (entry != null) sendEntry(entry, ctx)
         Some(payload)
       case _ =>
         None
