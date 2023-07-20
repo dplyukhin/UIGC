@@ -16,7 +16,7 @@ object Monotone extends Protocol {
   case object OnIdle extends CollectionStyle
   val config = ConfigFactory.load("application.conf")
   val collectionStyle: CollectionStyle =
-    config.getString("gc.crgc.collection-style") match {
+    System.getProperty("gc.crgc.collection-style") match {
       case "wave" => Wave
       case "on-block" => OnBlock
       case "on-idle" => OnIdle
@@ -53,7 +53,13 @@ object Monotone extends Protocol {
       case None =>
         state.markAsRoot()
     }
-    if ((collectionStyle == Wave && state.isRoot) || !context.hasMessages)
+
+    def onBlock(): Unit =
+      sendEntry(state.finalizeEntry(false), context)
+
+    if (collectionStyle == OnBlock)
+      context.asInstanceOf[AkkaContext[GCMessage[T]]].ctx.queue.onFinishedProcessingHook = onBlock
+    if ((collectionStyle == Wave && state.isRoot) || collectionStyle == OnIdle)
       sendEntry(state.finalizeEntry(false), context)
     state
   }
@@ -106,7 +112,7 @@ object Monotone extends Protocol {
         }
         Protocol.ShouldContinue
       case _ =>
-        if (collectionStyle == OnIdle || (collectionStyle == OnBlock && !ctx.hasMessages))
+        if (collectionStyle == OnIdle)
           sendEntry(state.finalizeEntry(false), ctx)
         Protocol.ShouldContinue
     }
