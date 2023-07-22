@@ -31,34 +31,20 @@ object Monotone extends Protocol {
 
   class SpawnInfo(
     var creator: Option[Refob[Nothing]],
-    var shadow: Shadow
-  ) extends Serializable {
-
-    // SpawnInfo is serialized by setting the Shadow field to None.
-    @throws(classOf[IOException])
-    private def writeObject(out: ObjectOutputStream): Unit = {
-      out.writeObject(creator)
-    }
-
-    @throws(classOf[IOException])
-    private def readObject(in: ObjectInputStream): Unit = {
-      this.creator = in.readObject().asInstanceOf[Option[Refob[Nothing]]]
-      this.shadow = null
-    }
-  }
+  ) extends Serializable
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])
 
   override def rootSpawnInfo(): SpawnInfo = 
-    new SpawnInfo(None, new Shadow())
+    new SpawnInfo(None)
 
   override def initState[T](
     context: ContextLike[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
-    val selfRefob = new Refob[Nothing](self, spawnInfo.shadow)
+    val selfRefob = new Refob[Nothing](self, targetShadow = null)
     val state = new State(selfRefob)
     state.onCreate(selfRefob, selfRefob)
     spawnInfo.creator match {
@@ -89,9 +75,8 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val shadow = new Shadow()
-    val child = factory(new SpawnInfo(Some(state.self), shadow))
-    val ref = new Refob[S](child, shadow)
+    val child = factory(new SpawnInfo(Some(state.self)))
+    val ref = new Refob[S](child, null)
       // NB: "onCreate" is only updated at the child, not the parent.
     state.onSpawn(ref)
     ref

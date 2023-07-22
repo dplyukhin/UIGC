@@ -10,8 +10,6 @@ public class Shadow {
     int recvCount;
     boolean mark;
     boolean isRoot;
-    /** Indicates whether the GC has interned this shadow yet. */
-    boolean isInterned;
     /** Indicates whether the GC has received a snapshot from this actor yet. */
     boolean isLocal;
     /** Whether this actor was busy in its latest entry. */
@@ -24,7 +22,6 @@ public class Shadow {
         this.recvCount = 0;
         this.mark = false;
         this.isRoot = false;
-        this.isInterned = false;
         this.isLocal = false;
         this.isBusy = false;
     }

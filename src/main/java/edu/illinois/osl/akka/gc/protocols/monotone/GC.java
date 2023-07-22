@@ -16,34 +16,30 @@ public class GC {
         shadowMap = new HashMap<>();
     }
 
-    public void intern(Refob<?> refob, Shadow shadow) {
-        if (!shadow.isInterned) {
-            from.add(shadow);
-            shadow.self = refob;
-            shadow.mark = !MARKED;
-                // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
-            shadow.isLocal = false;
-                // We haven't seen this shadow before, so we can't have received a snapshot from it.
-            shadow.isInterned = true;
-        }
-    }
-
     public Shadow getShadow(Refob<?> refob) {
-        // Check if it's in the cache
+        // Check if it's in the cache.
         if (refob.targetShadow() != null)
             return refob.targetShadow();
 
-        // Try to get it from the collection of all my shadows
+        // Try to get it from the collection of all my shadows. Save it in the cache.
         Shadow shadow = shadowMap.get(refob.target());
+        refob.targetShadow_$eq(shadow);
         if (shadow != null)
             return shadow;
 
-        // Create a new shadow in the map, cache it, and return it
-        Shadow newShadow = new Shadow();
-        shadowMap.put(refob.target(), newShadow);
-        refob.targetShadow_$eq(newShadow);
-            // This write is safe because the GC is the only one that reads it!
-        return newShadow;
+        // Haven't heard of this actor yet. Create a shadow for it.
+        shadow = new Shadow();
+        shadow.self = refob;
+        shadow.mark = !MARKED;
+            // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
+        shadow.isLocal = false;
+            // We haven't seen this shadow before, so we can't have received a snapshot from it.
+
+        shadowMap.put(refob.target(), shadow);
+        from.add(shadow);
+        refob.targetShadow_$eq(shadow);
+
+        return shadow;
     }
 
     public void processEntry(Entry entry) {
@@ -55,7 +51,6 @@ public class GC {
 
             // Increment the number of outgoing refs to the target
             Shadow shadow = getShadow(owner);
-            intern(owner, shadow);
             int count = shadow.outgoing.getOrDefault(target, 0);
             if (count == -1) {
                 // Instead of writing zero, we delete the count.
@@ -73,14 +68,12 @@ public class GC {
 
             // Set the child's supervisor field
             Shadow childShadow = getShadow(child);
-            intern(child, childShadow);
             childShadow.supervisor = entry.self;
             // NB: We don't increase the parent's created count; that info is in the child snapshot.
         }
 
         // Local information.
         Shadow selfShadow = getShadow(entry.self);
-        intern(entry.self, selfShadow);
         selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
@@ -116,7 +109,6 @@ public class GC {
             // Update the target's receive count
             if (sendCount > 0) {
                 Shadow targetShadow = getShadow(target);
-                intern(target, targetShadow);
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
         }
