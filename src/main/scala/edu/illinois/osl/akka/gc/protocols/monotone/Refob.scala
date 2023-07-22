@@ -38,4 +38,13 @@ class Refob[-T](
     this.target = in.readObject().asInstanceOf[RefLike[GCMessage[T]]]
     this.targetShadow = null
   }
+
+  override def equals(that: Any): Boolean = {
+    that match {
+      case that: Refob[_] => this.target == that.target
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = target.hashCode()
 }
