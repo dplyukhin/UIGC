@@ -28,10 +28,10 @@ public class State implements Pretty {
 
     public State(Refob<?> self) {
         this.self = self;
-        this.createdOwners = new Refob<?>[GC.ARRAY_MAX];
-        this.createdTargets = new Refob<?>[GC.ARRAY_MAX];
-        this.spawnedActors = new Refob<?>[GC.ARRAY_MAX];
-        this.updatedRefobs = new Refob<?>[GC.ARRAY_MAX];
+        this.createdOwners = new Refob<?>[Sizes.EntryFieldSize];
+        this.createdTargets = new Refob<?>[Sizes.EntryFieldSize];
+        this.spawnedActors = new Refob<?>[Sizes.EntryFieldSize];
+        this.updatedRefobs = new Refob<?>[Sizes.EntryFieldSize];
         this.createdIdx = 0;
         this.spawnedIdx = 0;
         this.updatedIdx = 0;
@@ -46,7 +46,7 @@ public class State implements Pretty {
 
     public Entry onCreate(Refob<?> owner, Refob<?> target) {
         Entry oldEntry =
-            createdIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
+            createdIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
         int i = createdIdx++;
         createdOwners[i] = owner;
         createdTargets[i] = target;
@@ -55,7 +55,7 @@ public class State implements Pretty {
 
     public Entry onSpawn(Refob<?> child) {
         Entry oldEntry =
-                spawnedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
+                spawnedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
         int i = spawnedIdx++;
         spawnedActors[i] = child;
         return oldEntry;
@@ -88,7 +88,7 @@ public class State implements Pretty {
         }
         // We'll need to add to the entry; finalize first if need be
         Entry oldEntry =
-            updatedIdx >= GC.ARRAY_MAX ? finalizeEntry(true) : null;
+            updatedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
         refob.hasChangedThisPeriod_$eq(true);
         updatedRefobs[updatedIdx++] = refob;
         return oldEntry;

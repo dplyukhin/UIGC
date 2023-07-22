@@ -15,11 +15,11 @@ public class Entry {
 
     public Entry() {
         self           = null;
-        createdOwners  = new Refob<?>[GC.ARRAY_MAX];
-        createdTargets = new Refob<?>[GC.ARRAY_MAX];
-        spawnedActors  = new Refob<?>[GC.ARRAY_MAX];
-        updatedRefs    = new Refob<?>[GC.ARRAY_MAX];
-        updatedInfos   = new short[GC.ARRAY_MAX];
+        createdOwners  = new Refob<?>[Sizes.EntryFieldSize];
+        createdTargets = new Refob<?>[Sizes.EntryFieldSize];
+        spawnedActors  = new Refob<?>[Sizes.EntryFieldSize];
+        updatedRefs    = new Refob<?>[Sizes.EntryFieldSize];
+        updatedInfos   = new short[Sizes.EntryFieldSize];
         isBusy         = false;
         becameRoot     = false;
     }

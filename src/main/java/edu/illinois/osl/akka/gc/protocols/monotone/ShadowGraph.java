@@ -4,14 +4,13 @@ import edu.illinois.osl.akka.gc.interfaces.RefLike;
 
 import java.util.*;
 
-public class GC {
+public class ShadowGraph {
     /** The size of each array in an entry */
-    static int ARRAY_MAX = 4;
     boolean MARKED = true;
     ArrayList<Shadow> from;
     HashMap<RefLike<?>, Shadow> shadowMap;
 
-    public GC() {
+    public ShadowGraph() {
         from = new ArrayList<>();
         shadowMap = new HashMap<>();
     }
@@ -42,7 +41,7 @@ public class GC {
         return shadow;
     }
 
-    public void processEntry(Entry entry) {
+    public void mergeEntry(Entry entry) {
         // Local information.
         Shadow selfShadow = getShadow(entry.self);
         selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
@@ -53,7 +52,7 @@ public class GC {
         }
 
         // Created refs.
-        for (int i = 0; i < ARRAY_MAX; i++) {
+        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.createdOwners[i] == null) break;
             Refob<?> owner = entry.createdOwners[i];
             Shadow targetShadow = getShadow(entry.createdTargets[i]);
@@ -71,7 +70,7 @@ public class GC {
         }
 
         // Spawned actors.
-        for (int i = 0; i < ARRAY_MAX; i++) {
+        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.spawnedActors[i] == null) break;
             Refob<?> child = entry.spawnedActors[i];
 
@@ -82,7 +81,7 @@ public class GC {
         }
 
         // Deactivate refs.
-        for (int i = 0; i < ARRAY_MAX; i++) {
+        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
             Shadow targetShadow = getShadow(entry.updatedRefs[i]);
             short info = entry.updatedInfos[i];
@@ -100,7 +99,7 @@ public class GC {
         }
 
         // Update send counts
-        for (int i = 0; i < ARRAY_MAX; i++) {
+        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
             Refob<?> target = entry.updatedRefs[i];
             short info = entry.updatedInfos[i];

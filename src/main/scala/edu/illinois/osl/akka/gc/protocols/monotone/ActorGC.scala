@@ -43,7 +43,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   import Bookkeeper._
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
-  private val gc = new GC()
+  private val shadowGraph = new ShadowGraph()
   private var remoteGCs: Set[ActorRef[Msg]] = Set()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
@@ -82,7 +82,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
-          gc.processEntry(entry)
+          shadowGraph.mergeEntry(entry)
           // Put back the entry
           entry.clean()
           Monotone.EntryPool.add(entry)
@@ -94,7 +94,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         totalEntries += count
 
         //start = System.currentTimeMillis()
-        count = gc.trace()
+        count = shadowGraph.trace()
         //end = System.currentTimeMillis()
         //println(s"Found $count garbage actors in ${end - start}ms.")
 
@@ -105,7 +105,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         Behaviors.same
 
       case StartWave =>
-        gc.startWave()
+        shadowGraph.startWave()
         Behaviors.same
     }
   }

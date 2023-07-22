@@ -95,6 +95,7 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
       case PostStop =>
         TerminateCounter.countDown()
+        println(TerminateCounter.getCount() + " remaining!")
         this
     }
   }
