@@ -1,5 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
+
 import java.util.*;
 
 public class GC {
@@ -7,23 +9,41 @@ public class GC {
     static int ARRAY_MAX = 4;
     boolean MARKED = true;
     ArrayList<Shadow> from;
+    HashMap<RefLike<?>, Shadow> shadowMap;
 
     public GC() {
         from = new ArrayList<>();
+        shadowMap = new HashMap<>();
     }
 
     public void intern(Refob<?> refob, Shadow shadow) {
         if (!shadow.isInterned) {
             from.add(shadow);
             shadow.self = refob;
-                // Shadows must be created by the parent before the parent knows the child's name.
-                // We set the `self` field here when we first encounter the shadow.
             shadow.mark = !MARKED;
                 // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
             shadow.isLocal = false;
                 // We haven't seen this shadow before, so we can't have received a snapshot from it.
             shadow.isInterned = true;
         }
+    }
+
+    public Shadow getShadow(Refob<?> refob) {
+        // Check if it's in the cache
+        if (refob.targetShadow() != null)
+            return refob.targetShadow();
+
+        // Try to get it from the collection of all my shadows
+        Shadow shadow = shadowMap.get(refob.target());
+        if (shadow != null)
+            return shadow;
+
+        // Create a new shadow in the map, cache it, and return it
+        Shadow newShadow = new Shadow();
+        shadowMap.put(refob.target(), newShadow);
+        refob.targetShadow_$eq(newShadow);
+            // This write is safe because the GC is the only one that reads it!
+        return newShadow;
     }
 
     public void processEntry(Entry entry) {
@@ -34,7 +54,7 @@ public class GC {
             Refob<?> target = entry.createdTargets[i];
 
             // Increment the number of outgoing refs to the target
-            Shadow shadow = owner.targetShadow();
+            Shadow shadow = getShadow(owner);
             intern(owner, shadow);
             int count = shadow.outgoing.getOrDefault(target, 0);
             if (count == -1) {
@@ -52,14 +72,14 @@ public class GC {
             Refob<?> child = entry.spawnedActors[i];
 
             // Set the child's supervisor field
-            Shadow childShadow = child.targetShadow();
+            Shadow childShadow = getShadow(child);
             intern(child, childShadow);
             childShadow.supervisor = entry.self;
             // NB: We don't increase the parent's created count; that info is in the child snapshot.
         }
 
         // Local information.
-        Shadow selfShadow = entry.self.targetShadow();
+        Shadow selfShadow = getShadow(entry.self);
         intern(entry.self, selfShadow);
         selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
         selfShadow.recvCount += entry.recvCount;
@@ -95,7 +115,7 @@ public class GC {
 
             // Update the target's receive count
             if (sendCount > 0) {
-                Shadow targetShadow = target.targetShadow();
+                Shadow targetShadow = getShadow(target);
                 intern(target, targetShadow);
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
@@ -128,7 +148,7 @@ public class GC {
             Shadow owner = to.get(scanptr);
             // Mark the outgoing references whose count is greater than zero
             for (Map.Entry<Refob<?>, Integer> entry : owner.outgoing.entrySet()) {
-                Shadow target = entry.getKey().targetShadow();
+                Shadow target = getShadow(entry.getKey());
                 if (entry.getValue() > 0 && target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
@@ -136,7 +156,7 @@ public class GC {
             }
             // Mark the actors that are monitoring or supervising this one
             if (owner.supervisor != null) {
-                Shadow supervisor = owner.supervisor.targetShadow();
+                Shadow supervisor = getShadow(owner.supervisor);
                 if (supervisor.mark != MARKED) {
                     to.add(supervisor);
                     supervisor.mark = MARKED;
@@ -151,6 +171,7 @@ public class GC {
             if (shadow.mark != MARKED) {
                 count++;
                 shadow.self.target().unsafeUpcast().$bang(StopMsg$.MODULE$);
+                shadowMap.remove(shadow.self.target());
             }
         }
         from = to;

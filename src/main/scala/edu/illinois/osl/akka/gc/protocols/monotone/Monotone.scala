@@ -6,6 +6,7 @@ import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 import edu.illinois.osl.akka.gc.proxies.AkkaContext
 
+import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -29,9 +30,22 @@ object Monotone extends Protocol {
   type State = monotone.State
 
   class SpawnInfo(
-    val creator: Option[Refob[Nothing]],
-    val shadow: Shadow
-  ) extends Serializable
+    var creator: Option[Refob[Nothing]],
+    var shadow: Shadow
+  ) extends Serializable {
+
+    // SpawnInfo is serialized by setting the Shadow field to None.
+    @throws(classOf[IOException])
+    private def writeObject(out: ObjectOutputStream): Unit = {
+      out.writeObject(creator)
+    }
+
+    @throws(classOf[IOException])
+    private def readObject(in: ObjectInputStream): Unit = {
+      this.creator = in.readObject().asInstanceOf[Option[Refob[Nothing]]]
+      this.shadow = null
+    }
+  }
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])
@@ -123,7 +137,7 @@ object Monotone extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] = {
-    val ref = Refob[S](target.target, target.targetShadow)
+    val ref = new Refob[S](target.target, target.targetShadow)
     val entry = state.onCreate(owner, target)
     if (entry != null) sendEntry(entry, ctx)
     ref
