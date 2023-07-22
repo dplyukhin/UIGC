@@ -1,12 +1,14 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.RefLike;
+
 import java.util.HashMap;
 
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
-    HashMap<Refob<?>, Integer> outgoing;
-    Refob<?> self;
-    Refob<?> supervisor;
+    HashMap<Shadow, Integer> outgoing;
+    RefLike<?> self;
+    Shadow supervisor;
     int recvCount;
     boolean mark;
     boolean isRoot;

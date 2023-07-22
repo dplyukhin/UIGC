@@ -29,7 +29,7 @@ public class GC {
 
         // Haven't heard of this actor yet. Create a shadow for it.
         shadow = new Shadow();
-        shadow.self = refob;
+        shadow.self = refob.target();
         shadow.mark = !MARKED;
             // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
         shadow.isLocal = false;
@@ -43,21 +43,30 @@ public class GC {
     }
 
     public void processEntry(Entry entry) {
+        // Local information.
+        Shadow selfShadow = getShadow(entry.self);
+        selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
+        selfShadow.recvCount += entry.recvCount;
+        selfShadow.isBusy = entry.isBusy;
+        if (entry.becameRoot) {
+            selfShadow.isRoot = true;
+        }
+
         // Created refs.
         for (int i = 0; i < ARRAY_MAX; i++) {
             if (entry.createdOwners[i] == null) break;
             Refob<?> owner = entry.createdOwners[i];
-            Refob<?> target = entry.createdTargets[i];
+            Shadow targetShadow = getShadow(entry.createdTargets[i]);
 
             // Increment the number of outgoing refs to the target
             Shadow shadow = getShadow(owner);
-            int count = shadow.outgoing.getOrDefault(target, 0);
+            int count = shadow.outgoing.getOrDefault(targetShadow, 0);
             if (count == -1) {
                 // Instead of writing zero, we delete the count.
-                shadow.outgoing.remove(target);
+                shadow.outgoing.remove(targetShadow);
             }
             else {
-                shadow.outgoing.put(target, count + 1);
+                shadow.outgoing.put(targetShadow, count + 1);
             }
         }
 
@@ -68,34 +77,25 @@ public class GC {
 
             // Set the child's supervisor field
             Shadow childShadow = getShadow(child);
-            childShadow.supervisor = entry.self;
+            childShadow.supervisor = selfShadow;
             // NB: We don't increase the parent's created count; that info is in the child snapshot.
-        }
-
-        // Local information.
-        Shadow selfShadow = getShadow(entry.self);
-        selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
-        selfShadow.recvCount += entry.recvCount;
-        selfShadow.isBusy = entry.isBusy;
-        if (entry.becameRoot) {
-            selfShadow.isRoot = true;
         }
 
         // Deactivate refs.
         for (int i = 0; i < ARRAY_MAX; i++) {
             if (entry.updatedRefs[i] == null) break;
-            Refob<?> target = entry.updatedRefs[i];
+            Shadow targetShadow = getShadow(entry.updatedRefs[i]);
             short info = entry.updatedInfos[i];
             boolean isActive = RefobInfo.isActive(info);
             boolean isDeactivated = !isActive;
 
             // Update the owner's outgoing references
             if (isDeactivated) {
-                int count = selfShadow.outgoing.getOrDefault(target, 0);
+                int count = selfShadow.outgoing.getOrDefault(targetShadow, 0);
                 if (count == 1)
-                    selfShadow.outgoing.remove(target);
+                    selfShadow.outgoing.remove(targetShadow);
                 else
-                    selfShadow.outgoing.put(target, count - 1); // may be negative!
+                    selfShadow.outgoing.put(targetShadow, count - 1); // may be negative!
             }
         }
 
@@ -139,16 +139,16 @@ public class GC {
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
             Shadow owner = to.get(scanptr);
             // Mark the outgoing references whose count is greater than zero
-            for (Map.Entry<Refob<?>, Integer> entry : owner.outgoing.entrySet()) {
-                Shadow target = getShadow(entry.getKey());
+            for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
+                Shadow target = entry.getKey();
                 if (entry.getValue() > 0 && target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
                 }
             }
             // Mark the actors that are monitoring or supervising this one
-            if (owner.supervisor != null) {
-                Shadow supervisor = getShadow(owner.supervisor);
+            Shadow supervisor = owner.supervisor;
+            if (supervisor != null) {
                 if (supervisor.mark != MARKED) {
                     to.add(supervisor);
                     supervisor.mark = MARKED;
@@ -162,8 +162,8 @@ public class GC {
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED) {
                 count++;
-                shadow.self.target().unsafeUpcast().$bang(StopMsg$.MODULE$);
-                shadowMap.remove(shadow.self.target());
+                shadow.self.unsafeUpcast().$bang(StopMsg$.MODULE$);
+                shadowMap.remove(shadow.self);
             }
         }
         from = to;
@@ -176,7 +176,7 @@ public class GC {
         for (Shadow shadow : from) {
             if (shadow.isRoot) {
                 count++;
-                shadow.self.target().unsafeUpcast().$bang(WaveMsg$.MODULE$);
+                shadow.self.unsafeUpcast().$bang(WaveMsg$.MODULE$);
             }
         }
     }
