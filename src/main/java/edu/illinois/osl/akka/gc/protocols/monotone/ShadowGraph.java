@@ -21,24 +21,45 @@ public class ShadowGraph {
             return refob.targetShadow();
 
         // Try to get it from the collection of all my shadows. Save it in the cache.
-        Shadow shadow = shadowMap.get(refob.target());
+        Shadow shadow = getShadow(refob.target());
         refob.targetShadow_$eq(shadow);
+
+        return shadow;
+    }
+
+    public Shadow getShadow(RefLike<?> ref) {
+        // Try to get it from the collection of all my shadows.
+        Shadow shadow = shadowMap.get(ref);
         if (shadow != null)
             return shadow;
 
         // Haven't heard of this actor yet. Create a shadow for it.
-        shadow = new Shadow();
-        shadow.self = refob.target();
+        return makeShadow(ref);
+    }
+
+    public Shadow makeShadow(RefLike<?> ref) {
+        // Haven't heard of this actor yet. Create a shadow for it.
+        Shadow shadow = new Shadow();
+        shadow.self = ref;
         shadow.mark = !MARKED;
             // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
         shadow.isLocal = false;
             // We haven't seen this shadow before, so we can't have received a snapshot from it.
 
-        shadowMap.put(refob.target(), shadow);
+        shadowMap.put(ref, shadow);
         from.add(shadow);
-        refob.targetShadow_$eq(shadow);
-
         return shadow;
+    }
+
+    public void updateOutgoing(Map<Shadow, Integer> outgoing, Shadow target, int delta) {
+        int count = outgoing.getOrDefault(target, 0);
+        if (count + delta == 0) {
+            // Instead of writing zero, we delete the count.
+            outgoing.remove(target);
+        }
+        else {
+            outgoing.put(target, count + delta);
+        }
     }
 
     public void mergeEntry(Entry entry) {
@@ -47,9 +68,7 @@ public class ShadowGraph {
         selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
-        if (entry.becameRoot) {
-            selfShadow.isRoot = true;
-        }
+        selfShadow.isRoot = entry.isRoot;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
@@ -59,14 +78,7 @@ public class ShadowGraph {
 
             // Increment the number of outgoing refs to the target
             Shadow shadow = getShadow(owner);
-            int count = shadow.outgoing.getOrDefault(targetShadow, 0);
-            if (count == -1) {
-                // Instead of writing zero, we delete the count.
-                shadow.outgoing.remove(targetShadow);
-            }
-            else {
-                shadow.outgoing.put(targetShadow, count + 1);
-            }
+            updateOutgoing(shadow.outgoing, targetShadow, 1);
         }
 
         // Spawned actors.
@@ -90,11 +102,7 @@ public class ShadowGraph {
 
             // Update the owner's outgoing references
             if (isDeactivated) {
-                int count = selfShadow.outgoing.getOrDefault(targetShadow, 0);
-                if (count == 1)
-                    selfShadow.outgoing.remove(targetShadow);
-                else
-                    selfShadow.outgoing.put(targetShadow, count - 1); // may be negative!
+                updateOutgoing(selfShadow.outgoing, targetShadow, -1);
             }
         }
 
@@ -110,6 +118,33 @@ public class ShadowGraph {
                 Shadow targetShadow = getShadow(target);
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
+        }
+    }
+
+    public void mergeDelta(DeltaGraph delta) {
+        // This will act as a hashmap, mapping compressed IDs to actorRefs.
+        RefLike<?>[] refs = new RefLike<?>[delta.currentSize];
+        for (Map.Entry<RefLike<?>, Short> entry : delta.compressionTable.entrySet()) {
+            refs[entry.getValue()] = entry.getKey();
+        }
+
+        short i = 0;
+        for (DeltaGraph.DeltaShadow deltaShadow : delta.shadows) {
+            Shadow shadow = getShadow(refs[i]);
+
+            shadow.recvCount += deltaShadow.recvCount;
+            shadow.isBusy = deltaShadow.isBusy;
+            shadow.isRoot = deltaShadow.isRoot;
+            if (deltaShadow.supervisor >= 0) {
+                shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
+            }
+            for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
+                short id = entry.getKey();
+                int count = entry.getValue();
+                updateOutgoing(shadow.outgoing, getShadow(refs[id]), count);
+            }
+
+            i++;
         }
     }
 

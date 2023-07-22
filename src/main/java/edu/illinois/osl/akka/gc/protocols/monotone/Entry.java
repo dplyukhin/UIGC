@@ -11,7 +11,7 @@ public class Entry {
     public short[] updatedInfos;
     public short recvCount;
     public boolean isBusy;
-    public boolean becameRoot;
+    public boolean isRoot;
 
     public Entry() {
         self           = null;
@@ -21,7 +21,7 @@ public class Entry {
         updatedRefs    = new Refob<?>[Sizes.EntryFieldSize];
         updatedInfos   = new short[Sizes.EntryFieldSize];
         isBusy         = false;
-        becameRoot     = false;
+        isRoot = false;
     }
 
     public void clean() {
@@ -32,6 +32,6 @@ public class Entry {
         Arrays.fill(updatedRefs, null);
         Arrays.fill(updatedInfos, (short) 0);
         isBusy = false;
-        becameRoot = false;
+        isRoot = false;
     }
 }

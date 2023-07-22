@@ -113,7 +113,7 @@ public class State implements Pretty {
         Entry entry = getEntry();
         entry.self = self;
         entry.isBusy = isBusy;
-        entry.becameRoot = isRoot;
+        entry.isRoot = isRoot;
 
         for (int i = 0; i < createdIdx; i++) {
             entry.createdOwners[i] = this.createdOwners[i];

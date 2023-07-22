@@ -15,6 +15,7 @@ public class DeltaGraph {
 
     HashMap<RefLike<?>, Short> compressionTable;
     DeltaShadow[] shadows;
+    int graphID;
     short currentSize;
 
     public static class DeltaShadow {
@@ -26,28 +27,31 @@ public class DeltaGraph {
 
         public DeltaShadow() {
             this.outgoing = new HashMap<>();
-            this.supervisor = 0;
+            this.supervisor = -1; // Set to an invalid value if it didn't change
             this.recvCount = 0;
             this.isRoot = false;
             this.isBusy = false;
         }
     }
 
-    public DeltaGraph() {
-        compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
-        shadows = new DeltaShadow[Sizes.DeltaGraphSize];
-        currentSize = 0;
+    public DeltaGraph(int graphID) {
+        this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
+        this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
+        this.graphID = graphID;
+        this.currentSize = 0;
     }
 
-    public void mergeEntry(Entry entry) {
+    /**
+     * Merge the given entry into the delta graph.
+     * @return whether the graph is full.
+     */
+    public boolean mergeEntry(Entry entry) {
         // Local information.
         short selfID = getID(entry.self);
         DeltaShadow selfShadow = shadows[selfID];
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
-        if (entry.becameRoot) {
-            selfShadow.isRoot = true;
-        }
+        selfShadow.isRoot = entry.isRoot;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
@@ -112,6 +116,12 @@ public class DeltaGraph {
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
         }
+
+        /* Sleazy hack to avoid overflows: We know that merging an entry can only produce
+         * so many new shadows. So we never fill the delta graph to actual capacity; we
+         * tell the GC to finalize the delta graph if the next entry *could potentially*
+         * cause an overflow. */
+        return currentSize + (4 * Sizes.EntryFieldSize) + 1 >= Sizes.DeltaGraphSize;
     }
 
     private short getID(Refob<?> refob) {
@@ -122,7 +132,6 @@ public class DeltaGraph {
         if (compressionTable.containsKey(ref))
             return compressionTable.get(ref);
 
-        // TODO What if we exceed the max size?
         short id = currentSize++;
         compressionTable.put(ref, id);
         shadows[id] = new DeltaShadow();
