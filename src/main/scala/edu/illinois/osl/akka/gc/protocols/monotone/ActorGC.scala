@@ -2,6 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed._
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import edu.illinois.osl.akka.gc.interfaces.RefLike
 
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -27,6 +28,9 @@ object Bookkeeper {
   trait Msg
   case object Wakeup extends Msg
   case object StartWave extends Msg
+  case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
+  private val BKServiceKey = ServiceKey[Msg]("Bookkeeper")
+
   def apply(): Behavior[Msg] = {
     Behaviors.withTimers(timers =>
       Behaviors.setup(ctx => new Bookkeeper(timers, ctx))
@@ -40,17 +44,36 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
   private val gc = new GC()
+  private var remoteGCs: Set[ActorRef[Msg]] = Set()
+  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
+  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
 
+  if (numNodes == 1) {
+    start()
+  }
+  else {
+    ctx.system.receptionist ! Receptionist.Register(BKServiceKey, ctx.self)
+    val adapter = ctx.messageAdapter[Receptionist.Listing](ReceptionistListing.apply)
+    ctx.system.receptionist ! Receptionist.Subscribe(BKServiceKey, adapter)
+    println("Waiting for other bookkeepers to join...")
+  }
 
-  println("Bookkeeper started!")
-  timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
-  if (Monotone.collectionStyle == Monotone.Wave) {
-    val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
-    timers.startTimerWithFixedDelay(StartWave, StartWave, waveFrequency.millis)
+  private def start(): Unit = {
+    timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
+    if (Monotone.collectionStyle == Monotone.Wave) {
+      timers.startTimerWithFixedDelay(StartWave, StartWave, waveFrequency.millis)
+    }
+    println("Bookkeeper started!")
   }
 
   override def onMessage(msg: Msg): Behavior[Msg] = {
     msg match {
+      case ReceptionistListing(BKServiceKey.Listing(listing)) =>
+        remoteGCs = remoteGCs ++ listing.filter(_ != ctx.self)
+        if (remoteGCs.size + 1 == numNodes)
+          start()
+        this
+
       case Wakeup =>
         //println("Bookkeeper woke up!")
         //var start = System.currentTimeMillis()

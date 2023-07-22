@@ -7,7 +7,7 @@ import edu.illinois.osl.akka.gc.interfaces._
 package object gc {
 
   val protocol: Protocol =
-    System.getProperty("uigc.protocol") match {
+    System.getProperty("gc.protocol") match {
       case "NoProtocol" => protocols.NoProtocol
       case "Monotone" => protocols.monotone.Monotone
       case "wrc" => protocols.wrc.WRC
