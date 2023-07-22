@@ -1,6 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
-import akka.actor.typed.{PostStop, Terminated, Signal}
+import akka.actor.typed.{PostStop, Signal, Terminated}
+
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
@@ -14,7 +15,7 @@ object DRL extends Protocol {
   class SpawnInfo(
     val token: Option[Token],
     val creator: Option[Name]
-  )
+  ) extends Serializable
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, None, refs.asInstanceOf[Iterable[Refob[Nothing]]])

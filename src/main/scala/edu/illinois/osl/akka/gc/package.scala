@@ -43,5 +43,23 @@ package object gc {
     type ActorRef[-T] = typed.ActorRef[T]
     type Behavior[T] = typed.Behavior[T]
     type ActorContext[T] = scaladsl.ActorContext[T]
+    val Behaviors: scaladsl.Behaviors.type = scaladsl.Behaviors
+  }
+
+  object RemoteSpawner {
+    trait Command[T] extends Serializable
+    case class Spawn[T](
+      factory: String,
+      info: protocol.SpawnInfo,
+      replyTo: unmanaged.ActorRef[unmanaged.ActorRef[protocol.GCMessage[T]]]
+    ) extends Command[T]
+
+    def apply[T](factories: Map[String, ActorContext[T] => Behavior[T]]): unmanaged.Behavior[Command[T]] =
+      unmanaged.Behaviors.receive { (ctx, msg) => msg match {
+        case Spawn(key, info, replyTo) =>
+          val refob = ctx.spawnAnonymous(Behaviors.setup(factories(key))(info))
+          replyTo ! refob
+          unmanaged.Behaviors.same
+      }}
   }
 }

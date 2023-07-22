@@ -31,7 +31,7 @@ object Monotone extends Protocol {
   class SpawnInfo(
     val creator: Option[Refob[Nothing]],
     val shadow: Shadow
-  )
+  ) extends Serializable
 
   override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
     AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])

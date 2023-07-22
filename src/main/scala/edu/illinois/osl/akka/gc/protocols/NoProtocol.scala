@@ -2,6 +2,7 @@ package edu.illinois.osl.akka.gc.protocols
 
 import edu.illinois.osl.akka.gc.interfaces._
 import akka.actor.typed.Signal
+
 import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.ActorPath
 
@@ -14,7 +15,8 @@ object NoProtocol extends Protocol {
     override def pretty: String = target.pretty
   }
 
-  type SpawnInfo = Unit
+  trait SpawnInfo extends Serializable
+  case class Info() extends SpawnInfo
 
   class State(
     val selfRef: Refob[Nothing]
@@ -32,7 +34,7 @@ object NoProtocol extends Protocol {
   /** 
    * Produces SpawnInfo indicating to the actor that it is a root actor.
    */
-  def rootSpawnInfo(): SpawnInfo = ()
+  def rootSpawnInfo(): SpawnInfo = Info()
 
   def initState[T](
     context: ContextLike[GCMessage[T]],
@@ -51,7 +53,7 @@ object NoProtocol extends Protocol {
     state: State,
     ctx: ContextLike[GCMessage[T]]
   ): Refob[S] =
-    Refob(factory(()))
+    Refob(factory(Info()))
 
   def onMessage[T](
     msg: GCMessage[T],

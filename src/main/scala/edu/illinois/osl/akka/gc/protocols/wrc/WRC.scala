@@ -4,6 +4,7 @@ import edu.illinois.osl.akka.gc.protocols.Protocol
 import edu.illinois.osl.akka.gc.interfaces._
 import akka.actor.typed.Signal
 import akka.actor.ActorPath
+
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable
 import akka.actor.typed.Terminated
@@ -49,7 +50,7 @@ object WRC extends Protocol {
       """
   }
 
-  sealed trait SpawnInfo
+  sealed trait SpawnInfo extends Serializable
   case object IsRoot extends SpawnInfo
   case object NonRoot extends SpawnInfo
 

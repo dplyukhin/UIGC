@@ -1,9 +1,14 @@
 package edu.illinois.osl.akka.gc
 
 import akka.actor.typed
-import akka.actor.typed.scaladsl
+import akka.actor.typed.scaladsl.AskPattern.{Askable, schedulerFromActorSystem}
+import akka.actor.typed.{Props, SpawnProtocol, scaladsl}
+import akka.util.Timeout
 import edu.illinois.osl.akka.gc.interfaces.RefobLike
 import edu.illinois.osl.akka.gc.proxies._
+
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.{Duration, DurationInt}
 
 /**
  * A version of [[scaladsl.ActorContext]] used by garbage-collected actors. Provides
@@ -37,6 +42,23 @@ class ActorContext[T](
   def spawn[S](factory: ActorFactory[S], name: String): ActorRef[S] = {
     protocol.spawnImpl(
       info => AkkaRef(rawContext.spawn(factory(info), name)), 
+      state, proxyContext)
+  }
+
+  def spawnRemote[S](factory: String, location: unmanaged.ActorRef[RemoteSpawner.Command[S]]): ActorRef[S] = {
+    implicit val system = rawContext.system
+    implicit val timeout: Timeout = Timeout(1.minute)
+
+    def spawnIt(info: protocol.SpawnInfo): unmanaged.ActorRef[protocol.GCMessage[S]] = {
+      val f: Future[unmanaged.ActorRef[protocol.GCMessage[S]]] =
+        location.ask((ref: unmanaged.ActorRef[unmanaged.ActorRef[protocol.GCMessage[S]]]) =>
+          RemoteSpawner.Spawn(factory, info, ref))
+
+      Await.result[unmanaged.ActorRef[protocol.GCMessage[S]]](f, Duration.Inf)
+    }
+
+    protocol.spawnImpl(
+      info => AkkaRef(spawnIt(info)),
       state, proxyContext)
   }
 
