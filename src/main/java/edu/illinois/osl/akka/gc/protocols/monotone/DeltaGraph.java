@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
 import edu.illinois.osl.akka.gc.interfaces.RefLike;
 
 import java.util.HashMap;
@@ -11,37 +12,20 @@ import java.util.HashMap;
  * Nodes in the graph are called DeltaShadows. They are stored in an array of shadows.
  * The location of an actor's delta-shadow in the array is equal to its compressed actor name.
  */
-public class DeltaGraph {
+public class DeltaGraph implements CborSerializable {
 
     HashMap<RefLike<?>, Short> compressionTable;
     DeltaShadow[] shadows;
     int graphID;
+    int numEntriesMerged;
     short currentSize;
 
-    public static class DeltaShadow {
-        HashMap<Short, Integer> outgoing;
-        short supervisor;
-        int recvCount;
-        boolean isRoot;
-        boolean isBusy;
-        boolean isLocal;
-            // This field will be set to `true` if any of the entries in this batch were
-            // produced by this actor.
-
-        public DeltaShadow() {
-            this.outgoing = new HashMap<>();
-            this.supervisor = -1; // Set to an invalid value if it didn't change
-            this.recvCount = 0;
-            this.isRoot = false;
-            this.isBusy = false;
-            this.isLocal = false;
-        }
-    }
 
     public DeltaGraph(int graphID) {
         this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
         this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
         this.graphID = graphID;
+        this.numEntriesMerged = 0;
         this.currentSize = 0;
     }
 
@@ -121,6 +105,8 @@ public class DeltaGraph {
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
         }
+
+        numEntriesMerged++;
 
         /* Sleazy hack to avoid overflows: We know that merging an entry can only produce
          * so many new shadows. So we never fill the delta graph to actual capacity; we

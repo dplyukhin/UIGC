@@ -129,7 +129,7 @@ public class ShadowGraph {
         }
 
         for (short i = 0; i < delta.currentSize; i++) {
-            DeltaGraph.DeltaShadow deltaShadow = delta.shadows[i];
+            DeltaShadow deltaShadow = delta.shadows[i];
             Shadow shadow = getShadow(refs[i]);
 
             shadow.isLocal = shadow.isLocal || deltaShadow.isLocal;
