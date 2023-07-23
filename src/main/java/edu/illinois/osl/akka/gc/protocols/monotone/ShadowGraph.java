@@ -210,10 +210,12 @@ public class ShadowGraph {
         // are also garbage.
         int count = 0;
         for (Shadow shadow : from) {
-            if (shadow.mark != MARKED && shadow.isLocal) {
+            if (shadow.mark != MARKED) {
                 count++;
-                shadow.self.unsafeUpcast().tell(StopMsg$.MODULE$);
                 shadowMap.remove(shadow.self);
+                if (shadow.isLocal && shadow.supervisor.mark == MARKED) {
+                    shadow.self.unsafeUpcast().tell(StopMsg$.MODULE$);
+                }
             }
         }
         from = to;
@@ -224,7 +226,7 @@ public class ShadowGraph {
     public void startWave() {
         int count = 0;
         for (Shadow shadow : from) {
-            if (shadow.isRoot) {
+            if (shadow.isRoot && shadow.isLocal) {
                 count++;
                 shadow.self.unsafeUpcast().tell(WaveMsg$.MODULE$);
             }
