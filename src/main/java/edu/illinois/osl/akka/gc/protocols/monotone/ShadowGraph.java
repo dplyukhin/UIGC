@@ -128,10 +128,13 @@ public class ShadowGraph {
             refs[entry.getValue()] = entry.getKey();
         }
 
-        short i = 0;
-        for (DeltaGraph.DeltaShadow deltaShadow : delta.shadows) {
+        for (short i = 0; i < delta.currentSize; i++) {
+            DeltaGraph.DeltaShadow deltaShadow = delta.shadows[i];
             Shadow shadow = getShadow(refs[i]);
 
+            shadow.isLocal = shadow.isLocal || deltaShadow.isLocal;
+                // Set `isLocal` if we have already received an entry from this actor
+                // or if an entry was received in the latest batch.
             shadow.recvCount += deltaShadow.recvCount;
             shadow.isBusy = deltaShadow.isBusy;
             shadow.isRoot = deltaShadow.isRoot;
@@ -143,8 +146,19 @@ public class ShadowGraph {
                 int count = entry.getValue();
                 updateOutgoing(shadow.outgoing, getShadow(refs[id]), count);
             }
+        }
+    }
 
-            i++;
+    public void assertEquals(ShadowGraph that) {
+        assert (this.shadowMap.keySet().equals(that.shadowMap.keySet()))
+                : "Shadow maps have different actors:\n"
+                + "This: " + this.shadowMap.keySet() + "\n"
+                + "That: " + that.shadowMap.keySet();
+
+        for (Map.Entry<RefLike<?>, Shadow> entry : this.shadowMap.entrySet()) {
+            Shadow thisShadow = entry.getValue();
+            Shadow thatShadow = that.shadowMap.get(entry.getKey());
+            thisShadow.assertEquals(thatShadow);
         }
     }
 

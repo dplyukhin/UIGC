@@ -44,6 +44,10 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
   private val shadowGraph = new ShadowGraph()
+
+  private var deltaGraphID: Int = 0
+  private var deltaGraph = new DeltaGraph(0)
+
   private var remoteGCs: Set[ActorRef[Msg]] = Set()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
@@ -79,16 +83,33 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         //var start = System.currentTimeMillis()
         val queue = ActorGC(ctx.system).Queue
         var count = 0
+        var deltaCount = 0
         var entry: Entry = queue.poll()
         while (entry != null) {
           count += 1
           shadowGraph.mergeEntry(entry)
+
+          val isFull = deltaGraph.mergeEntry(entry)
+          if (isFull) {
+            deltaCount += 1
+            deltaGraphID += 1
+            deltaGraph = new DeltaGraph(deltaGraphID)
+          }
+
           // Put back the entry
           entry.clean()
           Monotone.EntryPool.add(entry)
           // Try and get another one
           entry = queue.poll()
         }
+
+        if (deltaGraph.nonEmpty()) {
+          deltaCount += 1
+          deltaGraphID += 1
+          deltaGraph = new DeltaGraph(deltaGraphID)
+        }
+        //println(s"Produced $deltaCount delta-graphs.")
+
         //var end = System.currentTimeMillis()
         //println(s"Scanned $count entries in ${end - start}ms.")
         totalEntries += count

@@ -24,6 +24,9 @@ public class DeltaGraph {
         int recvCount;
         boolean isRoot;
         boolean isBusy;
+        boolean isLocal;
+            // This field will be set to `true` if any of the entries in this batch were
+            // produced by this actor.
 
         public DeltaShadow() {
             this.outgoing = new HashMap<>();
@@ -31,6 +34,7 @@ public class DeltaGraph {
             this.recvCount = 0;
             this.isRoot = false;
             this.isBusy = false;
+            this.isLocal = false;
         }
     }
 
@@ -52,6 +56,7 @@ public class DeltaGraph {
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
         selfShadow.isRoot = entry.isRoot;
+        selfShadow.isLocal = true;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
@@ -136,6 +141,10 @@ public class DeltaGraph {
         compressionTable.put(ref, id);
         shadows[id] = new DeltaShadow();
         return id;
+    }
+
+    public boolean nonEmpty() {
+        return currentSize > 0;
     }
 
 }
