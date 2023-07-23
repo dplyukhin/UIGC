@@ -7,6 +7,7 @@ import java.util.*;
 public class ShadowGraph {
     /** The size of each array in an entry */
     boolean MARKED = true;
+    int totalActorsSeen = 0;
     ArrayList<Shadow> from;
     HashMap<ActorRef<?>, Shadow> shadowMap;
 
@@ -38,6 +39,7 @@ public class ShadowGraph {
     }
 
     public Shadow makeShadow(ActorRef<?> ref) {
+        totalActorsSeen++;
         // Haven't heard of this actor yet. Create a shadow for it.
         Shadow shadow = new Shadow();
         shadow.self = ref;

@@ -26,7 +26,7 @@ class ActorGC(system: ActorSystem[_]) extends Extension {
 
 object Bookkeeper {
   trait Msg
-  private case class DeltaMsg(graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with CborSerializable
+  private case class DeltaMsg(id: Int, graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with CborSerializable
   private case object Wakeup extends Msg
   private case object StartWave extends Msg
   private case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
@@ -47,7 +47,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private val shadowGraph = new ShadowGraph()
 
   private var deltaGraphID: Int = 0
-  private var deltaGraph = new DeltaGraph(0)
+  private var deltaGraph = new DeltaGraph()
 
   private var remoteGCs: Set[ActorRef[Msg]] = Set()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
@@ -73,10 +73,10 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
 
   private def finalizeDeltaGraph(): Unit = {
     for (gc <- remoteGCs) {
-      gc ! DeltaMsg(deltaGraph, ctx.self)
+      gc ! DeltaMsg(deltaGraphID, deltaGraph, ctx.self)
     }
     deltaGraphID += 1
-    deltaGraph = new DeltaGraph(deltaGraphID)
+    deltaGraph = new DeltaGraph()
   }
 
   override def onMessage(msg: Msg): Behavior[Msg] = {
@@ -87,8 +87,8 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           start()
         this
 
-      case DeltaMsg(delta, replyTo) =>
-        println(s"Got ${delta.graphID} deltas from $replyTo")
+      case DeltaMsg(id, delta, replyTo) =>
+        //println(s"Got ${id} deltas from $replyTo")
         shadowGraph.mergeDelta(delta)
         this
 
@@ -146,7 +146,8 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
 
   override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
     case PostStop =>
-      println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, and stopped $stopCount actors.")
+      println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, " +
+        s"and stopped $stopCount (of ${shadowGraph.totalActorsSeen}) actors.")
       timers.cancel(Wakeup)
       this
   }

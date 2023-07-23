@@ -16,7 +16,7 @@ class Egress()
       setHandler(in, new InHandler {
         override def onPush(): Unit = {
           val msg = grab(in)
-          println(msg)
+          //println(msg)
           push(out, msg)
         }
       })

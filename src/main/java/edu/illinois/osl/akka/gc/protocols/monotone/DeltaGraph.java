@@ -1,8 +1,16 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import akka.actor.typed.ActorRef;
+import akka.serialization.jackson.ActorRefDeserializer;
+import akka.serialization.jackson.AkkaSerializationDeserializer;
+import akka.serialization.jackson.AkkaSerializationSerializer;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.KeyDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
 
+import java.io.IOException;
 import java.util.HashMap;
 
 /**
@@ -14,17 +22,17 @@ import java.util.HashMap;
  */
 public class DeltaGraph implements CborSerializable {
 
+    @JsonDeserialize(using = AkkaSerializationDeserializer.class)
+    @JsonSerialize(using = AkkaSerializationSerializer.class)
     HashMap<ActorRef<?>, Short> compressionTable;
     DeltaShadow[] shadows;
-    int graphID;
     int numEntriesMerged;
     short currentSize;
 
 
-    public DeltaGraph(int graphID) {
+    public DeltaGraph() {
         this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
         this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
-        this.graphID = graphID;
         this.numEntriesMerged = 0;
         this.currentSize = 0;
     }
@@ -133,4 +141,11 @@ public class DeltaGraph implements CborSerializable {
         return currentSize > 0;
     }
 
+    public static class CompressionDeserializer extends KeyDeserializer {
+
+        @Override
+        public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
+            return ActorRefDeserializer.instance().deserialize(ctxt.getParser(), ctxt);
+        }
+    }
 }
