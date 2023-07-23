@@ -18,8 +18,8 @@ package object gc {
       msg.asInstanceOf[drl.GCMessage[T]]
     implicit def gcmessage2[T](msg: drl.GCMessage[T]): protocol.GCMessage[T] =
       msg.asInstanceOf[protocol.GCMessage[T]]
-    implicit def reflike[T](ref: RefLike[protocol.GCMessage[T]]): RefLike[drl.GCMessage[T]] =
-      ref.asInstanceOf[RefLike[drl.GCMessage[T]]]
+    implicit def ActorRef[T](ref: ActorRef[protocol.GCMessage[T]]): ActorRef[drl.GCMessage[T]] =
+      ref.asInstanceOf[ActorRef[drl.GCMessage[T]]]
     implicit def refob[T](ref: drl.Refob[T]): protocol.Refob[T] =
       ref.asInstanceOf[protocol.Refob[T]]
   }

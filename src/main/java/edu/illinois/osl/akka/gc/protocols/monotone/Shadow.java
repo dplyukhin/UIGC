@@ -1,6 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
-import edu.illinois.osl.akka.gc.interfaces.RefLike;
+import akka.actor.typed.ActorRef;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -9,7 +9,7 @@ import java.util.Objects;
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<Shadow, Integer> outgoing;
-    RefLike<?> self;
+    ActorRef<?> self;
     Shadow supervisor;
     int recvCount;
     boolean mark;

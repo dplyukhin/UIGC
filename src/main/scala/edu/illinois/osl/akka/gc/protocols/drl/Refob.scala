@@ -1,6 +1,8 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
 import edu.illinois.osl.akka.gc.interfaces._
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 import scala.annotation.unchecked.uncheckedVariance
 
 /**
@@ -12,11 +14,11 @@ case class Token(ref: Name, n: Int) extends Pretty {
 
 case class Refob[-T](
   token: Option[Token],
-  owner: Option[RefLike[GCMessage[Nothing]]],
-  target: RefLike[GCMessage[T]],
+  owner: Option[ActorRef[GCMessage[Nothing]]],
+  target: ActorRef[GCMessage[T]],
 ) extends RefobLike[T] {
   override def pretty: String = {
-    f"<Refob#${Math.floorMod(token.hashCode(), 1000)}: ${owner.get.pretty} -> ${target.pretty}>"
+    f"<Refob#${Math.floorMod(token.hashCode(), 1000)}: ${owner} -> ${target}>"
   }
 
 }

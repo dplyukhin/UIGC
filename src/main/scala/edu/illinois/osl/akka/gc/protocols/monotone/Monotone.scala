@@ -4,7 +4,8 @@ import akka.actor.typed.{Signal, Terminated}
 import com.typesafe.config.ConfigFactory
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
-import edu.illinois.osl.akka.gc.proxies.AkkaContext
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 
 import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -40,7 +41,7 @@ object Monotone extends Protocol {
     new SpawnInfo(None)
 
   override def initState[T](
-    context: ContextLike[GCMessage[T]],
+    context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val self = context.self
@@ -58,7 +59,7 @@ object Monotone extends Protocol {
       sendEntry(state.finalizeEntry(false), context)
 
     if (collectionStyle == OnBlock)
-      context.asInstanceOf[AkkaContext[GCMessage[T]]].ctx.queue.onFinishedProcessingHook = onBlock
+      context.queue.onFinishedProcessingHook = onBlock
     if ((collectionStyle == Wave && state.isRoot) || collectionStyle == OnIdle)
       sendEntry(state.finalizeEntry(false), context)
     state
@@ -66,14 +67,14 @@ object Monotone extends Protocol {
 
   override def getSelfRef[T](
     state: State,
-    context: ContextLike[GCMessage[T]]
+    context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.self.asInstanceOf[Refob[T]]
 
   override def spawnImpl[S, T](
-    factory: SpawnInfo => RefLike[GCMessage[S]],
+    factory: SpawnInfo => ActorRef[GCMessage[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val child = factory(new SpawnInfo(Some(state.self)))
     val ref = new Refob[S](child, null)
@@ -85,7 +86,7 @@ object Monotone extends Protocol {
   override def onMessage[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Option[T] =
     msg match {
       case AppMsg(payload, _) =>
@@ -99,14 +100,14 @@ object Monotone extends Protocol {
   override def onIdle[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     msg match {
       case StopMsg =>
         Protocol.ShouldStop
       case WaveMsg =>
         sendEntry(state.finalizeEntry(false), ctx)
-        for (child <- ctx.asInstanceOf[AkkaContext[T]].ctx.children) {
+        for (child <- ctx.children) {
           child.unsafeUpcast[GCMessage[Any]].tell(WaveMsg)
         }
         Protocol.ShouldContinue
@@ -120,7 +121,7 @@ object Monotone extends Protocol {
     target: Refob[S],
     owner: Refob[Nothing],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val ref = new Refob[S](target.target, target.targetShadow)
     val entry = state.onCreate(owner, target)
@@ -131,7 +132,7 @@ object Monotone extends Protocol {
   override def release[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = {
     for (ref <- releasing) {
       val entry = state.onDeactivate(ref)
@@ -141,31 +142,27 @@ object Monotone extends Protocol {
 
   override def releaseEverything[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ???
 
   override def preSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   override def postSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     Protocol.Unhandled
 
   private def sendEntry[T](
     entry: Entry,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = {
-    ctx match {
-      case ctx: AkkaContext[GCMessage[T]] =>
-        ActorGC(ctx.system).Queue.add(entry)
-      case _ => ???
-    }
+    ActorGC(ctx.system).Queue.add(entry)
   }
 
   override def sendMessage[T, S](
@@ -173,7 +170,7 @@ object Monotone extends Protocol {
     msg: T,
     refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[S]]
+    ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     val entry = state.onSend(ref)
     if (entry != null) sendEntry(entry, ctx)

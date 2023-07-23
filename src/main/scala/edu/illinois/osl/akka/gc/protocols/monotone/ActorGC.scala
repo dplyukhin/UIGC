@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import edu.illinois.osl.akka.gc.interfaces.{CborSerializable, RefLike}
+import edu.illinois.osl.akka.gc.interfaces.CborSerializable
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.duration.DurationInt

@@ -1,13 +1,13 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
 import edu.illinois.osl.akka.gc.interfaces._
-import edu.illinois.osl.akka.gc.protocols.monotone.Monotone.Refob
-
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import scala.annotation.unchecked.uncheckedVariance
 
 class Refob[-T](
-  var target: RefLike[GCMessage[T]] @uncheckedVariance,
+  var target: ActorRef[GCMessage[T]] @uncheckedVariance,
     // This is really a val, so the variance is correct---but we write to it (safely) in the deserializer.
   @volatile var targetShadow: Shadow
     // This field is read by actors that create new refobs and written-to by
@@ -25,7 +25,7 @@ class Refob[-T](
     hasChangedThisPeriod = false
   }
 
-  override def pretty: String = target.pretty
+  override def pretty: String = target.toString
 
   // SpawnInfo is serialized by setting the Shadow field to None.
   @throws(classOf[IOException])
@@ -35,7 +35,7 @@ class Refob[-T](
 
   @throws(classOf[IOException])
   private def readObject(in: ObjectInputStream): Unit = {
-    this.target = in.readObject().asInstanceOf[RefLike[GCMessage[T]]]
+    this.target = in.readObject().asInstanceOf[ActorRef[GCMessage[T]]]
     this.targetShadow = null
   }
 

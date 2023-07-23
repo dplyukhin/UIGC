@@ -1,6 +1,9 @@
 package edu.illinois.osl.akka.gc.protocols
 
-import akka.actor.typed.Signal
+import akka.actor.typed.{ActorRef, Signal}
+import akka.actor.typed.scaladsl.ActorContext
+
+
 import scala.annotation.unchecked.uncheckedVariance
 import edu.illinois.osl.akka.gc.interfaces._
 
@@ -29,19 +32,19 @@ trait Protocol {
   def rootSpawnInfo(): SpawnInfo
 
   def initState[T](
-    context: ContextLike[GCMessage[T]],
+    context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State
 
   def getSelfRef[T](
     state: State,
-    context: ContextLike[GCMessage[T]]
+    context: ActorContext[GCMessage[T]]
   ): Refob[T]
 
   def spawnImpl[S, T](
-    factory: SpawnInfo => RefLike[GCMessage[S]],
-    state: State,
-    ctx: ContextLike[GCMessage[T]]
+     factory: SpawnInfo => ActorRef[GCMessage[S]],
+     state: State,
+     ctx: ActorContext[GCMessage[T]]
   ): Refob[S]
 
   def sendMessage[T,S](
@@ -49,48 +52,48 @@ trait Protocol {
     msg: T,
     refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[S]]
+    ctx: ActorContext[GCMessage[S]]
   ): Unit
 
   def onMessage[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Option[T]
 
   def onIdle[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision
 
   def preSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit
 
   def postSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision
 
   def createRef[S,T](
     target: Refob[S], 
     owner: Refob[Nothing],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S]
 
   def release[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit
 
   def releaseEverything[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit
 }

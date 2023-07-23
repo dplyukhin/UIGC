@@ -3,16 +3,15 @@ package edu.illinois.osl.akka.gc.interfaces
 import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.typed.ActorRef
 import edu.illinois.osl.akka.gc.ActorContext
-import edu.illinois.osl.akka.gc.proxies.AkkaRef
 
 trait RefobLike[-T] extends Pretty {
   def !(msg: T, refs: Iterable[RefobLike[Nothing]])(implicit ctx: ActorContext[_]): Unit =
     ctx.sendMessage(this, msg, refs)
 
-  private[gc] def target: RefLike[Nothing]
+  private[gc] def target: ActorRef[Nothing]
 
   def rawActorRef: ActorRef[Nothing] =
-    this.target.asInstanceOf[AkkaRef[Nothing]].ref
+    this.target
 
   def tell(msg: T, refs: Iterable[RefobLike[Nothing]], ctx: ActorContext[_]): Unit =
     this.!(msg, refs)(ctx)

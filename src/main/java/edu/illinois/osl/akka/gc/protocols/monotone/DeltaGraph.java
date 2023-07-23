@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import akka.actor.typed.ActorRef;
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
-import edu.illinois.osl.akka.gc.interfaces.RefLike;
 
 import java.util.HashMap;
 
@@ -14,7 +14,7 @@ import java.util.HashMap;
  */
 public class DeltaGraph implements CborSerializable {
 
-    HashMap<RefLike<?>, Short> compressionTable;
+    HashMap<ActorRef<?>, Short> compressionTable;
     DeltaShadow[] shadows;
     int graphID;
     int numEntriesMerged;
@@ -119,7 +119,7 @@ public class DeltaGraph implements CborSerializable {
         return getID(refob.target());
     }
 
-    private short getID(RefLike<?> ref) {
+    private short getID(ActorRef<?> ref) {
         if (compressionTable.containsKey(ref))
             return compressionTable.get(ref);
 

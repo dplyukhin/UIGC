@@ -5,7 +5,6 @@ import akka.actor.typed.scaladsl.AskPattern.{Askable, schedulerFromActorSystem}
 import akka.actor.typed.{Props, SpawnProtocol, scaladsl}
 import akka.util.Timeout
 import edu.illinois.osl.akka.gc.interfaces.RefobLike
-import edu.illinois.osl.akka.gc.proxies._
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.{Duration, DurationInt}
@@ -23,11 +22,9 @@ class ActorContext[T](
   val spawnInfo: protocol.SpawnInfo,
 ) {
 
-  private[gc] val proxyContext = AkkaContext(rawContext)
+  private[gc] val state: protocol.State = protocol.initState(rawContext, spawnInfo)
 
-  private[gc] val state: protocol.State = protocol.initState(proxyContext, spawnInfo)
-
-  val self: ActorRef[T] = protocol.getSelfRef(state, proxyContext)
+  val self: ActorRef[T] = protocol.getSelfRef(state, rawContext)
 
   def name: ActorName = rawContext.self
 
@@ -41,8 +38,8 @@ class ActorContext[T](
    */
   def spawn[S](factory: ActorFactory[S], name: String): ActorRef[S] = {
     protocol.spawnImpl(
-      info => AkkaRef(rawContext.spawn(factory(info), name)), 
-      state, proxyContext)
+      info => rawContext.spawn(factory(info), name),
+      state, rawContext)
   }
 
   def spawnRemote[S](factory: String, location: unmanaged.ActorRef[RemoteSpawner.Command[S]]): ActorRef[S] = {
@@ -58,8 +55,8 @@ class ActorContext[T](
     }
 
     protocol.spawnImpl(
-      info => AkkaRef(spawnIt(info)),
-      state, proxyContext)
+      info => spawnIt(info),
+      state, rawContext)
   }
 
   def sendMessage[S](ref: RefobLike[S], msg: S, refs: Iterable[RefobLike[Nothing]]): Unit =
@@ -67,7 +64,7 @@ class ActorContext[T](
       ref.asInstanceOf[protocol.Refob[S]],
       msg,
       refs.asInstanceOf[Iterable[protocol.Refob[Nothing]]],
-      state, proxyContext)
+      state, rawContext)
 
   /**
    * Spawn a new anonymous actor into the GC system.
@@ -78,8 +75,8 @@ class ActorContext[T](
    */
   def spawnAnonymous[S](factory: ActorFactory[S]): ActorRef[S] = {
     protocol.spawnImpl(
-      info => AkkaRef(rawContext.spawnAnonymous(factory(info))), 
-      state, proxyContext)
+      info => rawContext.spawnAnonymous(factory(info)),
+      state, rawContext)
   }
 
   /**
@@ -92,14 +89,14 @@ class ActorContext[T](
    * @return The created reference.
    */
   def createRef[S](target: ActorRef[S], owner: ActorRef[Nothing]): ActorRef[S] = {
-    protocol.createRef(target, owner, state, proxyContext)
+    protocol.createRef(target, owner, state, rawContext)
   }
 
   /**
    * Releases a collection of references from an actor.
    */
   def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
-    protocol.release(releasing, state, proxyContext)
+    protocol.release(releasing, state, rawContext)
   }
 
   /**
@@ -111,6 +108,6 @@ class ActorContext[T](
   /**
    * Release all references owned by this actor.
    */
-  def releaseEverything(): Unit = protocol.releaseEverything(state, proxyContext)
+  def releaseEverything(): Unit = protocol.releaseEverything(state, rawContext)
 
 }

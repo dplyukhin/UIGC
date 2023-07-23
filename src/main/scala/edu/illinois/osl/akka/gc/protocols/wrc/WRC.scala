@@ -8,15 +8,17 @@ import akka.actor.ActorPath
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable
 import akka.actor.typed.Terminated
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 
 object WRC extends Protocol {
 
-  type Name = RefLike[GCMessage[Nothing]]
+  type Name = ActorRef[GCMessage[Nothing]]
 
   val RC_INC: Long = 255
 
-  case class Refob[-T](target: RefLike[GCMessage[T]]) extends RefobLike[T] {
-    override def pretty: String = target.pretty
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T] {
+    override def pretty: String = target.toString
   }
 
   trait GCMessage[+T] extends Message with Pretty
@@ -45,7 +47,7 @@ object WRC extends Protocol {
       s"""STATE:
       < kind: $kind
         rc:   $rc
-        actorMap: ${actorMap.pretty}
+        actorMap: ${actorMap}
       >
       """
   }
@@ -67,7 +69,7 @@ object WRC extends Protocol {
   def rootSpawnInfo(): SpawnInfo = IsRoot
 
   def initState[T](
-    context: ContextLike[GCMessage[T]],
+    context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val state = new State(Refob(context.self), spawnInfo)
@@ -78,14 +80,14 @@ object WRC extends Protocol {
 
   def getSelfRef[T](
     state: State,
-    context: ContextLike[GCMessage[T]]
+    context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.self.asInstanceOf[Refob[T]]
 
   def spawnImpl[S, T](
-    factory: SpawnInfo => RefLike[GCMessage[S]],
+    factory: SpawnInfo => ActorRef[GCMessage[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val actorRef = factory(NonRoot)
     ctx.watch(actorRef)
@@ -98,7 +100,7 @@ object WRC extends Protocol {
   def onMessage[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]],
+    ctx: ActorContext[GCMessage[T]],
   ): Option[T] = msg match {
     case AppMsg(payload, refs, isSelfMsg) => 
       if (isSelfMsg) {
@@ -120,9 +122,9 @@ object WRC extends Protocol {
 
   def tryTerminate[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
-    if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && !ctx.anyChildren) 
+    if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && ctx.children.isEmpty)
       Protocol.ShouldStop 
     else 
       Protocol.ShouldContinue
@@ -130,20 +132,20 @@ object WRC extends Protocol {
   def onIdle[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]],
+    ctx: ActorContext[GCMessage[T]],
   ): Protocol.TerminationDecision =
     tryTerminate(state, ctx)
 
   def preSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   def postSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     signal match {
       case signal: Terminated =>
@@ -156,7 +158,7 @@ object WRC extends Protocol {
     target: Refob[S], 
     owner: Refob[Nothing],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     if (target.target == ctx.self) {
       state.rc += 1
@@ -178,7 +180,7 @@ object WRC extends Protocol {
   def release[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = {
     for (ref <- releasing) {
       if (ref.target == ctx.self) {
@@ -199,7 +201,7 @@ object WRC extends Protocol {
 
   def releaseEverything[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ???
 
   override def sendMessage[T, S](
@@ -207,7 +209,7 @@ object WRC extends Protocol {
     msg: T,
     refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[S]]
+    ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     val isSelfMsg = ref.target == state.self.target
     if (isSelfMsg) {

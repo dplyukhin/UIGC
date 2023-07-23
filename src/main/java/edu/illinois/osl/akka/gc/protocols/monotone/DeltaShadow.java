@@ -1,10 +1,15 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.KeyDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
 
+import java.io.IOException;
 import java.util.HashMap;
 
 public class DeltaShadow implements CborSerializable {
+    @JsonDeserialize(keyUsing = OutgoingDeserializer.class)
     HashMap<Short, Integer> outgoing;
     short supervisor;
     int recvCount;
@@ -21,5 +26,13 @@ public class DeltaShadow implements CborSerializable {
         this.isRoot = false;
         this.isBusy = false;
         this.isLocal = false;
+    }
+
+    public static class OutgoingDeserializer extends KeyDeserializer {
+
+        @Override
+        public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
+            return Short.parseShort(key);
+        }
     }
 }

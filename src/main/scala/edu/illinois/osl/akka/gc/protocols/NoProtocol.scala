@@ -1,8 +1,10 @@
 package edu.illinois.osl.akka.gc.protocols
 
 import edu.illinois.osl.akka.gc.interfaces._
-import akka.actor.typed.Signal
+import akka.actor.typed.{ActorRef, Signal}
 
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.ActorPath
 
@@ -11,8 +13,8 @@ object NoProtocol extends Protocol {
     def pretty: String = payload.toString
   }
 
-  case class Refob[-T](target: RefLike[GCMessage[T]]) extends RefobLike[T] {
-    override def pretty: String = target.pretty
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T] {
+    override def pretty: String = target.toString
   }
 
   trait SpawnInfo extends Serializable
@@ -37,48 +39,48 @@ object NoProtocol extends Protocol {
   def rootSpawnInfo(): SpawnInfo = Info()
 
   def initState[T](
-    context: ContextLike[GCMessage[T]],
+    context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State =
     new State(Refob(context.self))
 
   def getSelfRef[T](
     state: State,
-    context: ContextLike[GCMessage[T]]
+    context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
   def spawnImpl[S, T](
-    factory: SpawnInfo => RefLike[GCMessage[S]],
+    factory: SpawnInfo => ActorRef[GCMessage[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] =
     Refob(factory(Info()))
 
   def onMessage[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]],
+    ctx: ActorContext[GCMessage[T]],
   ): Option[T] =
     Some(msg.payload)
 
   def onIdle[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]],
+    ctx: ActorContext[GCMessage[T]],
   ): Protocol.TerminationDecision =
     Protocol.ShouldContinue 
 
   def preSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   def postSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     Protocol.Unhandled
 
@@ -86,19 +88,19 @@ object NoProtocol extends Protocol {
     target: Refob[S], 
     owner: Refob[Nothing],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = 
     Refob(target.target)
 
   def release[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   def releaseEverything[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   override def sendMessage[T, S](
@@ -106,7 +108,7 @@ object NoProtocol extends Protocol {
     msg: T,
     refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[S]]
+    ctx: ActorContext[GCMessage[S]]
   ): Unit =
     ref.target ! GCMessage(msg, refs)
 }

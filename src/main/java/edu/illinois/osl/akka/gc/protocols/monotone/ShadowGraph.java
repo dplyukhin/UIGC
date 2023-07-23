@@ -1,6 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
-import edu.illinois.osl.akka.gc.interfaces.RefLike;
+import akka.actor.typed.ActorRef;
 
 import java.util.*;
 
@@ -8,7 +8,7 @@ public class ShadowGraph {
     /** The size of each array in an entry */
     boolean MARKED = true;
     ArrayList<Shadow> from;
-    HashMap<RefLike<?>, Shadow> shadowMap;
+    HashMap<ActorRef<?>, Shadow> shadowMap;
 
     public ShadowGraph() {
         from = new ArrayList<>();
@@ -27,7 +27,7 @@ public class ShadowGraph {
         return shadow;
     }
 
-    public Shadow getShadow(RefLike<?> ref) {
+    public Shadow getShadow(ActorRef<?> ref) {
         // Try to get it from the collection of all my shadows.
         Shadow shadow = shadowMap.get(ref);
         if (shadow != null)
@@ -37,7 +37,7 @@ public class ShadowGraph {
         return makeShadow(ref);
     }
 
-    public Shadow makeShadow(RefLike<?> ref) {
+    public Shadow makeShadow(ActorRef<?> ref) {
         // Haven't heard of this actor yet. Create a shadow for it.
         Shadow shadow = new Shadow();
         shadow.self = ref;
@@ -124,8 +124,8 @@ public class ShadowGraph {
 
     public void mergeDelta(DeltaGraph delta) {
         // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        RefLike<?>[] refs = new RefLike<?>[delta.currentSize];
-        for (Map.Entry<RefLike<?>, Short> entry : delta.compressionTable.entrySet()) {
+        ActorRef<?>[] refs = new ActorRef<?>[delta.currentSize];
+        for (Map.Entry<ActorRef<?>, Short> entry : delta.compressionTable.entrySet()) {
             refs[entry.getValue()] = entry.getKey();
         }
 
@@ -158,7 +158,7 @@ public class ShadowGraph {
                 + "This: " + this.shadowMap.keySet() + "\n"
                 + "That: " + that.shadowMap.keySet();
 
-        for (Map.Entry<RefLike<?>, Shadow> entry : this.shadowMap.entrySet()) {
+        for (Map.Entry<ActorRef<?>, Shadow> entry : this.shadowMap.entrySet()) {
             Shadow thisShadow = entry.getValue();
             Shadow thatShadow = that.shadowMap.get(entry.getKey());
             thisShadow.assertEquals(thatShadow);
@@ -210,7 +210,7 @@ public class ShadowGraph {
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED && shadow.isLocal) {
                 count++;
-                shadow.self.unsafeUpcast().$bang(StopMsg$.MODULE$);
+                shadow.self.unsafeUpcast().tell(StopMsg$.MODULE$);
                 shadowMap.remove(shadow.self);
             }
         }
@@ -224,7 +224,7 @@ public class ShadowGraph {
         for (Shadow shadow : from) {
             if (shadow.isRoot) {
                 count++;
-                shadow.self.unsafeUpcast().$bang(WaveMsg$.MODULE$);
+                shadow.self.unsafeUpcast().tell(WaveMsg$.MODULE$);
             }
         }
     }

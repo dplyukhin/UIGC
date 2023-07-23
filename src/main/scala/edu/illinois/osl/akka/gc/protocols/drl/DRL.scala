@@ -1,7 +1,8 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
 import akka.actor.typed.{PostStop, Signal, Terminated}
-
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
@@ -24,7 +25,7 @@ object DRL extends Protocol {
     new SpawnInfo(None, None)
 
   override def initState[T](
-    context: ContextLike[GCMessage[T]],
+    context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
     val state = new State(context.self, spawnInfo)
@@ -33,14 +34,14 @@ object DRL extends Protocol {
 
   def getSelfRef[T](
     state: State,
-    context: ContextLike[GCMessage[T]]
+    context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
   override def spawnImpl[S, T](
-    factory: SpawnInfo => RefLike[GCMessage[S]],
+    factory: SpawnInfo => ActorRef[GCMessage[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val x = state.newToken()
     val self = state.self
@@ -54,7 +55,7 @@ object DRL extends Protocol {
   override def onMessage[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
@@ -77,7 +78,7 @@ object DRL extends Protocol {
   override def onIdle[T](
     msg: GCMessage[T],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     msg match {
       case Kill =>
@@ -91,9 +92,9 @@ object DRL extends Protocol {
    */
   def tryTerminate[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision = {
-    if (ctx.anyChildren || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
+    if (ctx.children.nonEmpty || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
       Protocol.ShouldContinue
     else
       Protocol.ShouldStop
@@ -103,7 +104,7 @@ object DRL extends Protocol {
     target: Refob[S], 
     owner: Refob[Nothing],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val ref = state.newRef(owner, target)
     state.handleCreatedRef(target, ref)
@@ -113,7 +114,7 @@ object DRL extends Protocol {
   override def release[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = {
 
     val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])]
@@ -127,20 +128,20 @@ object DRL extends Protocol {
 
   override def releaseEverything[T](
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = 
     release(state.nontrivialActiveRefs, state, ctx)
 
   override def preSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   override def postSignal[T](
     signal: Signal, 
     state: State,
-    ctx: ContextLike[GCMessage[T]]
+    ctx: ActorContext[GCMessage[T]]
   ): Protocol.TerminationDecision =
     signal match {
       case signal: Terminated =>
@@ -154,7 +155,7 @@ object DRL extends Protocol {
     msg: T,
     refs: Iterable[Refob[Nothing]],
     state: State,
-    ctx: ContextLike[GCMessage[S]]
+    ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     ref.target ! AppMsg(msg, ref.token, refs)
     state.incSentCount(ref.token)
