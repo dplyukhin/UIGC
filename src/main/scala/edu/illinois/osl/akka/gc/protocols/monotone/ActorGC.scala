@@ -26,7 +26,7 @@ class ActorGC(system: ActorSystem[_]) extends Extension {
 
 object Bookkeeper {
   trait Msg
-  private case class DeltaMsg(id: Int, graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with CborSerializable
+  private case class DeltaMsg(id: Int, graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with Serializable
   private case object Wakeup extends Msg
   private case object StartWave extends Msg
   private case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
@@ -45,6 +45,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
   private val shadowGraph = new ShadowGraph()
+  //private val testGraph = new ShadowGraph()
 
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
@@ -90,6 +91,12 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
       case DeltaMsg(id, delta, replyTo) =>
         //println(s"Got ${id} deltas from $replyTo")
         shadowGraph.mergeDelta(delta)
+        //var i = 0
+        //while (i < delta.entries.size()) {
+        //  testGraph.mergeRemoteEntry(delta.entries.get(i))
+        //  i += 1;
+        //}
+        //shadowGraph.assertEquals(testGraph)
         this
 
       case Wakeup =>
@@ -102,6 +109,8 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         while (entry != null) {
           count += 1
           shadowGraph.mergeEntry(entry)
+          //testGraph.mergeEntry(entry)
+          //shadowGraph.assertEquals(testGraph)
 
           if (numNodes > 1) {
             val isFull = deltaGraph.mergeEntry(entry)
@@ -128,7 +137,9 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
         totalEntries += count
 
         //start = System.currentTimeMillis()
-        count = shadowGraph.trace()
+        count = shadowGraph.trace(true)
+        //count = testGraph.trace(false)
+        //shadowGraph.assertEquals(testGraph)
         //end = System.currentTimeMillis()
         //println(s"Found $count garbage actors in ${end - start}ms.")
 
@@ -148,6 +159,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
     case PostStop =>
       println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, " +
         s"and stopped $stopCount (of ${shadowGraph.totalActorsSeen}) actors.")
+      //shadowGraph.investigateLiveSet()
       timers.cancel(Wakeup)
       this
   }

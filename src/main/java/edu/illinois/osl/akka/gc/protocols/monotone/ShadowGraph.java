@@ -18,12 +18,12 @@ public class ShadowGraph {
 
     public Shadow getShadow(Refob<?> refob) {
         // Check if it's in the cache.
-        if (refob.targetShadow() != null)
-            return refob.targetShadow();
+        //if (refob.targetShadow() != null)
+        //    return refob.targetShadow();
 
         // Try to get it from the collection of all my shadows. Save it in the cache.
         Shadow shadow = getShadow(refob.target());
-        refob.targetShadow_$eq(shadow);
+        //refob.targetShadow_$eq(shadow);
 
         return shadow;
     }
@@ -162,10 +162,22 @@ public class ShadowGraph {
     }
 
     public void assertEquals(ShadowGraph that) {
+        HashSet<ActorRef<?>> thisNotThat = new HashSet<>();
+        for (ActorRef<?> ref : this.shadowMap.keySet()) {
+            if (!that.shadowMap.containsKey(ref)) {
+                thisNotThat.add(ref);
+            }
+        }
+        HashSet<ActorRef<?>> thatNotThis = new HashSet<>();
+        for (ActorRef<?> ref : that.shadowMap.keySet()) {
+            if (!this.shadowMap.containsKey(ref)) {
+                thatNotThis.add(ref);
+            }
+        }
         assert (this.shadowMap.keySet().equals(that.shadowMap.keySet()))
                 : "Shadow maps have different actors:\n"
-                + "This: " + this.shadowMap.keySet() + "\n"
-                + "That: " + that.shadowMap.keySet();
+                + "Actors in this, not that: " + thisNotThat + "\n"
+                + "Actors in that, not this " + thatNotThis;
 
         for (Map.Entry<ActorRef<?>, Shadow> entry : this.shadowMap.entrySet()) {
             Shadow thisShadow = entry.getValue();
@@ -178,7 +190,7 @@ public class ShadowGraph {
         return shadow.isRoot || shadow.isBusy || shadow.recvCount != 0;
     }
 
-    public int trace() {
+    public int trace(boolean shouldKill) {
         //System.out.println("Scanning " + from.size() + " actors...");
         ArrayList<Shadow> to = new ArrayList<>();
         // 0. Assume all shadows in `from` are in the UNMARKED state.
@@ -191,6 +203,7 @@ public class ShadowGraph {
             if (isUnblocked(shadow) || !shadow.interned) {
                 to.add(shadow);
                 shadow.mark = MARKED;
+                //shadow.markDepth = 1;
             }
         }
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
@@ -201,7 +214,11 @@ public class ShadowGraph {
                 if (entry.getValue() > 0 && target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
+                    //target.markDepth = owner.markDepth + 1;
                 }
+                //if (entry.getValue() > 0 && target.markDepth > owner.markDepth + 1) {
+                //    target.markDepth = owner.markDepth + 1;
+                //}
             }
             // Mark the actors that are monitoring or supervising this one
             Shadow supervisor = owner.supervisor;
@@ -210,6 +227,9 @@ public class ShadowGraph {
                     to.add(supervisor);
                     supervisor.mark = MARKED;
                 }
+                //if (supervisor.markDepth > owner.markDepth + 1) {
+                //    supervisor.markDepth = owner.markDepth + 1;
+                //}
             }
         }
 
@@ -220,7 +240,7 @@ public class ShadowGraph {
             if (shadow.mark != MARKED) {
                 count++;
                 shadowMap.remove(shadow.self);
-                if (shadow.isLocal && shadow.supervisor.mark == MARKED) {
+                if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill) {
                     shadow.self.unsafeUpcast().tell(StopMsg$.MODULE$);
                 }
             }
@@ -237,6 +257,58 @@ public class ShadowGraph {
                 count++;
                 shadow.self.unsafeUpcast().tell(WaveMsg$.MODULE$);
             }
+        }
+    }
+
+    public void investigateLiveSet() {
+        int nonInternedActors = 0;
+        int rootActors = 0;
+        int busyActors = 0;
+        int unblockedActors = 0;
+        int nonLocalActors = 0;
+        HashMap<Integer, Integer> markDepths = new HashMap<>();
+        for (Shadow shadow : from) {
+            if (!shadow.interned) nonInternedActors++;
+            if (shadow.isRoot) {
+                rootActors++;
+                System.out.println(shadow.outgoing.size() + " acquaintances of root actor " + shadow.self);
+            }
+            if (shadow.isBusy) busyActors++;
+            if (shadow.recvCount != 0) unblockedActors++;
+            if (!shadow.isLocal) nonLocalActors++;
+
+            //int x = markDepths.getOrDefault(shadow.markDepth, 0);
+            //markDepths.put(shadow.markDepth, x + 1);
+
+            if (shadow.isLocal) {
+                int c = 0;
+                for (Shadow out : shadow.outgoing.keySet()) {
+                    if (!out.isLocal) {
+                        c++;
+                        System.out.println("Local " + shadow.self + " appears acquainted with remote " + out.self + " (" + shadow.outgoing.get(out) + ")");
+                    }
+                }
+                if (c > 0)
+                    System.out.println("Local " + shadow.self + " has " + c + " nonlocal apparent acquaintances.");
+            }
+            else {
+                int c = 0;
+                for (Shadow out : shadow.outgoing.keySet()) {
+                    if (out.isLocal) c++;
+                }
+                if (c > 0)
+                    System.out.println("Remote " + shadow.self + " has " + c + " apparent acquaintances that are local to this node.");
+            }
+        }
+        System.out.println(
+                nonInternedActors + " actors not yet interned;\n" +
+                rootActors + " root actors;\n" +
+                busyActors + " busy actors;\n" +
+                nonLocalActors + " nonlocal actors;\n" +
+                unblockedActors + " actors have nonzero receive counts.\n"
+        );
+        for (int depth : markDepths.keySet()) {
+            System.out.println(markDepths.get(depth) + " actors at mark depth " + depth + "\n");
         }
     }
 }

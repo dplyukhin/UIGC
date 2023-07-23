@@ -6,10 +6,11 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 
-public class DeltaShadow implements CborSerializable {
-    @JsonDeserialize(keyUsing = OutgoingDeserializer.class)
+public class DeltaShadow implements Serializable {
+    //@JsonDeserialize(keyUsing = OutgoingDeserializer.class)
     HashMap<Short, Integer> outgoing;
     short supervisor;
     int recvCount;

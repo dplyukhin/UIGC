@@ -11,7 +11,10 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A compact, serializable summary of a batch of entries. Because ActorRefs are so large,
@@ -20,12 +23,13 @@ import java.util.HashMap;
  * Nodes in the graph are called DeltaShadows. They are stored in an array of shadows.
  * The location of an actor's delta-shadow in the array is equal to its compressed actor name.
  */
-public class DeltaGraph implements CborSerializable {
+public class DeltaGraph implements Serializable {
 
-    @JsonDeserialize(using = AkkaSerializationDeserializer.class)
-    @JsonSerialize(using = AkkaSerializationSerializer.class)
+    //@JsonDeserialize(using = AkkaSerializationDeserializer.class)
+    //@JsonSerialize(using = AkkaSerializationSerializer.class)
     HashMap<ActorRef<?>, Short> compressionTable;
     DeltaShadow[] shadows;
+    //ArrayList<Entry> entries;
     int numEntriesMerged;
     short currentSize;
 
@@ -33,8 +37,20 @@ public class DeltaGraph implements CborSerializable {
     public DeltaGraph() {
         this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
         this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
+        //this.entries = new ArrayList<>();
         this.numEntriesMerged = 0;
         this.currentSize = 0;
+    }
+
+    public void updateOutgoing(Map<Short, Integer> outgoing, Short target, int delta) {
+        int count = outgoing.getOrDefault(target, 0);
+        if (count + delta == 0) {
+            // Instead of writing zero, we delete the count.
+            outgoing.remove(target);
+        }
+        else {
+            outgoing.put(target, count + delta);
+        }
     }
 
     /**
@@ -45,10 +61,10 @@ public class DeltaGraph implements CborSerializable {
         // Local information.
         short selfID = getID(entry.self);
         DeltaShadow selfShadow = shadows[selfID];
+        selfShadow.interned = true;
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
         selfShadow.isRoot = entry.isRoot;
-        selfShadow.interned = true;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
@@ -57,16 +73,9 @@ public class DeltaGraph implements CborSerializable {
             short targetID = getID(entry.createdTargets[i]);
 
             // Increment the number of outgoing refs to the target
-            short ownerID = getID(owner.target());
+            short ownerID = getID(owner);
             DeltaShadow ownerShadow = shadows[ownerID];
-            int count = ownerShadow.outgoing.getOrDefault(targetID, 0);
-            if (count == -1) {
-                // Instead of writing zero, we delete the count.
-                ownerShadow.outgoing.remove(targetID);
-            }
-            else {
-                ownerShadow.outgoing.put(targetID, count + 1);
-            }
+            updateOutgoing(ownerShadow.outgoing, targetID, 1);
         }
 
         // Spawned actors.
@@ -91,11 +100,7 @@ public class DeltaGraph implements CborSerializable {
 
             // Update the owner's outgoing references
             if (isDeactivated) {
-                int count = selfShadow.outgoing.getOrDefault(targetID, 0);
-                if (count == 1)
-                    selfShadow.outgoing.remove(targetID);
-                else
-                    selfShadow.outgoing.put(targetID, count - 1); // may be negative!
+                updateOutgoing(selfShadow.outgoing, targetID, -1);
             }
         }
 

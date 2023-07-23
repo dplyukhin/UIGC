@@ -12,6 +12,7 @@ public class Shadow {
     ActorRef<?> self;
     Shadow supervisor;
     int recvCount;
+    //int markDepth;
     boolean mark;
     boolean isRoot;
     /** Indicates whether the GC has received a snapshot from this actor yet. */
@@ -26,6 +27,7 @@ public class Shadow {
         this.self = null;
         this.supervisor = null;
         this.recvCount = 0;
+        //this.markDepth = 0;
         this.mark = false;
         this.isRoot = false;
         this.interned = false;
@@ -33,24 +35,42 @@ public class Shadow {
         this.isBusy = false;
     }
 
+    @Override
+    public String toString() {
+        return "Shadow{" +
+                "\noutgoing=" + outgoing.keySet().stream().map(x -> x.self).toList() +
+                ", \nself=" + self +
+                ", \nsupervisor=" + (supervisor == null ? "null" : supervisor.self) +
+                ", \nrecvCount=" + recvCount +
+                //", \nmarkDepth=" + markDepth +
+                ", \nmark=" + mark +
+                ", \nisRoot=" + isRoot +
+                ", \ninterned=" + interned +
+                ", \nisLocal=" + isLocal +
+                ", \nisBusy=" + isBusy +
+                "}\n";
+    }
+
     /** Compare two shadows from distinct graphs for debugging purposes. */
     public void assertEquals(Shadow that) {
         assert (this.self == that.self)
-                : this.self + " was not " + that.self;
+                : this + " was not " + that;
         assert ((this.supervisor != null && that.supervisor != null) || (this.supervisor == null && that.supervisor == null))
-                : this.supervisor + " was not " + that.supervisor;
+                : this + " was not " + that;
         assert (this.supervisor == null || (this.supervisor.self == that.supervisor.self))
-                : this.supervisor.self + " was not " + that.supervisor.self;
+                : this + " was not " + that;
         assert (this.recvCount == that.recvCount)
-                : this.recvCount + " was not " + that.recvCount;
+                : this + " was not " + that;
         assert (this.isRoot == that.isRoot)
-                : this.isRoot + " was not " + that.isRoot;
+                : this + " was not " + that;
         assert (this.interned == that.interned)
-                : this.interned + " was not " + that.interned;
+                : this + " was not " + that;
         assert (this.isBusy == that.isBusy)
-                : this.isBusy + " was not " + that.isBusy;
+                : this + " was not " + that;
         for (Map.Entry<Shadow, Integer> thisEntry : this.outgoing.entrySet()) {
             boolean anyMatch = false;
+            assert(that != null);
+            assert(that.outgoing != null);
             for (Map.Entry<Shadow, Integer> thatEntry : that.outgoing.entrySet()) {
                 if (thisEntry.getKey().self == thatEntry.getKey().self) {
                     anyMatch = true;
@@ -58,9 +78,8 @@ public class Shadow {
                             : thisEntry + " was not " + thatEntry;
                 }
             }
-            assert anyMatch :
-                    outgoing.entrySet() + " contains entry for " + thisEntry.getKey().self
-                    + ", not present in " + that.outgoing.entrySet();
+            assert anyMatch
+                : this + " was not " + that;
         }
     }
 }
