@@ -43,7 +43,7 @@ public class ShadowGraph {
         shadow.self = ref;
         shadow.mark = !MARKED;
             // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
-        shadow.isLocal = false;
+        shadow.interned = false;
             // We haven't seen this shadow before, so we can't have received a snapshot from it.
 
         shadowMap.put(ref, shadow);
@@ -65,7 +65,8 @@ public class ShadowGraph {
     public void mergeEntry(Entry entry) {
         // Local information.
         Shadow selfShadow = getShadow(entry.self);
-        selfShadow.isLocal = true; // Mark it as local now that we have a snapshot from the actor.
+        selfShadow.interned = true; // We now have a snapshot from the actor.
+        selfShadow.isLocal = true;  // Entries only come from actors on this node.
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
         selfShadow.isRoot = entry.isRoot;
@@ -132,9 +133,11 @@ public class ShadowGraph {
             DeltaShadow deltaShadow = delta.shadows[i];
             Shadow shadow = getShadow(refs[i]);
 
-            shadow.isLocal = shadow.isLocal || deltaShadow.isLocal;
-                // Set `isLocal` if we have already received an entry from this actor
+            shadow.interned = shadow.interned || deltaShadow.isLocal;
+                // Set `interned` if we have already received an entry from this actor
                 // or if an entry was received in the latest batch.
+            shadow.isLocal = false;
+                // Delta graphs only come from remote actors.
             shadow.recvCount += deltaShadow.recvCount;
             shadow.isBusy = deltaShadow.isBusy;
             shadow.isRoot = deltaShadow.isRoot;
@@ -165,9 +168,6 @@ public class ShadowGraph {
     private static boolean isUnblocked(Shadow shadow) {
         return shadow.isRoot || shadow.isBusy || shadow.recvCount != 0;
     }
-    private static boolean isExternal(Shadow shadow) {
-        return !shadow.isLocal;
-    }
 
     public int trace() {
         //System.out.println("Scanning " + from.size() + " actors...");
@@ -179,7 +179,7 @@ public class ShadowGraph {
         // 3. Find all unmarked shadows in `from` and kill those actors.
         // 4. The `to` set becomes the new `from` set.
         for (Shadow shadow : from) {
-            if (isUnblocked(shadow) || isExternal(shadow)) {
+            if (isUnblocked(shadow) || !shadow.interned) {
                 to.add(shadow);
                 shadow.mark = MARKED;
             }
@@ -208,7 +208,7 @@ public class ShadowGraph {
         // are also garbage.
         int count = 0;
         for (Shadow shadow : from) {
-            if (shadow.mark != MARKED) {
+            if (shadow.mark != MARKED && shadow.isLocal) {
                 count++;
                 shadow.self.unsafeUpcast().$bang(StopMsg$.MODULE$);
                 shadowMap.remove(shadow.self);

@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import edu.illinois.osl.akka.gc.interfaces.RefLike
+import edu.illinois.osl.akka.gc.interfaces.{CborSerializable, RefLike}
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.duration.DurationInt
@@ -26,9 +26,10 @@ class ActorGC(system: ActorSystem[_]) extends Extension {
 
 object Bookkeeper {
   trait Msg
-  case object Wakeup extends Msg
-  case object StartWave extends Msg
-  case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
+  private case class DeltaMsg(graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with CborSerializable
+  private case object Wakeup extends Msg
+  private case object StartWave extends Msg
+  private case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
   private val BKServiceKey = ServiceKey[Msg]("Bookkeeper")
 
   def apply(): Behavior[Msg] = {
@@ -70,12 +71,25 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
     println("Bookkeeper started!")
   }
 
+  private def finalizeDeltaGraph(): Unit = {
+    for (gc <- remoteGCs) {
+      gc ! DeltaMsg(deltaGraph, ctx.self)
+    }
+    deltaGraphID += 1
+    deltaGraph = new DeltaGraph(deltaGraphID)
+  }
+
   override def onMessage(msg: Msg): Behavior[Msg] = {
     msg match {
       case ReceptionistListing(BKServiceKey.Listing(listing)) =>
         remoteGCs = remoteGCs ++ listing.filter(_ != ctx.self)
         if (remoteGCs.size + 1 == numNodes)
           start()
+        this
+
+      case DeltaMsg(delta, replyTo) =>
+        println(s"Got ${delta.graphID} deltas from $replyTo")
+        shadowGraph.mergeDelta(delta)
         this
 
       case Wakeup =>
@@ -89,11 +103,12 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           count += 1
           shadowGraph.mergeEntry(entry)
 
-          val isFull = deltaGraph.mergeEntry(entry)
-          if (isFull) {
-            deltaCount += 1
-            deltaGraphID += 1
-            deltaGraph = new DeltaGraph(deltaGraphID)
+          if (numNodes > 1) {
+            val isFull = deltaGraph.mergeEntry(entry)
+            if (isFull) {
+              deltaCount += 1
+              finalizeDeltaGraph()
+            }
           }
 
           // Put back the entry
@@ -103,15 +118,13 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
           entry = queue.poll()
         }
 
-        if (deltaGraph.nonEmpty()) {
+        if (numNodes > 1 && deltaGraph.nonEmpty()) {
           deltaCount += 1
-          deltaGraphID += 1
-          deltaGraph = new DeltaGraph(deltaGraphID)
+          finalizeDeltaGraph()
         }
-        //println(s"Produced $deltaCount delta-graphs.")
 
         //var end = System.currentTimeMillis()
-        //println(s"Scanned $count entries in ${end - start}ms.")
+        //println(s"Scanned $count entries and $deltaCount delta-graphs in ${end - start}ms.")
         totalEntries += count
 
         //start = System.currentTimeMillis()
@@ -133,7 +146,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
 
   override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
     case PostStop =>
-      println(s"Bookkeeper stopped! Read $totalEntries entries and stopped $stopCount actors.")
+      println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, and stopped $stopCount actors.")
       timers.cancel(Wakeup)
       this
   }

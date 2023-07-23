@@ -15,6 +15,8 @@ public class Shadow {
     boolean mark;
     boolean isRoot;
     /** Indicates whether the GC has received a snapshot from this actor yet. */
+    boolean interned;
+    /** Indicates whether the actor is on the same node as this GC. */
     boolean isLocal;
     /** Whether this actor was busy in its latest entry. */
     boolean isBusy;
@@ -26,6 +28,7 @@ public class Shadow {
         this.recvCount = 0;
         this.mark = false;
         this.isRoot = false;
+        this.interned = false;
         this.isLocal = false;
         this.isBusy = false;
     }
@@ -42,8 +45,8 @@ public class Shadow {
                 : this.recvCount + " was not " + that.recvCount;
         assert (this.isRoot == that.isRoot)
                 : this.isRoot + " was not " + that.isRoot;
-        assert (this.isLocal == that.isLocal)
-                : this.isLocal + " was not " + that.isLocal;
+        assert (this.interned == that.interned)
+                : this.interned + " was not " + that.interned;
         assert (this.isBusy == that.isBusy)
                 : this.isBusy + " was not " + that.isBusy;
         for (Map.Entry<Shadow, Integer> thisEntry : this.outgoing.entrySet()) {
