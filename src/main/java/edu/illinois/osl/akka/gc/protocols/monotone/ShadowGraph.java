@@ -47,6 +47,9 @@ public class ShadowGraph {
             // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
         shadow.interned = false;
             // We haven't seen this shadow before, so we can't have received a snapshot from it.
+        shadow.isLocal = false;
+            // By default we assume that the shadow is from a different node. If the shadow
+            // graph gets an entry from the actor, then it turns out the actor is local.
 
         shadowMap.put(ref, shadow);
         from.add(shadow);
@@ -135,11 +138,9 @@ public class ShadowGraph {
             DeltaShadow deltaShadow = delta.shadows[i];
             Shadow shadow = getShadow(refs[i]);
 
-            shadow.interned = shadow.interned || deltaShadow.isLocal;
+            shadow.interned = shadow.interned || deltaShadow.interned;
                 // Set `interned` if we have already received an entry from this actor
                 // or if an entry was received in the latest batch.
-            shadow.isLocal = false;
-                // Delta graphs only come from remote actors.
             shadow.recvCount += deltaShadow.recvCount;
             shadow.isBusy = deltaShadow.isBusy;
             shadow.isRoot = deltaShadow.isRoot;

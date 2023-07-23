@@ -48,7 +48,7 @@ public class DeltaGraph implements CborSerializable {
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
         selfShadow.isRoot = entry.isRoot;
-        selfShadow.isLocal = true;
+        selfShadow.interned = true;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {

@@ -15,7 +15,7 @@ public class DeltaShadow implements CborSerializable {
     int recvCount;
     boolean isRoot;
     boolean isBusy;
-    boolean isLocal;
+    boolean interned;
         // This field will be set to `true` if any of the entries in this batch were
         // produced by this actor.
 
@@ -25,7 +25,7 @@ public class DeltaShadow implements CborSerializable {
         this.recvCount = 0;
         this.isRoot = false;
         this.isBusy = false;
-        this.isLocal = false;
+        this.interned = false;
     }
 
     public static class OutgoingDeserializer extends KeyDeserializer {
