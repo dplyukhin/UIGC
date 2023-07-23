@@ -139,11 +139,17 @@ public class ShadowGraph {
             Shadow shadow = getShadow(refs[i]);
 
             shadow.interned = shadow.interned || deltaShadow.interned;
-                // Set `interned` if we have already received an entry from this actor
-                // or if an entry was received in the latest batch.
+                // Set `interned` if we have already received a delta shadow in which
+                // the actor was interned, or if the actor was interned in this delta.
             shadow.recvCount += deltaShadow.recvCount;
-            shadow.isBusy = deltaShadow.isBusy;
-            shadow.isRoot = deltaShadow.isRoot;
+            if (deltaShadow.interned) {
+                // Careful here! The isBusy and isRoot fields are only accurate if
+                // the delta shadow is interned, i.e. we received an entry from this
+                // actor in the given period. Otherwise, they are set at the default
+                // value of `false`.
+                shadow.isBusy = deltaShadow.isBusy;
+                shadow.isRoot = deltaShadow.isRoot;
+            }
             if (deltaShadow.supervisor >= 0) {
                 shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
             }
