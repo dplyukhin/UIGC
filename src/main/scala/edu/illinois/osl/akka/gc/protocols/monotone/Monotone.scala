@@ -199,7 +199,7 @@ object Monotone extends Protocol {
         push(env)
       case ActorSelectionMessage(Egress.FinalizeEgressEntry, _, _) =>
         val oldEntry = state.finalizeEntry()
-        println(s"Finalizing egress entry for ${state.adjacentAddress}, window=${oldEntry.id}")
+        // println(s"Finalizing egress entry for ${state.adjacentAddress}, window=${oldEntry.id}")
         push(
           state.outboundEnvelopePool
             .acquire()
@@ -209,9 +209,8 @@ object Monotone extends Protocol {
               sender = OptionVal.None)
         )
       case _ =>
+        push(env)
     }
-    push(env)
-  }
 
   override def onIngressEnvelope(state: IngressState, env: InboundEnvelope, push: InboundEnvelope => Unit): Unit =
     env.message match {
@@ -220,10 +219,8 @@ object Monotone extends Protocol {
         state.currentEntry.onMessage(recipient, msg.refs.asJava)
         push(env)
       case entry: IngressEntry =>
-        println(s"Got egress entry from ${state.adjacentAddress}, window=${entry.id}")
+        // println(s"Got egress entry from ${state.adjacentAddress}, window=${entry.id}")
         //ActorGC(state.system).bookkeeper ! Bookkeeper
-      case Egress.FinalizeEgressEntry =>
-        println("Huh?")
       case _ =>
         push(env)
     }
