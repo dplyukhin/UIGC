@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
+import scala.jdk.CollectionConverters._
 import akka.{ actor => classic }
 import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{Signal, Terminated}
@@ -188,26 +189,12 @@ object Monotone extends Protocol {
   override def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState =
     new Egress(system, adjacent)
 
-  def updateIngressEntry(recipient: classic.ActorRef, msg: AppMsg[_], entry: IngressEntry): Unit = {
-    var field = entry.admitted.get(recipient)
-    if (field == null) {
-      field = new IngressEntry.Field()
-      entry.admitted.put(recipient, field)
-    }
-    field.messageCount += 1
-    for (ref <- msg.refs) {
-      val target = ref.target.classicRef
-      val n = field.createdRefs.getOrDefault(target, 0)
-      field.createdRefs.put(target, n + 1)
-    }
-  }
-
   override def onEgressEnvelope(state: EgressState, env: OutboundEnvelope, push: OutboundEnvelope => Unit): Unit = {
     env.message match {
       case msg: AppMsg[_] =>
         val recipient = env.target.get
         msg.windowID = state.currentEntry.id
-        updateIngressEntry(recipient, msg, state.currentEntry)
+        state.currentEntry.onMessage(recipient, msg.refs.asJava)
       case _ =>
     }
     push(env)
@@ -217,7 +204,7 @@ object Monotone extends Protocol {
     env.message match {
       case msg: AppMsg[_] =>
         val recipient = env.target.get
-        updateIngressEntry(recipient, msg, state.currentEntry)
+        state.currentEntry.onMessage(recipient, msg.refs.asJava)
       case _ =>
     }
     push(env)
