@@ -14,7 +14,7 @@ public class IngressEntry implements Serializable {
     int size;
         // This integer counts the number of hashmap entries.
 
-    public static class Field {
+    public static class Field implements Serializable {
         int messageCount;
         HashMap<ActorRef, Integer> createdRefs;
             // We could probably be smarter about the data structure based on

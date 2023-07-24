@@ -1,47 +1,52 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
-import akka.actor.Address
+import akka.actor.{Actor, ActorIdentity, ActorRef, ActorSelection, ActorSystem, Address, ClassicActorSystemProvider, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, Identify, Props, RootActorPath, Timers}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
-import akka.actor.typed._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.cluster.{Cluster, MemberStatus}
+import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable
 
 import java.util.concurrent.ConcurrentLinkedQueue
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, DurationInt}
 
-object ActorGC extends ExtensionId[ActorGC] {
-  def createExtension(system: ActorSystem[_]): ActorGC =
-    new ActorGC(system)
+object ActorGC extends ExtensionId[ActorGCImpl] with ExtensionIdProvider {
+  override def lookup: ActorGC.type = ActorGC
 
-  def get(system: ActorSystem[_]): ActorGC = apply(system)
+  def createExtension(system: ExtendedActorSystem): ActorGCImpl =
+    new ActorGCImpl(system)
+
+  override def get(system: ActorSystem): ActorGCImpl = super.get(system)
+
+  override def get(system: ClassicActorSystemProvider): ActorGCImpl = super.get(system)
 }
 
-class ActorGC(system: ActorSystem[_]) extends Extension {
+class ActorGCImpl(system: ExtendedActorSystem) extends Extension {
   // This could be split into multiple queues if contention becomes high
   val Queue: ConcurrentLinkedQueue[Entry] = new ConcurrentLinkedQueue[Entry]()
 
-  val bookkeeper: ActorRef[Bookkeeper.Msg] =
-    system.systemActorOf(Bookkeeper(), "Bookkeeper",
-      DispatcherSelector.fromConfig("my-pinned-dispatcher"))
+  val bookkeeper: ActorRef =
+    system.systemActorOf(
+      Props[Bookkeeper]().withDispatcher("my-pinned-dispatcher"),
+      "Bookkeeper")
 }
 
 object Bookkeeper {
   trait Msg
-  private case class DeltaMsg(id: Int, graph: DeltaGraph, replyTo: ActorRef[Msg]) extends Msg with Serializable
+  /** Message sent from the garbage collector [[sender]], summarizing the entries it received recently. */
+  private case class DeltaMsg(seqnum: Int, graph: DeltaGraph, sender: ActorRef) extends Msg with Serializable
+  /** Message produced by a timer, asking the garbage collector to scan its queue of incoming entries. */
   private case object Wakeup extends Msg
+  /** Message produced by a timer, asking the garbage collector to start a wave. */
   private case object StartWave extends Msg
-  private case class ReceptionistListing[T](listing: Receptionist.Listing) extends Msg
-  private val BKServiceKey = ServiceKey[Msg]("Bookkeeper")
+  /** Message sent to a garbage collector, asking it to forward the given [[msg]] to the egress actor
+   * at the given location. */
+  private case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
 
-  def apply(): Behavior[Msg] = {
-    Behaviors.withTimers(timers =>
-      Behaviors.setup(ctx => new Bookkeeper(timers, ctx))
-    )
-  }
 }
 
-class Bookkeeper(timers: TimerScheduler[Bookkeeper.Msg], ctx: ActorContext[Bookkeeper.Msg])
-extends AbstractBehavior[Bookkeeper.Msg](ctx) {
+class Bookkeeper extends Actor with Timers {
   import Bookkeeper._
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
@@ -51,7 +56,8 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
 
-  private var remoteGCs: Map[Address, ActorRef[Msg]] = Map()
+  private val thisAddress: Address = Cluster(context.system).selfMember.address
+  private var remoteGCs: Map[Address, ActorSelection] = Map()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
 
@@ -59,40 +65,58 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
     start()
   }
   else {
-    ctx.system.receptionist ! Receptionist.Register(BKServiceKey, ctx.self)
-    val adapter = ctx.messageAdapter[Receptionist.Listing](ReceptionistListing.apply)
-    ctx.system.receptionist ! Receptionist.Subscribe(BKServiceKey, adapter)
+    Cluster(context.system).subscribe(self, classOf[MemberUp])
     println("Waiting for other bookkeepers to join...")
   }
 
   private def start(): Unit = {
+    // Start processing entries
     timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
+    // Start triggering GC waves
     if (Monotone.collectionStyle == Monotone.Wave) {
       timers.startTimerWithFixedDelay(StartWave, StartWave, waveFrequency.millis)
+    }
+    // Start asking egress actors to finalize entries
+    for ((addr, _) <- remoteGCs) {
+      timers.startTimerWithFixedDelay(
+        Egress.FinalizeEgressEntry,
+        ForwardToEgress((thisAddress, addr), Egress.FinalizeEgressEntry),
+        10.millis
+      )
     }
     println("Bookkeeper started!")
   }
 
   private def finalizeDeltaGraph(): Unit = {
     for (gc <- remoteGCs.values) {
-      gc ! DeltaMsg(deltaGraphID, deltaGraph, ctx.self)
+      gc ! DeltaMsg(deltaGraphID, deltaGraph, context.self)
     }
     deltaGraphID += 1
     deltaGraph = new DeltaGraph()
   }
 
-  override def onMessage(msg: Msg): Behavior[Msg] = {
-    msg match {
-      case ReceptionistListing(BKServiceKey.Listing(listing)) =>
-        val newPeers = listing.filter(_ != ctx.self)
-        for (peer <- newPeers) {
-          println(s"Connected to $peer on ${peer.path.address}")
-          remoteGCs = remoteGCs + (peer.path.address -> peer)
+  override def receive = {
+      case ForwardToEgress((sender, receiver), msg) =>
+        if (sender == thisAddress) {
+          println(s"Bookkeeper sending $msg to ${remoteGCs(receiver)} at $receiver")
+          remoteGCs(receiver) ! msg
         }
-        if (remoteGCs.size + 1 == numNodes) {
-          start()
+        else {
+          remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
         }
-        this
+
+      case state: CurrentClusterState =>
+        state.members.filter(_.status == MemberStatus.Up).foreach(member => {
+          if (member != Cluster(context.system).selfMember) {
+            val addr = member.address
+            val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
+            println(s"${context.self} connected to $gc on ${addr}")
+            remoteGCs = remoteGCs + (addr -> gc)
+            if (remoteGCs.size + 1 == numNodes) {
+              start()
+            }
+          }
+        })
 
       case DeltaMsg(id, delta, replyTo) =>
         //println(s"Got ${id} deltas from $replyTo")
@@ -108,7 +132,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
       case Wakeup =>
         //println("Bookkeeper woke up!")
         //var start = System.currentTimeMillis()
-        val queue = ActorGC(ctx.system).Queue
+        val queue = ActorGC(context.system).Queue
         var count = 0
         var deltaCount = 0
         var entry: Entry = queue.poll()
@@ -158,16 +182,13 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
       case StartWave =>
         shadowGraph.startWave()
         Behaviors.same
-    }
   }
 
-  override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
-    case PostStop =>
+  override def postStop(): Unit = {
       println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, " +
         s"and stopped $stopCount (of ${shadowGraph.totalActorsSeen}) actors.")
       //shadowGraph.investigateLiveSet()
       timers.cancel(Wakeup)
-      this
   }
 }
 
