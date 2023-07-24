@@ -7,6 +7,8 @@ sealed trait GCMessage[+T] extends Message with Pretty
 final case class AppMsg[+T](
   payload: T, refs: Iterable[Refob[Nothing]]
 ) extends GCMessage[T] {
+  var windowID: Int = -1
+    // This field is set by the egress if the message gets sent to another node.
   def pretty: String = s"AppMsg($payload, ${refs.toList.pretty})"
 }
 

@@ -1,8 +1,9 @@
 package edu.illinois.osl.akka.gc.protocols
 
+import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{ActorRef, Signal}
 import akka.actor.typed.scaladsl.ActorContext
-
+import akka.remote.artery.{InboundEnvelope, OutboundEnvelope}
 
 import scala.annotation.unchecked.uncheckedVariance
 import edu.illinois.osl.akka.gc.interfaces._
@@ -19,6 +20,8 @@ trait Protocol {
   type Refob[-T] <: RefobLike[T]
   type SpawnInfo
   type State <: Pretty
+  type IngressState
+  type EgressState
 
   /**
    * Transform a message from a non-GC actor so that it can be understood
@@ -96,4 +99,26 @@ trait Protocol {
     state: State,
     ctx: ActorContext[GCMessage[T]]
   ): Unit
+
+  def spawnIngress(
+      system: ExtendedActorSystem,
+      adjacent: Address
+  ): IngressState
+
+  def spawnEgress(
+    system: ExtendedActorSystem,
+    adjacent: Address
+  ): EgressState
+
+  def onIngressEnvelope(
+      state: IngressState,
+      msg: InboundEnvelope,
+      push: InboundEnvelope => Unit
+  ): Unit = push(msg)
+
+  def onEgressEnvelope(
+    state: EgressState,
+    msg: OutboundEnvelope,
+    push: OutboundEnvelope => Unit
+  ): Unit = push(msg)
 }

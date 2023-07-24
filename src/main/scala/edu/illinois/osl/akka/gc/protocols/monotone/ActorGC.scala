@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
+import akka.actor.Address
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
@@ -50,7 +51,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
 
-  private var remoteGCs: Set[ActorRef[Msg]] = Set()
+  private var remoteGCs: Map[Address, ActorRef[Msg]] = Map()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
 
@@ -73,7 +74,7 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   }
 
   private def finalizeDeltaGraph(): Unit = {
-    for (gc <- remoteGCs) {
+    for (gc <- remoteGCs.values) {
       gc ! DeltaMsg(deltaGraphID, deltaGraph, ctx.self)
     }
     deltaGraphID += 1
@@ -83,9 +84,14 @@ extends AbstractBehavior[Bookkeeper.Msg](ctx) {
   override def onMessage(msg: Msg): Behavior[Msg] = {
     msg match {
       case ReceptionistListing(BKServiceKey.Listing(listing)) =>
-        remoteGCs = remoteGCs ++ listing.filter(_ != ctx.self)
-        if (remoteGCs.size + 1 == numNodes)
+        val newPeers = listing.filter(_ != ctx.self)
+        for (peer <- newPeers) {
+          println(s"Connected to $peer on ${peer.path.address}")
+          remoteGCs = remoteGCs + (peer.path.address -> peer)
+        }
+        if (remoteGCs.size + 1 == numNodes) {
           start()
+        }
         this
 
       case DeltaMsg(id, delta, replyTo) =>

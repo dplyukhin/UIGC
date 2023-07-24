@@ -1,13 +1,18 @@
 package edu.illinois.osl.akka.gc.protocols.drl
 
+import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{PostStop, Signal, Terminated}
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
+
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
 
 object DRL extends Protocol {
+
+  type IngressState = Unit
+  type EgressState = Unit
 
   type GCMessage[+T] = drl.GCMessage[T]
   type Refob[-T] = drl.Refob[T]
@@ -160,4 +165,8 @@ object DRL extends Protocol {
     ref.target ! AppMsg(msg, ref.token, refs)
     state.incSentCount(ref.token)
   }
+
+  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+
 }

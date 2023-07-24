@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.wrc
 import edu.illinois.osl.akka.gc.protocols.Protocol
 import edu.illinois.osl.akka.gc.interfaces._
 import akka.actor.typed.Signal
-import akka.actor.ActorPath
+import akka.actor.{ActorPath, Address, ExtendedActorSystem}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable
@@ -14,6 +14,9 @@ import akka.actor.typed.scaladsl.ActorContext
 object WRC extends Protocol {
 
   type Name = ActorRef[GCMessage[Nothing]]
+
+  type IngressState = Unit
+  type EgressState = Unit
 
   val RC_INC: Long = 255
 
@@ -217,4 +220,8 @@ object WRC extends Protocol {
     }
     ref.target ! AppMsg(msg, refs, isSelfMsg)
   }
+
+  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+
 }

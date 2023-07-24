@@ -1,10 +1,12 @@
 package edu.illinois.osl.akka.gc.streams
 
+import akka.actor.{Address, ExtendedActorSystem}
 import akka.remote.artery.OutboundEnvelope
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import edu.illinois.osl.akka.gc.protocol
 
-class Egress()
+class Egress(system: ExtendedActorSystem, adjacentSystem: Address)
   extends GraphStage[FlowShape[OutboundEnvelope, OutboundEnvelope]] {
 
   val in: Inlet[OutboundEnvelope] = Inlet("Artery.Ingress.in")
@@ -13,11 +15,11 @@ class Egress()
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
+      val state: protocol.EgressState = protocol.spawnEgress(system, adjacentSystem)
       setHandler(in, new InHandler {
         override def onPush(): Unit = {
           val msg = grab(in)
-          //println(msg)
-          push(out, msg)
+          protocol.onEgressEnvelope(state, msg, m => push(out, m))
         }
       })
       setHandler(out, new OutHandler {

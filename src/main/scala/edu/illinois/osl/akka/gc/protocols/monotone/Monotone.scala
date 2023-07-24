@@ -1,11 +1,14 @@
 package edu.illinois.osl.akka.gc.protocols.monotone
 
+import akka.{ actor => classic }
+import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{Signal, Terminated}
 import com.typesafe.config.ConfigFactory
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
+import akka.remote.artery.{InboundEnvelope, OutboundEnvelope}
 
 import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -29,6 +32,8 @@ object Monotone extends Protocol {
   type GCMessage[+T] = monotone.GCMessage[T]
   type Refob[-T] = monotone.Refob[T]
   type State = monotone.State
+  override type IngressState = monotone.Ingress
+  override type EgressState = monotone.Egress
 
   class SpawnInfo(
     var creator: Option[Refob[Nothing]],
@@ -175,5 +180,46 @@ object Monotone extends Protocol {
     val entry = state.onSend(ref)
     if (entry != null) sendEntry(entry, ctx)
     ref.target ! AppMsg(msg, refs)
+  }
+
+  override def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState =
+    new Ingress(system, adjacent)
+
+  override def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState =
+    new Egress(system, adjacent)
+
+  def updateIngressEntry(recipient: classic.ActorRef, msg: AppMsg[_], entry: IngressEntry): Unit = {
+    var field = entry.admitted.get(recipient)
+    if (field == null) {
+      field = new IngressEntry.Field()
+      entry.admitted.put(recipient, field)
+    }
+    field.messageCount += 1
+    for (ref <- msg.refs) {
+      val target = ref.target.classicRef
+      val n = field.createdRefs.getOrDefault(target, 0)
+      field.createdRefs.put(target, n + 1)
+    }
+  }
+
+  override def onEgressEnvelope(state: EgressState, env: OutboundEnvelope, push: OutboundEnvelope => Unit): Unit = {
+    env.message match {
+      case msg: AppMsg[_] =>
+        val recipient = env.target.get
+        msg.windowID = state.currentEntry.id
+        updateIngressEntry(recipient, msg, state.currentEntry)
+      case _ =>
+    }
+    push(env)
+  }
+
+  override def onIngressEnvelope(state: IngressState, env: InboundEnvelope, push: InboundEnvelope => Unit): Unit = {
+    env.message match {
+      case msg: AppMsg[_] =>
+        val recipient = env.target.get
+        updateIngressEntry(recipient, msg, state.currentEntry)
+      case _ =>
+    }
+    push(env)
   }
 }

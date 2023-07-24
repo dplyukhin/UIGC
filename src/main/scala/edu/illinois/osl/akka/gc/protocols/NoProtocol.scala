@@ -2,11 +2,11 @@ package edu.illinois.osl.akka.gc.protocols
 
 import edu.illinois.osl.akka.gc.interfaces._
 import akka.actor.typed.{ActorRef, Signal}
-
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
+
 import scala.annotation.unchecked.uncheckedVariance
-import akka.actor.ActorPath
+import akka.actor.{ActorPath, Address, ExtendedActorSystem}
 
 object NoProtocol extends Protocol {
   case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message with Pretty {
@@ -25,6 +25,9 @@ object NoProtocol extends Protocol {
   ) extends Pretty {
     def pretty: String = "<nothing>"
   }
+
+  type IngressState = Unit
+  type EgressState = Unit
 
   /**
    * Transform a message from a non-GC actor so that it can be understood
@@ -111,4 +114,8 @@ object NoProtocol extends Protocol {
     ctx: ActorContext[GCMessage[S]]
   ): Unit =
     ref.target ! GCMessage(msg, refs)
+
+  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+
 }
