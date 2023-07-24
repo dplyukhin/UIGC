@@ -4,6 +4,7 @@ import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{PostStop, Signal, Terminated}
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
+import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
 import scala.collection.mutable
 import edu.illinois.osl.akka.gc.interfaces._
@@ -167,6 +168,6 @@ object DRL extends Protocol {
   }
 
   def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }

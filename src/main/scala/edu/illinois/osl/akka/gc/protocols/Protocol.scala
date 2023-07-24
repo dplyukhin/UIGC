@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc.protocols
 import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{ActorRef, Signal}
 import akka.actor.typed.scaladsl.ActorContext
-import akka.remote.artery.{InboundEnvelope, OutboundEnvelope}
+import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
 import scala.annotation.unchecked.uncheckedVariance
 import edu.illinois.osl.akka.gc.interfaces._
@@ -107,7 +107,8 @@ trait Protocol {
 
   def spawnEgress(
     system: ExtendedActorSystem,
-    adjacent: Address
+    adjacent: Address,
+    outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]
   ): EgressState
 
   def onIngressEnvelope(

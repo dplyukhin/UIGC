@@ -10,6 +10,7 @@ import scala.collection.mutable
 import akka.actor.typed.Terminated
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
+import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
 object WRC extends Protocol {
 
@@ -222,6 +223,6 @@ object WRC extends Protocol {
   }
 
   def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }

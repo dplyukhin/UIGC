@@ -7,6 +7,7 @@ import akka.actor.typed.scaladsl.ActorContext
 
 import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.{ActorPath, Address, ExtendedActorSystem}
+import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
 object NoProtocol extends Protocol {
   case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message with Pretty {
@@ -116,6 +117,6 @@ object NoProtocol extends Protocol {
     ref.target ! GCMessage(msg, refs)
 
   def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address): EgressState = ()
+  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }
