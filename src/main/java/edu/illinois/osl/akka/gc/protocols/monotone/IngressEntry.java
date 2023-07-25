@@ -32,7 +32,7 @@ public class IngressEntry implements Serializable {
     }
 
     public void onMessage(ActorRef recipient, Iterable<Refob<?>> refs) {
-        var field = this.admitted.get(recipient);
+        Field field = this.admitted.get(recipient);
         if (field == null) {
             field = new Field();
             this.admitted.put(recipient, field);

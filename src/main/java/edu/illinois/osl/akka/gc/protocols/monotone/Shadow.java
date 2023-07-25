@@ -38,7 +38,7 @@ public class Shadow {
     @Override
     public String toString() {
         return "Shadow{" +
-                "\noutgoing=" + outgoing.keySet().stream().map(x -> x.self).toList() +
+                "\noutgoing=" + outgoing.keySet().stream().map(x -> x.self) +
                 ", \nself=" + self +
                 ", \nsupervisor=" + (supervisor == null ? "null" : supervisor.self) +
                 ", \nrecvCount=" + recvCount +
