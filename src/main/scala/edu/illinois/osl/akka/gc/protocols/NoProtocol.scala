@@ -27,9 +27,6 @@ object NoProtocol extends Protocol {
     def pretty: String = "<nothing>"
   }
 
-  type IngressState = Unit
-  type EgressState = Unit
-
   /**
    * Transform a message from a non-GC actor so that it can be understood
    * by a GC actor. Necessarily, the recipient is a root actor.
@@ -116,7 +113,5 @@ object NoProtocol extends Protocol {
   ): Unit =
     ref.target ! GCMessage(msg, refs)
 
-  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }

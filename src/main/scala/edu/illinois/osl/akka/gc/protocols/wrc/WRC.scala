@@ -16,9 +16,6 @@ object WRC extends Protocol {
 
   type Name = ActorRef[GCMessage[Nothing]]
 
-  type IngressState = Unit
-  type EgressState = Unit
-
   val RC_INC: Long = 255
 
   case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T] {
@@ -221,8 +218,5 @@ object WRC extends Protocol {
     }
     ref.target ! AppMsg(msg, refs, isSelfMsg)
   }
-
-  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }

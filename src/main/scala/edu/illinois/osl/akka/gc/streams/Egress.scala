@@ -13,20 +13,8 @@ class Egress(system: ExtendedActorSystem, adjacentSystem: Address, outboundObjec
   val out: Outlet[OutboundEnvelope] = Outlet("Artery.Ingress.out")
   val shape: FlowShape[OutboundEnvelope, OutboundEnvelope] = FlowShape(in, out)
 
-  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
-      val state: protocol.EgressState = protocol.spawnEgress(system, adjacentSystem, outboundObjectPool)
-      setHandler(in, new InHandler {
-        override def onPush(): Unit = {
-          val msg = grab(in)
-          protocol.onEgressEnvelope(state, msg, m => push(out, m))
-        }
-      })
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = {
-          pull(in)
-        }
-      })
-    }
+  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
+    protocol.spawnEgress(in, out, shape, system, adjacentSystem, outboundObjectPool)
+  }
 }
 

@@ -12,9 +12,6 @@ import edu.illinois.osl.akka.gc.protocols.{Protocol, drl}
 
 object DRL extends Protocol {
 
-  type IngressState = Unit
-  type EgressState = Unit
-
   type GCMessage[+T] = drl.GCMessage[T]
   type Refob[-T] = drl.Refob[T]
   type State = drl.State
@@ -166,8 +163,5 @@ object DRL extends Protocol {
     ref.target ! AppMsg(msg, ref.token, refs)
     state.incSentCount(ref.token)
   }
-
-  def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState = ()
-  def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundObjectPool: ObjectPool[ReusableOutboundEnvelope]): EgressState = ()
 
 }
