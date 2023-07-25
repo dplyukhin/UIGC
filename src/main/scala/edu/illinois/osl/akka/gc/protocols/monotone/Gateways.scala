@@ -16,14 +16,14 @@ object Gateway {
   trait Msg extends Bookkeeper.Msg
 }
 
-abstract class Gateway(system: ExtendedActorSystem, egressAddress: Address, ingressAddress: Address) {
+abstract class Gateway(val system: ExtendedActorSystem) {
   private var seqnum: Int = 0
-
-  val queue: ConcurrentLinkedQueue[Ingress.Msg] = new ConcurrentLinkedQueue()
   val thisAddress: Address = Cluster(system).selfAddress
-  var currentEntry: IngressEntry = createEntry()
+  var egressAddress: Address
+  var ingressAddress: Address
+  var currentEntry: IngressEntry
 
-  private def createEntry(): IngressEntry = {
+  protected def createEntry(): IngressEntry = {
     val entry = new IngressEntry()
     entry.id = seqnum
     entry.egressAddress = egressAddress
@@ -44,14 +44,32 @@ object Egress {
   case object FinalizeEgressEntry extends Msg
 }
 
-class Egress(val system: ExtendedActorSystem, val adjacentAddress: Address, val outboundEnvelopePool: ObjectPool[ReusableOutboundEnvelope])
-  extends Gateway(system, Cluster(system).selfAddress, adjacentAddress) {
+class Egress(system: ExtendedActorSystem, val adjacentAddress: Address, val outboundEnvelopePool: ObjectPool[ReusableOutboundEnvelope])
+  extends Gateway(system) {
+  override var egressAddress: Address = Cluster(system).selfAddress
+  override var ingressAddress: Address = adjacentAddress
+  override var currentEntry: IngressEntry = createEntry()
+
+  var isFirstMessage: Boolean = true
+  println(s"Spawned egress actor ($ingressAddress, $egressAddress)")
 }
 
 object Ingress {
   trait Msg extends Gateway.Msg
+  case class GetAdjacentAddress(address: Address) extends Msg
 }
 
-class Ingress(val system: ExtendedActorSystem, val adjacentAddress: Address)
-  extends Gateway(system, adjacentAddress, Cluster(system).selfAddress) {
+class Ingress(system: ExtendedActorSystem)
+  extends Gateway(system) {
+  // Some fields are null until we learn the ingress address.
+  override var egressAddress: Address = _
+  override var ingressAddress: Address = Cluster(system).selfAddress
+  override var currentEntry: IngressEntry = _
+  println(s"Spawned ingress actor at $ingressAddress. Waiting to learn egress address...")
+
+  def setEgressAddress(address: Address): Unit = {
+    egressAddress = address
+    currentEntry = createEntry()
+    println(s"Ingress actor ($ingressAddress, $egressAddress) initialized.")
+  }
 }

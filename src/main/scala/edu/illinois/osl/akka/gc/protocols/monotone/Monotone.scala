@@ -184,44 +184,59 @@ object Monotone extends Protocol {
     ref.target ! AppMsg(msg, refs)
   }
 
-  override def spawnIngress(system: ExtendedActorSystem, adjacent: Address): IngressState =
-    new Ingress(system, adjacent)
+  override def spawnIngress(system: ExtendedActorSystem, _foo: Address): IngressState =
+    new Ingress(system)
 
   override def spawnEgress(system: ExtendedActorSystem, adjacent: Address, outboundEnvelopePool: ObjectPool[ReusableOutboundEnvelope]): EgressState =
     new Egress(system, adjacent, outboundEnvelopePool)
 
-  override def onEgressEnvelope(state: EgressState, env: OutboundEnvelope, push: OutboundEnvelope => Unit): Unit =
+  private def newOutboundEnvelope(state: EgressState, msg: AnyRef): OutboundEnvelope =
+    state.outboundEnvelopePool
+      .acquire()
+      .init(
+        recipient = OptionVal.None,
+        message = msg,
+        sender = OptionVal.None)
+
+  override def onEgressEnvelope(state: EgressState, env: OutboundEnvelope, push: OutboundEnvelope => Unit): Unit = {
+    // Eventually we should have the streams stage proactively push a message when first initialized.
     env.message match {
       case msg: AppMsg[_] =>
+        if (state.isFirstMessage) {
+          push(
+            newOutboundEnvelope(state, Ingress.GetAdjacentAddress(state.thisAddress))
+          )
+          state.isFirstMessage = false
+        }
         val recipient = env.target.get
         msg.windowID = state.currentEntry.id
         state.currentEntry.onMessage(recipient, msg.refs.asJava)
         push(env)
       case ActorSelectionMessage(Egress.FinalizeEgressEntry, _, _) =>
         val oldEntry = state.finalizeEntry()
-        // println(s"Finalizing egress entry for ${state.adjacentAddress}, window=${oldEntry.id}")
+        println(s"Egress (${state.thisAddress}) finalizing entry for ${state.adjacentAddress}, window=${oldEntry.id}")
         push(
-          state.outboundEnvelopePool
-            .acquire()
-            .init(
-              recipient = OptionVal.None,
-              message = oldEntry,
-              sender = OptionVal.None)
+          newOutboundEnvelope(state, oldEntry)
         )
       case _ =>
         push(env)
     }
+  }
 
-  override def onIngressEnvelope(state: IngressState, env: InboundEnvelope, push: InboundEnvelope => Unit): Unit =
+  override def onIngressEnvelope(state: IngressState, env: InboundEnvelope, push: InboundEnvelope => Unit): Unit = {
     env.message match {
       case msg: AppMsg[_] =>
         val recipient = env.target.get
         state.currentEntry.onMessage(recipient, msg.refs.asJava)
         push(env)
       case entry: IngressEntry =>
-        // println(s"Got egress entry from ${state.adjacentAddress}, window=${entry.id}")
-        //ActorGC(state.system).bookkeeper ! Bookkeeper
+        println(s"Ingress (${state.thisAddress}) got egress entry from ${state.egressAddress}, window=${entry.id}")
+        val oldEntry = state.finalizeEntry()
+        ActorGC(state.system).bookkeeper ! Bookkeeper.LocalIngressEntry(state.egressAddress, oldEntry)
+      case Ingress.GetAdjacentAddress(address) =>
+        state.setEgressAddress(address)
       case _ =>
         push(env)
     }
+  }
 }

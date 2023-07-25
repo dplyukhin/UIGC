@@ -34,15 +34,25 @@ class ActorGCImpl(system: ExtendedActorSystem) extends Extension {
 
 object Bookkeeper {
   trait Msg
-  /** Message sent from the garbage collector [[sender]], summarizing the entries it received recently. */
-  private case class DeltaMsg(seqnum: Int, graph: DeltaGraph, sender: ActorRef) extends Msg with Serializable
+
   /** Message produced by a timer, asking the garbage collector to scan its queue of incoming entries. */
   private case object Wakeup extends Msg
+
   /** Message produced by a timer, asking the garbage collector to start a wave. */
   private case object StartWave extends Msg
+
+  /** Message sent from the garbage collector [[sender]], summarizing the entries it received recently. */
+  private case class DeltaMsg(seqnum: Int, graph: DeltaGraph, sender: ActorRef) extends Msg with Serializable
+
   /** Message sent to a garbage collector, asking it to forward the given [[msg]] to the egress actor
    * at the given location. */
-  private case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
+  case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
+
+  /** Message an ingress actor sends to its local GC when it finalizes an entry. */
+  case class LocalIngressEntry(adjacentAddress: Address, entry: IngressEntry) extends Msg
+
+  /** Message in which a garbage collector broadcasts local ingress entries to all other collectors. */
+  private case class RemoteIngressEntry(location: (Address, Address), msg: IngressEntry) extends Msg
 
 }
 
@@ -52,6 +62,7 @@ class Bookkeeper extends Actor with Timers {
   private var stopCount: Int = 0
   private val shadowGraph = new ShadowGraph()
   //private val testGraph = new ShadowGraph()
+  private val undoLog = new UndoLog()
 
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
@@ -96,15 +107,6 @@ class Bookkeeper extends Actor with Timers {
   }
 
   override def receive = {
-      case ForwardToEgress((sender, receiver), msg) =>
-        if (sender == thisAddress) {
-          println(s"Bookkeeper sending $msg to ${remoteGCs(receiver)} at $receiver")
-          remoteGCs(receiver) ! msg
-        }
-        else {
-          remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
-        }
-
       case state: CurrentClusterState =>
         state.members.filter(_.status == MemberStatus.Up).foreach(member => {
           if (member != Cluster(context.system).selfMember) {
@@ -118,8 +120,26 @@ class Bookkeeper extends Actor with Timers {
           }
         })
 
+      case ForwardToEgress((sender, receiver), msg) =>
+        if (sender == thisAddress) {
+          println(s"GC sending $msg to ${remoteGCs(receiver)} at $receiver")
+          remoteGCs(receiver) ! msg
+        }
+        else {
+          remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
+        }
+
+      case LocalIngressEntry(adjacentAddress, entry) =>
+        println(s"GC got local ingress entry ${entry.id}")
+        for ((addr, gc) <- remoteGCs; if addr != adjacentAddress) {
+          gc ! RemoteIngressEntry((adjacentAddress, thisAddress), entry)
+        }
+
+      case RemoteIngressEntry(location, entry) =>
+        println(s"GC got remote ingress entry $location - ${entry.id}")
+
       case DeltaMsg(id, delta, replyTo) =>
-        //println(s"Got ${id} deltas from $replyTo")
+        println(s"GC ${id} deltas from $replyTo")
         shadowGraph.mergeDelta(delta)
         //var i = 0
         //while (i < delta.entries.size()) {
@@ -127,7 +147,6 @@ class Bookkeeper extends Actor with Timers {
         //  i += 1;
         //}
         //shadowGraph.assertEquals(testGraph)
-        this
 
       case Wakeup =>
         //println("Bookkeeper woke up!")
@@ -177,11 +196,8 @@ class Bookkeeper extends Actor with Timers {
 
         //println(s"Found $stopCount garbage actors so far.")
 
-        Behaviors.same
-
       case StartWave =>
         shadowGraph.startWave()
-        Behaviors.same
   }
 
   override def postStop(): Unit = {
