@@ -49,10 +49,10 @@ object Bookkeeper {
   case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
 
   /** Message an ingress actor sends to its local GC when it finalizes an entry. */
-  case class LocalIngressEntry(adjacentAddress: Address, entry: IngressEntry) extends Msg
+  case class LocalIngressEntry(entry: IngressEntry) extends Msg
 
   /** Message in which a garbage collector broadcasts local ingress entries to all other collectors. */
-  private case class RemoteIngressEntry(location: (Address, Address), msg: IngressEntry) extends Msg
+  private case class RemoteIngressEntry(msg: IngressEntry) extends Msg
 
 }
 
@@ -129,14 +129,15 @@ class Bookkeeper extends Actor with Timers {
           remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
         }
 
-      case LocalIngressEntry(adjacentAddress, entry) =>
-        println(s"GC got local ingress entry ${entry.id}")
-        for ((addr, gc) <- remoteGCs; if addr != adjacentAddress) {
-          gc ! RemoteIngressEntry((adjacentAddress, thisAddress), entry)
+      case LocalIngressEntry(entry) =>
+        println(s"GC got local ingress entry (${entry.egressAddress}, ${entry.ingressAddress}) ${entry.id}")
+        for ((addr, gc) <- remoteGCs; if addr != entry.egressAddress) {
+          // Tell each remote GC, except the one that is adjacent to this entry, about the entry.
+          gc ! RemoteIngressEntry(entry)
         }
 
-      case RemoteIngressEntry(location, entry) =>
-        println(s"GC got remote ingress entry $location - ${entry.id}")
+      case RemoteIngressEntry(entry) =>
+        println(s"GC got remote ingress entry (${entry.egressAddress}, ${entry.ingressAddress}) ${entry.id}")
 
       case DeltaMsg(id, delta, replyTo) =>
         println(s"GC ${id} deltas from $replyTo")

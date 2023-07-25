@@ -26,6 +26,8 @@ trait Gateway {
   var currentEntry: IngressEntry
   private var seqnum: Int = 0
 
+  def location: (Address, Address) = (egressAddress, ingressAddress)
+
   def finalizeEntry(): IngressEntry = {
     val entry = currentEntry
     currentEntry = createEntry()
@@ -63,7 +65,7 @@ class Egress(
   override var currentEntry: IngressEntry = createEntry()
 
   var isFirstMessage: Boolean = true
-  println(s"Spawned egress actor ($egressAddress, $ingressAddress)")
+  println(s"Spawned egress actor $location")
 
   setHandler(
     in,
@@ -71,6 +73,7 @@ class Egress(
       override def onPush(): Unit = {
         val env = grab(in)
 
+        // println(s"Egress $location: ${env.message}")
         env.message match {
           case msg: AppMsg[_] =>
             // Set the window, update the entry, and push it on through
@@ -82,7 +85,7 @@ class Egress(
           case ActorSelectionMessage(Egress.FinalizeEgressEntry, _, _) =>
             // Being asked to finalize the entry. Push it to the ingress.
             val oldEntry = finalizeEntry()
-            println(s"Egress ($thisAddress) finalizing entry for $adjacentAddress, window=${oldEntry.id}")
+            println(s"Egress $location finalizing entry, window=${oldEntry.id}")
             push(
               out, newOutboundEnvelope(oldEntry)
             )
@@ -143,7 +146,7 @@ class Ingress(
   def setEgressAddress(address: Address): Unit = {
     egressAddress = address
     currentEntry = createEntry()
-    println(s"Ingress actor ($egressAddress, $ingressAddress) initialized.")
+    println(s"Ingress actor $location initialized.")
   }
 
   setHandler(
@@ -151,7 +154,9 @@ class Ingress(
     new InHandler {
       override def onPush(): Unit = {
         val env = grab(in)
+        env.originUid
 
+        println(s"Ingress $location: ${env.message}")
         env.message match {
           case msg: AppMsg[_] =>
             val recipient = env.target.get
@@ -159,9 +164,9 @@ class Ingress(
             push(out, env)
 
           case entry: IngressEntry =>
-            println(s"Ingress ($thisAddress) got egress entry from $egressAddress, window=${entry.id}")
+            println(s"Ingress $location received egress entry, window=${entry.id}")
             val oldEntry = finalizeEntry()
-            ActorGC(system).bookkeeper ! Bookkeeper.LocalIngressEntry(egressAddress, oldEntry)
+            ActorGC(system).bookkeeper ! Bookkeeper.LocalIngressEntry(oldEntry)
             pull(in)
 
           case Ingress.GetAdjacentAddress(address) =>
