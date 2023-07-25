@@ -189,6 +189,6 @@ object Monotone extends Protocol {
     new Egress(in, out, shape, system, adjacent, outboundObjectPool)
 
   override def spawnIngress(in: Inlet[InboundEnvelope], out: Outlet[InboundEnvelope], shape: FlowShape[InboundEnvelope, InboundEnvelope], system: ExtendedActorSystem, adjacent: Address): GraphStageLogic =
-    new Ingress(in, out, shape, system, adjacent)
+    new MultiIngress(in, out, shape, system, adjacent)
 
 }

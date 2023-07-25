@@ -90,7 +90,7 @@ class Bookkeeper extends Actor with Timers {
     // Start asking egress actors to finalize entries
     for ((addr, _) <- remoteGCs) {
       timers.startTimerWithFixedDelay(
-        Egress.FinalizeEgressEntry,
+        (Egress.FinalizeEgressEntry, addr),
         ForwardToEgress((thisAddress, addr), Egress.FinalizeEgressEntry),
         10.millis
       )
@@ -122,7 +122,7 @@ class Bookkeeper extends Actor with Timers {
 
       case ForwardToEgress((sender, receiver), msg) =>
         if (sender == thisAddress) {
-          println(s"GC sending $msg to ${remoteGCs(receiver)} at $receiver")
+          //println(s"GC sending $msg to ${remoteGCs(receiver)} at $receiver")
           remoteGCs(receiver) ! msg
         }
         else {
@@ -130,17 +130,17 @@ class Bookkeeper extends Actor with Timers {
         }
 
       case LocalIngressEntry(entry) =>
-        println(s"GC got local ingress entry (${entry.egressAddress}, ${entry.ingressAddress}) ${entry.id}")
+        //println(s"GC got local ingress entry (${entry.egressAddress},${entry.ingressAddress}) ${entry.id}")
         for ((addr, gc) <- remoteGCs; if addr != entry.egressAddress) {
           // Tell each remote GC, except the one that is adjacent to this entry, about the entry.
           gc ! RemoteIngressEntry(entry)
         }
 
       case RemoteIngressEntry(entry) =>
-        println(s"GC got remote ingress entry (${entry.egressAddress}, ${entry.ingressAddress}) ${entry.id}")
+        //println(s"GC got remote ingress entry (${entry.egressAddress},${entry.ingressAddress}) ${entry.id}")
 
       case DeltaMsg(id, delta, replyTo) =>
-        println(s"GC ${id} deltas from $replyTo")
+        //println(s"GC ${id} deltas from $replyTo")
         shadowGraph.mergeDelta(delta)
         //var i = 0
         //while (i < delta.entries.size()) {
