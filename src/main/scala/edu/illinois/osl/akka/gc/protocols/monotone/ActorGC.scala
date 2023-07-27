@@ -3,7 +3,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 import akka.actor.{Actor, ActorIdentity, ActorRef, ActorSelection, ActorSystem, Address, ClassicActorSystemProvider, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, Identify, Props, RootActorPath, Timers}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.cluster.{Cluster, MemberStatus}
+import akka.cluster.{Cluster, Member, MemberStatus}
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable
 
@@ -106,19 +106,24 @@ class Bookkeeper extends Actor with Timers {
     deltaGraph = new DeltaGraph()
   }
 
+  def addMember(member: Member): Unit = {
+    if (member != Cluster(context.system).selfMember) {
+      val addr = member.address
+      val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
+      println(s"${context.self} connected to $gc on ${addr}")
+      remoteGCs = remoteGCs + (addr -> gc)
+      if (remoteGCs.size + 1 == numNodes) {
+        start()
+      }
+    }
+  }
+
   override def receive = {
+      case MemberUp(member) =>
+        addMember(member)
+
       case state: CurrentClusterState =>
-        state.members.filter(_.status == MemberStatus.Up).foreach(member => {
-          if (member != Cluster(context.system).selfMember) {
-            val addr = member.address
-            val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
-            println(s"${context.self} connected to $gc on ${addr}")
-            remoteGCs = remoteGCs + (addr -> gc)
-            if (remoteGCs.size + 1 == numNodes) {
-              start()
-            }
-          }
-        })
+        state.members.filter(_.status == MemberStatus.Up).foreach(addMember)
 
       case ForwardToEgress((sender, receiver), msg) =>
         if (sender == thisAddress) {
