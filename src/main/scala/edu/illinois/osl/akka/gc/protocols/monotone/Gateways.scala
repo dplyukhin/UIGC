@@ -2,6 +2,7 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 
 import akka.actor.{ActorSelectionMessage, Address, ExtendedActorSystem}
 import akka.cluster.Cluster
+import akka.remote.artery.OutboundHandshake.HandshakeReq
 import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 import akka.stream.stage.{GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{FlowShape, Inlet, Outlet}
@@ -65,8 +66,7 @@ class Egress(
   override var ingressAddress: Address = adjacentAddress
   override var currentEntry: IngressEntry = createEntry()
 
-  var isFirstMessage: Boolean = true
-  //println(s"Spawned egress actor $location")
+  println(s"Spawned egress actor $location")
 
   setHandler(
     in,
@@ -102,14 +102,7 @@ class Egress(
     out,
     new OutHandler {
       override def onPull(): Unit = {
-        if (isFirstMessage) {
-          push(out,
-            newOutboundEnvelope(Ingress.GetAdjacentAddress(thisAddress))
-          )
-          isFirstMessage = false
-        }
-        else
-          pull(in)
+        pull(in)
       }
     }
   )
@@ -125,7 +118,6 @@ class Egress(
 
 object Ingress {
   trait Msg extends Gateway.Msg
-  case class GetAdjacentAddress(address: Address) extends Msg
 }
 
 class Ingress(system: ExtendedActorSystem, adjacentAddress: Address) extends Gateway {
@@ -133,7 +125,7 @@ class Ingress(system: ExtendedActorSystem, adjacentAddress: Address) extends Gat
   override var egressAddress: Address = adjacentAddress
   override var ingressAddress: Address = Cluster(system).selfAddress
   override var currentEntry: IngressEntry = createEntry()
-  //println(s"Spawned ingress actor $location.")
+  println(s"Spawned ingress actor $location.")
 }
 
 class MultiIngress(
@@ -167,9 +159,10 @@ class MultiIngress(
             ActorGC(system).bookkeeper ! Bookkeeper.LocalIngressEntry(oldEntry)
             pull(in)
 
-          case Ingress.GetAdjacentAddress(address) =>
-            ingressActors(address) = new Ingress(system, address)
-            pull(in)
+          case msg: HandshakeReq =>
+            if (!ingressActors.contains(msg.from.address))
+              ingressActors(msg.from.address) = new Ingress(system, msg.from.address)
+            push(out, env)
 
           case _ =>
             push(out, env)
