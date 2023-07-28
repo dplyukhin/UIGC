@@ -13,6 +13,8 @@ public class IngressEntry implements Serializable {
     int id;
     int size;
         // This integer counts the number of hashmap entries.
+    boolean isFinal;
+        // Whether this is the last ingress entry sent by the ingress actor.
 
     public static class Field implements Serializable {
         int messageCount;
@@ -29,6 +31,7 @@ public class IngressEntry implements Serializable {
     public IngressEntry() {
         this.admitted = new HashMap<>();
         this.size = 0;
+        this.isFinal = false;
     }
 
     public void onMessage(ActorRef recipient, Iterable<Refob<?>> refs) {

@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorIdentity, ActorRef, ActorSelection, ActorSystem, 
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.cluster.{Cluster, Member, MemberStatus}
-import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
+import akka.cluster.ClusterEvent.{CurrentClusterState, MemberRemoved, MemberUp}
 import edu.illinois.osl.akka.gc.interfaces.CborSerializable
 
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -54,6 +54,8 @@ object Bookkeeper {
   /** Message in which a garbage collector broadcasts local ingress entries to all other collectors. */
   private case class RemoteIngressEntry(msg: IngressEntry) extends Msg
 
+  /** Bit of a hack. The ingress actor sends its local GC a hook to run when the adjacent node is removed. */
+  case class NewIngressActor(adjacentAddress: Address, finalizeAndSendEntry: () => Unit) extends Msg
 }
 
 class Bookkeeper extends Actor with Timers {
@@ -69,14 +71,17 @@ class Bookkeeper extends Actor with Timers {
 
   private val thisAddress: Address = Cluster(context.system).selfMember.address
   private var remoteGCs: Map[Address, ActorSelection] = Map()
+  private var ingressHooks: Map[Address, () => Unit] = Map()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+
 
   if (numNodes == 1) {
     start()
   }
   else {
     Cluster(context.system).subscribe(self, classOf[MemberUp])
+    Cluster(context.system).subscribe(self, classOf[MemberRemoved])
     println("Waiting for other bookkeepers to join...")
   }
 
@@ -106,7 +111,7 @@ class Bookkeeper extends Actor with Timers {
     deltaGraph = new DeltaGraph()
   }
 
-  def addMember(member: Member): Unit = {
+  private def addMember(member: Member): Unit = {
     if (member != Cluster(context.system).selfMember) {
       val addr = member.address
       val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
@@ -118,20 +123,42 @@ class Bookkeeper extends Actor with Timers {
     }
   }
 
+  private def removeMember(member: Member): Unit = {
+    if (member != Cluster(context.system).selfMember) {
+      val addr = member.address
+      println(s"GC detected that $member on $addr has been removed.")
+
+      // Ask the member's ingress actor to finalize its entry.
+      ingressHooks(addr)()
+
+      remoteGCs = remoteGCs - addr
+      ingressHooks = ingressHooks - addr
+      timers.cancel((Egress.FinalizeEgressEntry, addr))
+    }
+  }
+
   override def receive = {
       case MemberUp(member) =>
         addMember(member)
 
+      case MemberRemoved(member, previousStatus) =>
+        removeMember(member)
+
       case state: CurrentClusterState =>
         state.members.filter(_.status == MemberStatus.Up).foreach(addMember)
+        state.members.filter(_.status == MemberStatus.Removed).foreach(addMember)
+
+      case NewIngressActor(addr, hook) =>
+        ingressHooks = ingressHooks + (addr -> hook)
 
       case ForwardToEgress((sender, receiver), msg) =>
-        if (sender == thisAddress) {
+        if (sender == thisAddress && remoteGCs.contains(receiver)) {
           //println(s"GC sending $msg to ${remoteGCs(receiver)} at $receiver")
           remoteGCs(receiver) ! msg
         }
         else {
-          remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
+          if (remoteGCs.contains(sender))
+            remoteGCs(sender) ! ForwardToEgress((sender, receiver), msg)
         }
 
       case LocalIngressEntry(entry) =>

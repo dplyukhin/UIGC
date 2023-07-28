@@ -125,7 +125,21 @@ class Ingress(system: ExtendedActorSystem, adjacentAddress: Address) extends Gat
   override var egressAddress: Address = adjacentAddress
   override var ingressAddress: Address = Cluster(system).selfAddress
   override var currentEntry: IngressEntry = createEntry()
+  private val gc = ActorGC(system).bookkeeper
   println(s"Spawned ingress actor $location.")
+
+  gc ! Bookkeeper.NewIngressActor(adjacentAddress, () => finalizeAndSendEntry(true))
+
+  def finalizeAndSendEntry(isFinal: Boolean = false): Unit = {
+    val oldEntry = finalizeEntry()
+    if (isFinal) {
+      println(s"Finalizing ingress actor $location")
+      oldEntry.isFinal = true
+      // This entry shouldn't be used again!
+      currentEntry = null
+    }
+    gc ! Bookkeeper.LocalIngressEntry(oldEntry)
+  }
 }
 
 class MultiIngress(
@@ -155,8 +169,7 @@ class MultiIngress(
 
           case entry: IngressEntry =>
             //println(s"Received egress entry (${entry.egressAddress},${entry.ingressAddress}) window=${entry.id}")
-            val oldEntry = ingressActors(entry.egressAddress).finalizeEntry()
-            ActorGC(system).bookkeeper ! Bookkeeper.LocalIngressEntry(oldEntry)
+            ingressActors(entry.egressAddress).finalizeAndSendEntry()
             pull(in)
 
           case msg: HandshakeReq =>
