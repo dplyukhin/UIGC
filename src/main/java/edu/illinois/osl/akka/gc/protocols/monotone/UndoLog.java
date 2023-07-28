@@ -5,6 +5,7 @@ import akka.actor.Address;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 /**
@@ -13,8 +14,7 @@ import java.util.Map;
  * is a bit misleading because the values can be negative. But it's good to have a mental model.)
  */
 public class UndoLog {
-    /** The address of the node whose effects we are undoing. */
-    Address nodeAddress;
+    HashSet<Address> finalizedBy;
     HashMap<ActorRef, Field> admitted;
 
     public static class Field implements Serializable {
@@ -27,6 +27,11 @@ public class UndoLog {
             this.messageCount = 0;
             this.createdRefs = new HashMap<>();
         }
+    }
+
+    public UndoLog() {
+        this.finalizedBy = new HashSet<>();
+        this.admitted = new HashMap<>();
     }
 
     public void mergeDeltaGraph(DeltaGraph delta) {
@@ -80,6 +85,9 @@ public class UndoLog {
                 // Add back the references that actually got delivered to the node.
                 updateOutgoing(field.createdRefs, targetActor, count);
             }
+        }
+        if (entry.isFinal) {
+            finalizedBy.add(entry.ingressAddress);
         }
     }
 

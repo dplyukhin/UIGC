@@ -10,6 +10,7 @@ import edu.illinois.osl.akka.gc.interfaces.CborSerializable
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, DurationInt}
+import scala.jdk.CollectionConverters.IterableHasAsJava
 
 object ActorGC extends ExtensionId[ActorGCImpl] with ExtensionIdProvider {
   override def lookup: ActorGC.type = ActorGC
@@ -62,7 +63,9 @@ class Bookkeeper extends Actor with Timers {
   import Bookkeeper._
   private val thisAddress: Address = Cluster(context.system).selfMember.address
   private var remoteGCs: Map[Address, ActorSelection] = Map()
+  private var undoLogs: Map[Address, UndoLog] = Map()
   private var downedGCs: Set[Address] = Set()
+  private var undoneGCs: Set[Address] = Set()
   private var ingressHooks: Map[Address, () => Unit] = Map()
   private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
   private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
@@ -71,7 +74,6 @@ class Bookkeeper extends Actor with Timers {
   private var stopCount: Int = 0
   private val shadowGraph = new ShadowGraph()
   //private val testGraph = new ShadowGraph()
-  private val undoLog = new UndoLog()
 
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
@@ -120,6 +122,8 @@ class Bookkeeper extends Actor with Timers {
       val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
       println(s"${context.self} connected to $gc on ${addr}")
       remoteGCs = remoteGCs + (addr -> gc)
+      if (!undoLogs.contains(addr))
+        undoLogs = undoLogs + (addr -> new UndoLog())
       if (remoteGCs.size + 1 == numNodes) {
         start()
       }
@@ -141,6 +145,22 @@ class Bookkeeper extends Actor with Timers {
       remoteGCs = remoteGCs - addr
       ingressHooks = ingressHooks - addr
       timers.cancel((Egress.FinalizeEgressEntry, addr))
+    }
+  }
+
+  private def mergeIngressEntry(entry: IngressEntry): Unit = {
+    val addr = entry.egressAddress
+    if (!undoLogs.contains(addr)) {
+      undoLogs = undoLogs + (addr -> new UndoLog())
+    }
+    undoLogs(addr).mergeIngressEntry(entry)
+    if (entry.isFinal) {
+      println(s"GC got final ingress entry for (${entry.egressAddress},${entry.ingressAddress})")
+      // If the undo log for this node has now been finalized by every node in remoteGCs, we can undo it.
+      if (undoLogs(addr).finalizedBy.contains(thisAddress) &&
+        undoLogs(addr).finalizedBy.containsAll(remoteGCs.keys.asJavaCollection)) {
+        println(s"Undo log for $addr is ready!")
+      }
     }
   }
 
@@ -174,15 +194,18 @@ class Bookkeeper extends Actor with Timers {
           // Tell each remote GC, except the one that is adjacent to this entry, about the entry.
           gc ! RemoteIngressEntry(entry)
         }
+        mergeIngressEntry(entry)
 
       case RemoteIngressEntry(entry) =>
         //println(s"GC got remote ingress entry (${entry.egressAddress},${entry.ingressAddress}) ${entry.id}")
+        mergeIngressEntry(entry)
 
       case DeltaMsg(id, delta, replyTo) =>
         //println(s"GC ${id} deltas from $replyTo")
         if (remoteGCs.contains(delta.address)) {
           // Only merge shadow graphs from nodes that have not yet been removed.
           shadowGraph.mergeDelta(delta)
+          undoLogs(delta.address).mergeDeltaGraph(delta)
         }
         //var i = 0
         //while (i < delta.entries.size()) {
