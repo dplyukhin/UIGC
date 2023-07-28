@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import akka.actor.Address;
 import akka.actor.typed.ActorRef;
 
 import java.util.HashMap;
@@ -10,6 +11,7 @@ public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<Shadow, Integer> outgoing;
     ActorRef<?> self;
+    Address location;
     Shadow supervisor;
     int recvCount;
     //int markDepth;

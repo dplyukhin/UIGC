@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import akka.actor.Address;
 import akka.actor.typed.ActorRef;
 
 import java.util.*;
@@ -42,6 +43,7 @@ public class ShadowGraph {
         totalActorsSeen++;
         // Haven't heard of this actor yet. Create a shadow for it.
         Shadow shadow = new Shadow();
+        shadow.location = ref.path().address();
         shadow.self = ref;
         shadow.mark = !MARKED;
             // The value of MARKED flips on every GC scan. Make sure this shadow is unmarked.
@@ -260,6 +262,47 @@ public class ShadowGraph {
         }
     }
 
+    /** Debugging method to look at how many actors are reachable by actors at `location`. */
+    public int investigateRemotelyHeldActors(Address location) {
+        // Mark everything reachable by `location`.
+        ArrayList<Shadow> to = new ArrayList<>();
+        for (Shadow shadow : from) {
+            if (shadow.location.equals(location)) {
+                to.add(shadow);
+                shadow.mark = MARKED;
+            }
+        }
+
+        for (int scanptr = 0; scanptr < to.size(); scanptr++) {
+            Shadow owner = to.get(scanptr);
+            for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
+                Shadow target = entry.getKey();
+                if (entry.getValue() > 0 && target.mark != MARKED) {
+                    to.add(target);
+                    target.mark = MARKED;
+                }
+            }
+        }
+
+        // Now unmark all those actors, resetting the state so we can do GC again.
+        for (Shadow shadow : to) {
+            shadow.mark = !MARKED;
+        }
+        return to.size();
+    }
+
+    public void addressesInGraph() {
+        HashMap<Address, Integer> addresses = new HashMap<>();
+        for (Shadow shadow : from) {
+            int count = addresses.getOrDefault(shadow.location, 0);
+            addresses.put(shadow.location, count+1);
+        }
+        for (Map.Entry<Address, Integer> entry : addresses.entrySet()) {
+            System.out.println(entry.getValue() + " uncollected at " + entry.getKey());
+        }
+    }
+
+    /** Debugging method to dump information about the live set. */
     public void investigateLiveSet() {
         int nonInternedActors = 0;
         int rootActors = 0;

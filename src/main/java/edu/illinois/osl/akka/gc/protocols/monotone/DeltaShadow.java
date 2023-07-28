@@ -12,8 +12,8 @@ import java.util.HashMap;
 public class DeltaShadow implements Serializable {
     //@JsonDeserialize(keyUsing = OutgoingDeserializer.class)
     HashMap<Short, Integer> outgoing;
-    short supervisor;
     int recvCount;
+    short supervisor;
     boolean isRoot;
     boolean isBusy;
     boolean interned;

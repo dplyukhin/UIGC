@@ -1,5 +1,6 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
+import akka.actor.Address;
 import akka.actor.typed.ActorRef;
 import akka.serialization.jackson.ActorRefDeserializer;
 import akka.serialization.jackson.AkkaSerializationDeserializer;
@@ -29,6 +30,7 @@ public class DeltaGraph implements Serializable {
     //@JsonSerialize(using = AkkaSerializationSerializer.class)
     HashMap<ActorRef<?>, Short> compressionTable;
     DeltaShadow[] shadows;
+    Address address;
     //ArrayList<Entry> entries;
     int numEntriesMerged;
     short currentSize;
@@ -40,6 +42,11 @@ public class DeltaGraph implements Serializable {
         //this.entries = new ArrayList<>();
         this.numEntriesMerged = 0;
         this.currentSize = 0;
+    }
+
+    /** This is a separate constructor because the serializer doesn't like non-empty constructors. */
+    public void initialize(Address address) {
+        this.address = address;
     }
 
     public void updateOutgoing(Map<Short, Integer> outgoing, Short target, int delta) {

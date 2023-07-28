@@ -46,7 +46,7 @@ object Bookkeeper {
 
   /** Message sent to a garbage collector, asking it to forward the given [[msg]] to the egress actor
    * at the given location. */
-  case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
+  private case class ForwardToEgress(location: (Address, Address), msg: Gateway.Msg) extends Msg
 
   /** Message an ingress actor sends to its local GC when it finalizes an entry. */
   case class LocalIngressEntry(entry: IngressEntry) extends Msg
@@ -60,6 +60,13 @@ object Bookkeeper {
 
 class Bookkeeper extends Actor with Timers {
   import Bookkeeper._
+  private val thisAddress: Address = Cluster(context.system).selfMember.address
+  private var remoteGCs: Map[Address, ActorSelection] = Map()
+  private var downedGCs: Set[Address] = Set()
+  private var ingressHooks: Map[Address, () => Unit] = Map()
+  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
+  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
   private val shadowGraph = new ShadowGraph()
@@ -68,12 +75,7 @@ class Bookkeeper extends Actor with Timers {
 
   private var deltaGraphID: Int = 0
   private var deltaGraph = new DeltaGraph()
-
-  private val thisAddress: Address = Cluster(context.system).selfMember.address
-  private var remoteGCs: Map[Address, ActorSelection] = Map()
-  private var ingressHooks: Map[Address, () => Unit] = Map()
-  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
-  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+  deltaGraph.initialize(thisAddress)
 
 
   if (numNodes == 1) {
@@ -109,6 +111,7 @@ class Bookkeeper extends Actor with Timers {
     }
     deltaGraphID += 1
     deltaGraph = new DeltaGraph()
+    deltaGraph.initialize(thisAddress)
   }
 
   private def addMember(member: Member): Unit = {
@@ -127,6 +130,10 @@ class Bookkeeper extends Actor with Timers {
     if (member != Cluster(context.system).selfMember) {
       val addr = member.address
       println(s"GC detected that $member on $addr has been removed.")
+      downedGCs = downedGCs + addr
+
+      val count = shadowGraph.investigateRemotelyHeldActors(addr)
+      println(s"$member is preventing $count actors from being collected.")
 
       // Ask the member's ingress actor to finalize its entry.
       ingressHooks(addr)()
@@ -173,7 +180,10 @@ class Bookkeeper extends Actor with Timers {
 
       case DeltaMsg(id, delta, replyTo) =>
         //println(s"GC ${id} deltas from $replyTo")
-        shadowGraph.mergeDelta(delta)
+        if (remoteGCs.contains(delta.address)) {
+          // Only merge shadow graphs from nodes that have not yet been removed.
+          shadowGraph.mergeDelta(delta)
+        }
         //var i = 0
         //while (i < delta.entries.size()) {
         //  testGraph.mergeRemoteEntry(delta.entries.get(i))
@@ -236,6 +246,10 @@ class Bookkeeper extends Actor with Timers {
   override def postStop(): Unit = {
       println(s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, " +
         s"and stopped $stopCount (of ${shadowGraph.totalActorsSeen}) actors.")
+      for (addr <- downedGCs) {
+        val count = shadowGraph.investigateRemotelyHeldActors(addr)
+        println(s"Address $addr is preventing $count actors from being collected.")
+      }
       //shadowGraph.investigateLiveSet()
       timers.cancel(Wakeup)
   }
