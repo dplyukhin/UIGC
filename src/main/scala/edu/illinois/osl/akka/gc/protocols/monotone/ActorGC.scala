@@ -61,14 +61,16 @@ object Bookkeeper {
 
 class Bookkeeper extends Actor with Timers {
   import Bookkeeper._
-  private val thisAddress: Address = Cluster(context.system).selfMember.address
+
+  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
+  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+
+  private val thisAddress: Address = if (numNodes > 1)  Cluster(context.system).selfMember.address else null
   private var remoteGCs: Map[Address, ActorSelection] = Map()
   private var undoLogs: Map[Address, UndoLog] = Map()
   private var downedGCs: Set[Address] = Set()
   private var undoneGCs: Set[Address] = Set()
   private var ingressHooks: Map[Address, () => Unit] = Map()
-  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
-  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
 
   private var totalEntries: Int = 0
   private var stopCount: Int = 0
@@ -123,7 +125,7 @@ class Bookkeeper extends Actor with Timers {
       println(s"${context.self} connected to $gc on ${addr}")
       remoteGCs = remoteGCs + (addr -> gc)
       if (!undoLogs.contains(addr))
-        undoLogs = undoLogs + (addr -> new UndoLog())
+        undoLogs = undoLogs + (addr -> new UndoLog(addr))
       if (remoteGCs.size + 1 == numNodes) {
         start()
       }
@@ -151,7 +153,7 @@ class Bookkeeper extends Actor with Timers {
   private def mergeIngressEntry(entry: IngressEntry): Unit = {
     val addr = entry.egressAddress
     if (!undoLogs.contains(addr)) {
-      undoLogs = undoLogs + (addr -> new UndoLog())
+      undoLogs = undoLogs + (addr -> new UndoLog(addr))
     }
     undoLogs(addr).mergeIngressEntry(entry)
     if (entry.isFinal) {

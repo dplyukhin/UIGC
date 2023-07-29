@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import akka.actor.Address;
-import akka.actor.typed.ActorRef;
+import akka.actor.ActorRef;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,7 +10,7 @@ import java.util.Objects;
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<Shadow, Integer> outgoing;
-    ActorRef<?> self;
+    ActorRef self;
     Address location;
     Shadow supervisor;
     int recvCount;
@@ -23,6 +23,8 @@ public class Shadow {
     boolean isLocal;
     /** Whether this actor was busy in its latest entry. */
     boolean isBusy;
+    /** Whether this actor has permanently stopped. */
+    boolean isHalted;
 
     public Shadow() {
         this.outgoing = new HashMap<>();
@@ -35,6 +37,7 @@ public class Shadow {
         this.interned = false;
         this.isLocal = false;
         this.isBusy = false;
+        this.isHalted = false;
     }
 
     @Override

@@ -14,6 +14,7 @@ import java.util.Map;
  * is a bit misleading because the values can be negative. But it's good to have a mental model.)
  */
 public class UndoLog {
+    Address nodeAddress;
     HashSet<Address> finalizedBy;
     HashMap<ActorRef, Field> admitted;
 
@@ -29,15 +30,16 @@ public class UndoLog {
         }
     }
 
-    public UndoLog() {
+    public UndoLog(Address nodeAddress) {
+        this.nodeAddress = nodeAddress;
         this.finalizedBy = new HashSet<>();
         this.admitted = new HashMap<>();
     }
 
     public void mergeDeltaGraph(DeltaGraph delta) {
         // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        akka.actor.typed.ActorRef<?>[] refs = new akka.actor.typed.ActorRef<?>[delta.currentSize];
-        for (Map.Entry<akka.actor.typed.ActorRef<?>, Short> entry : delta.compressionTable.entrySet()) {
+        ActorRef[] refs = new ActorRef[delta.currentSize];
+        for (Map.Entry<ActorRef, Short> entry : delta.compressionTable.entrySet()) {
             refs[entry.getValue()] = entry.getKey();
         }
 
@@ -48,7 +50,7 @@ public class UndoLog {
                 // *for actors on other nodes*.
                 continue;
 
-            ActorRef thisActor = refs[i].classicRef();
+            ActorRef thisActor = refs[i];
             Field field = admitted.get(thisActor);
             if (field == null) {
                 field = new Field();
@@ -59,7 +61,7 @@ public class UndoLog {
 
             // Undo any of the references this node claims to have created for the recipient
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
-                ActorRef targetActor = refs[entry.getKey()].classicRef();
+                ActorRef targetActor = refs[entry.getKey()];
                 int count = entry.getValue();
                 updateOutgoing(field.createdRefs, targetActor, -count);
             }

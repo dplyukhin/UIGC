@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import akka.actor.Address;
-import akka.actor.typed.ActorRef;
+import akka.actor.ActorRef;
 import akka.serialization.jackson.ActorRefDeserializer;
 import akka.serialization.jackson.AkkaSerializationDeserializer;
 import akka.serialization.jackson.AkkaSerializationSerializer;
@@ -28,7 +28,7 @@ public class DeltaGraph implements Serializable {
 
     //@JsonDeserialize(using = AkkaSerializationDeserializer.class)
     //@JsonSerialize(using = AkkaSerializationSerializer.class)
-    HashMap<ActorRef<?>, Short> compressionTable;
+    HashMap<ActorRef, Short> compressionTable;
     DeltaShadow[] shadows;
     Address address;
     //ArrayList<Entry> entries;
@@ -136,10 +136,10 @@ public class DeltaGraph implements Serializable {
     }
 
     private short getID(Refob<?> refob) {
-        return getID(refob.target());
+        return getID(refob.target().classicRef());
     }
 
-    private short getID(ActorRef<?> ref) {
+    private short getID(ActorRef ref) {
         if (compressionTable.containsKey(ref))
             return compressionTable.get(ref);
 

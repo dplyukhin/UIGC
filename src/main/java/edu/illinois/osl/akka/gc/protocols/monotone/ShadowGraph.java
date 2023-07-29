@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import akka.actor.Address;
-import akka.actor.typed.ActorRef;
+import akka.actor.ActorRef;
 
 import java.util.*;
 
@@ -10,7 +10,7 @@ public class ShadowGraph {
     boolean MARKED = true;
     int totalActorsSeen = 0;
     ArrayList<Shadow> from;
-    HashMap<ActorRef<?>, Shadow> shadowMap;
+    HashMap<ActorRef, Shadow> shadowMap;
 
     public ShadowGraph() {
         from = new ArrayList<>();
@@ -23,13 +23,13 @@ public class ShadowGraph {
         //    return refob.targetShadow();
 
         // Try to get it from the collection of all my shadows. Save it in the cache.
-        Shadow shadow = getShadow(refob.target());
+        Shadow shadow = getShadow(refob.target().classicRef());
         //refob.targetShadow_$eq(shadow);
 
         return shadow;
     }
 
-    public Shadow getShadow(ActorRef<?> ref) {
+    public Shadow getShadow(ActorRef ref) {
         // Try to get it from the collection of all my shadows.
         Shadow shadow = shadowMap.get(ref);
         if (shadow != null)
@@ -39,7 +39,7 @@ public class ShadowGraph {
         return makeShadow(ref);
     }
 
-    public Shadow makeShadow(ActorRef<?> ref) {
+    public Shadow makeShadow(ActorRef ref) {
         totalActorsSeen++;
         // Haven't heard of this actor yet. Create a shadow for it.
         Shadow shadow = new Shadow();
@@ -131,8 +131,8 @@ public class ShadowGraph {
 
     public void mergeDelta(DeltaGraph delta) {
         // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        ActorRef<?>[] refs = new ActorRef<?>[delta.currentSize];
-        for (Map.Entry<ActorRef<?>, Short> entry : delta.compressionTable.entrySet()) {
+        ActorRef[] refs = new ActorRef[delta.currentSize];
+        for (Map.Entry<ActorRef, Short> entry : delta.compressionTable.entrySet()) {
             refs[entry.getValue()] = entry.getKey();
         }
 
@@ -163,15 +163,33 @@ public class ShadowGraph {
         }
     }
 
+    public void mergeUndoLog(UndoLog log) {
+        // 1. All actors on the node become `halted`.
+        // 2. All actors have their undelivered message counts adjusted.
+        // 3. All actors have their outgoing references adjusted.
+        for (Shadow shadow : from) {
+            if (shadow.location.equals(log.nodeAddress)) {
+                shadow.isHalted = true;
+            }
+            UndoLog.Field field = log.admitted.get(shadow.self);
+            if (field != null) {
+                shadow.recvCount += field.messageCount;
+                for (Map.Entry<akka.actor.ActorRef,Integer> pair : field.createdRefs.entrySet()) {
+                    updateOutgoing(shadow.outgoing, getShadow(pair.getKey()), pair.getValue());
+                }
+            }
+        }
+    }
+
     public void assertEquals(ShadowGraph that) {
-        HashSet<ActorRef<?>> thisNotThat = new HashSet<>();
-        for (ActorRef<?> ref : this.shadowMap.keySet()) {
+        HashSet<ActorRef> thisNotThat = new HashSet<>();
+        for (ActorRef ref : this.shadowMap.keySet()) {
             if (!that.shadowMap.containsKey(ref)) {
                 thisNotThat.add(ref);
             }
         }
-        HashSet<ActorRef<?>> thatNotThis = new HashSet<>();
-        for (ActorRef<?> ref : that.shadowMap.keySet()) {
+        HashSet<ActorRef> thatNotThis = new HashSet<>();
+        for (ActorRef ref : that.shadowMap.keySet()) {
             if (!this.shadowMap.containsKey(ref)) {
                 thatNotThis.add(ref);
             }
@@ -181,15 +199,15 @@ public class ShadowGraph {
                 + "Actors in this, not that: " + thisNotThat + "\n"
                 + "Actors in that, not this " + thatNotThis;
 
-        for (Map.Entry<ActorRef<?>, Shadow> entry : this.shadowMap.entrySet()) {
+        for (Map.Entry<ActorRef, Shadow> entry : this.shadowMap.entrySet()) {
             Shadow thisShadow = entry.getValue();
             Shadow thatShadow = that.shadowMap.get(entry.getKey());
             thisShadow.assertEquals(thatShadow);
         }
     }
 
-    private static boolean isUnblocked(Shadow shadow) {
-        return shadow.isRoot || shadow.isBusy || shadow.recvCount != 0;
+    private static boolean isPseudoRoot(Shadow shadow) {
+        return (shadow.isRoot || shadow.isBusy || shadow.recvCount != 0 || !shadow.interned) && !shadow.isHalted;
     }
 
     public int trace(boolean shouldKill) {
@@ -197,12 +215,12 @@ public class ShadowGraph {
         ArrayList<Shadow> to = new ArrayList<>();
         // 0. Assume all shadows in `from` are in the UNMARKED state.
         //    Also assume that, if an actor has an incoming external actor, that external has a snapshot in `from`.
-        // 1. Find all the shadows that are (a) internal and unblocked, or (b) external --- and mark them and move them to `to`.
+        // 1. Find all the shadows that are pseudoroots and mark them and move them to `to`.
         // 2. Trace a path from every marked shadow, moving marked shadows to `to`.
         // 3. Find all unmarked shadows in `from` and kill those actors.
         // 4. The `to` set becomes the new `from` set.
         for (Shadow shadow : from) {
-            if (isUnblocked(shadow) || !shadow.interned) {
+            if (isPseudoRoot(shadow)) {
                 to.add(shadow);
                 shadow.mark = MARKED;
                 //shadow.markDepth = 1;
@@ -213,7 +231,7 @@ public class ShadowGraph {
             // Mark the outgoing references whose count is greater than zero
             for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
                 Shadow target = entry.getKey();
-                if (entry.getValue() > 0 && target.mark != MARKED) {
+                if (entry.getValue() > 0 && target.mark != MARKED && !target.isHalted) {
                     to.add(target);
                     target.mark = MARKED;
                     //target.markDepth = owner.markDepth + 1;
@@ -225,7 +243,7 @@ public class ShadowGraph {
             // Mark the actors that are monitoring or supervising this one
             Shadow supervisor = owner.supervisor;
             if (supervisor != null) {
-                if (supervisor.mark != MARKED) {
+                if (supervisor.mark != MARKED && !supervisor.isHalted) {
                     to.add(supervisor);
                     supervisor.mark = MARKED;
                 }
@@ -243,7 +261,7 @@ public class ShadowGraph {
                 count++;
                 shadowMap.remove(shadow.self);
                 if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill) {
-                    shadow.self.unsafeUpcast().tell(StopMsg$.MODULE$);
+                    shadow.self.tell(StopMsg$.MODULE$, null);
                 }
             }
         }
@@ -257,7 +275,7 @@ public class ShadowGraph {
         for (Shadow shadow : from) {
             if (shadow.isRoot && shadow.isLocal) {
                 count++;
-                shadow.self.unsafeUpcast().tell(WaveMsg$.MODULE$);
+                shadow.self.tell(WaveMsg$.MODULE$, null);
             }
         }
     }
