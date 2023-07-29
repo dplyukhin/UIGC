@@ -228,10 +228,14 @@ public class ShadowGraph {
         }
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
             Shadow owner = to.get(scanptr);
+            if (owner.isHalted) {
+                // Don't mark actors reachable from halted actors.
+                continue;
+            }
             // Mark the outgoing references whose count is greater than zero
             for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
                 Shadow target = entry.getKey();
-                if (entry.getValue() > 0 && target.mark != MARKED && !target.isHalted) {
+                if (entry.getValue() > 0 && target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
                     //target.markDepth = owner.markDepth + 1;
@@ -243,7 +247,7 @@ public class ShadowGraph {
             // Mark the actors that are monitoring or supervising this one
             Shadow supervisor = owner.supervisor;
             if (supervisor != null) {
-                if (supervisor.mark != MARKED && !supervisor.isHalted) {
+                if (supervisor.mark != MARKED) {
                     to.add(supervisor);
                     supervisor.mark = MARKED;
                 }
@@ -260,7 +264,7 @@ public class ShadowGraph {
             if (shadow.mark != MARKED) {
                 count++;
                 shadowMap.remove(shadow.self);
-                if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill) {
+                if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill && !shadow.isHalted) {
                     shadow.self.tell(StopMsg$.MODULE$, null);
                 }
             }
@@ -293,6 +297,8 @@ public class ShadowGraph {
 
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
             Shadow owner = to.get(scanptr);
+            if (owner.isHalted)
+                continue;
             for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
                 Shadow target = entry.getKey();
                 if (entry.getValue() > 0 && target.mark != MARKED) {
