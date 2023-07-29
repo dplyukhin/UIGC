@@ -157,11 +157,17 @@ class Bookkeeper extends Actor with Timers {
     }
     undoLogs(addr).mergeIngressEntry(entry)
     if (entry.isFinal) {
-      println(s"GC got final ingress entry for (${entry.egressAddress},${entry.ingressAddress})")
+      //println(s"GC got final ingress entry for (${entry.egressAddress},${entry.ingressAddress})")
       // If the undo log for this node has now been finalized by every node in remoteGCs, we can undo it.
       if (undoLogs(addr).finalizedBy.contains(thisAddress) &&
         undoLogs(addr).finalizedBy.containsAll(remoteGCs.keys.asJavaCollection)) {
-        println(s"Undo log for $addr is ready!")
+        println(s"Undo log for $addr is ready! It contains ${undoLogs(addr).admitted.size()} fields.")
+
+        shadowGraph.mergeUndoLog(undoLogs(addr))
+        val count = shadowGraph.trace(true)
+        println(s"Merged undo log and found $count garbage actors. New heap size: ${shadowGraph.from.size()}")
+        // val remaining = shadowGraph.investigateRemotelyHeldActors(addr)
+        // println(s"Now $addr prevents $remaining from being collected.")
       }
     }
   }
