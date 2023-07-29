@@ -85,18 +85,6 @@ public class DeltaGraph implements Serializable {
             updateOutgoing(ownerShadow.outgoing, targetID, 1);
         }
 
-        // Spawned actors.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
-            if (entry.spawnedActors[i] == null) break;
-            Refob<?> child = entry.spawnedActors[i];
-
-            // Set the child's supervisor field
-            short childID = getID(child);
-            DeltaShadow childShadow = shadows[childID];
-            childShadow.supervisor = selfID;
-            // NB: We don't increase the parent's created count; that info is in the child snapshot.
-        }
-
         // Deactivate refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;

@@ -12,7 +12,6 @@ public class Shadow {
     HashMap<Shadow, Integer> outgoing;
     ActorRef self;
     Address location;
-    Shadow supervisor;
     int recvCount;
     //int markDepth;
     boolean mark;
@@ -29,7 +28,6 @@ public class Shadow {
     public Shadow() {
         this.outgoing = new HashMap<>();
         this.self = null;
-        this.supervisor = null;
         this.recvCount = 0;
         //this.markDepth = 0;
         this.mark = false;
@@ -45,7 +43,6 @@ public class Shadow {
         return "Shadow{" +
                 "\noutgoing=" + outgoing.keySet().stream().map(x -> x.self) +
                 ", \nself=" + self +
-                ", \nsupervisor=" + (supervisor == null ? "null" : supervisor.self) +
                 ", \nrecvCount=" + recvCount +
                 //", \nmarkDepth=" + markDepth +
                 ", \nmark=" + mark +
@@ -59,10 +56,6 @@ public class Shadow {
     /** Compare two shadows from distinct graphs for debugging purposes. */
     public void assertEquals(Shadow that) {
         assert (this.self == that.self)
-                : this + " was not " + that;
-        assert ((this.supervisor != null && that.supervisor != null) || (this.supervisor == null && that.supervisor == null))
-                : this + " was not " + that;
-        assert (this.supervisor == null || (this.supervisor.self == that.supervisor.self))
                 : this + " was not " + that;
         assert (this.recvCount == that.recvCount)
                 : this + " was not " + that;

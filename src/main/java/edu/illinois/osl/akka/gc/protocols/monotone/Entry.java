@@ -6,7 +6,6 @@ public class Entry {
     public Refob<?> self;
     public Refob<?>[] createdOwners;
     public Refob<?>[] createdTargets;
-    public Refob<?>[] spawnedActors;
     public Refob<?>[] updatedRefs;
     public short[] updatedInfos;
     public short recvCount;
@@ -17,7 +16,6 @@ public class Entry {
         self           = null;
         createdOwners  = new Refob<?>[Sizes.EntryFieldSize];
         createdTargets = new Refob<?>[Sizes.EntryFieldSize];
-        spawnedActors  = new Refob<?>[Sizes.EntryFieldSize];
         updatedRefs    = new Refob<?>[Sizes.EntryFieldSize];
         updatedInfos   = new short[Sizes.EntryFieldSize];
         isBusy         = false;
@@ -28,7 +26,6 @@ public class Entry {
         self = null;
         Arrays.fill(createdOwners, null);
         Arrays.fill(createdTargets, null);
-        Arrays.fill(spawnedActors, null);
         Arrays.fill(updatedRefs, null);
         Arrays.fill(updatedInfos, (short) 0);
         isBusy = false;

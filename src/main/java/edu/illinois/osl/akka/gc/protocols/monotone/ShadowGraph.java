@@ -89,17 +89,6 @@ public class ShadowGraph {
             updateOutgoing(shadow.outgoing, targetShadow, 1);
         }
 
-        // Spawned actors.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
-            if (entry.spawnedActors[i] == null) break;
-            Refob<?> child = entry.spawnedActors[i];
-
-            // Set the child's supervisor field
-            Shadow childShadow = getShadow(child);
-            childShadow.supervisor = selfShadow;
-            // NB: We don't increase the parent's created count; that info is in the child snapshot.
-        }
-
         // Deactivate refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
@@ -151,9 +140,6 @@ public class ShadowGraph {
                 // value of `false`.
                 shadow.isBusy = deltaShadow.isBusy;
                 shadow.isRoot = deltaShadow.isRoot;
-            }
-            if (deltaShadow.supervisor >= 0) {
-                shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
             }
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
                 short id = entry.getKey();
@@ -244,17 +230,6 @@ public class ShadowGraph {
                 //    target.markDepth = owner.markDepth + 1;
                 //}
             }
-            // Mark the actors that are monitoring or supervising this one
-            Shadow supervisor = owner.supervisor;
-            if (supervisor != null) {
-                if (supervisor.mark != MARKED) {
-                    to.add(supervisor);
-                    supervisor.mark = MARKED;
-                }
-                //if (supervisor.markDepth > owner.markDepth + 1) {
-                //    supervisor.markDepth = owner.markDepth + 1;
-                //}
-            }
         }
 
         // Unmarked actors are garbage. Due to supervision, an actor will only be garbage if all its descendants
@@ -264,8 +239,9 @@ public class ShadowGraph {
             if (shadow.mark != MARKED) {
                 count++;
                 shadowMap.remove(shadow.self);
-                if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill && !shadow.isHalted) {
-                    shadow.self.tell(StopMsg$.MODULE$, null);
+                if (shadow.isLocal && shouldKill && !shadow.isHalted) {
+                    if (!shadow.self.isTerminated())
+                        shadow.self.tell(StopMsg$.MODULE$, null);
                 }
             }
         }
