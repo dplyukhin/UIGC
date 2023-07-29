@@ -54,6 +54,7 @@ public class UndoLog {
             Field field = admitted.get(thisActor);
             if (field == null) {
                 field = new Field();
+                admitted.put(thisActor, field);
             }
 
             // Undo any messages this node claims to have sent to the recipient actor
@@ -76,6 +77,7 @@ public class UndoLog {
             Field field = this.admitted.get(actor);
             if (field == null) {
                 field = new Field();
+                admitted.put(actor, field);
             }
 
             // Add back the number of messages that actually got admitted to the node.
