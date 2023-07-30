@@ -10,9 +10,10 @@ import java.util.Objects;
 
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
+    ActorRef self;
+    Shadow supervisor;
     HashMap<Shadow, Integer> outgoing;
     HashSet<Shadow> watchers;
-    ActorRef self;
     Address location;
     int recvCount;
     //int markDepth;
@@ -28,9 +29,10 @@ public class Shadow {
     boolean isHalted;
 
     public Shadow() {
+        this.self = null;
+        this.supervisor = null;
         this.outgoing = new HashMap<>();
         this.watchers = new HashSet<>();
-        this.self = null;
         this.recvCount = 0;
         //this.markDepth = 0;
         this.mark = false;
@@ -45,6 +47,8 @@ public class Shadow {
     public String toString() {
         return "Shadow{" +
                 "\noutgoing=" + outgoing.keySet().stream().map(x -> x.self) +
+                ", \nwatchers=" + watchers.stream().map(x -> x.self) +
+                ", \nsupervisor=" + (supervisor == null ? "null" : supervisor.self) +
                 ", \nself=" + self +
                 ", \nrecvCount=" + recvCount +
                 //", \nmarkDepth=" + markDepth +
@@ -58,7 +62,12 @@ public class Shadow {
 
     /** Compare two shadows from distinct graphs for debugging purposes. */
     public void assertEquals(Shadow that) {
+        // TODO Compare the watcher sets!
         assert (this.self == that.self)
+                : this + " was not " + that;
+        assert ((this.supervisor != null && that.supervisor != null) || (this.supervisor == null && that.supervisor == null))
+                : this + " was not " + that;
+        assert (this.supervisor == null || (this.supervisor.self == that.supervisor.self))
                 : this + " was not " + that;
         assert (this.recvCount == that.recvCount)
                 : this + " was not " + that;

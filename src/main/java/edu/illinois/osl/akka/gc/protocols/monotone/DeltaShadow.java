@@ -13,6 +13,7 @@ public class DeltaShadow implements Serializable {
     //@JsonDeserialize(keyUsing = OutgoingDeserializer.class)
     HashMap<Short, Integer> outgoing;
     int recvCount;
+    short supervisor;
     boolean isRoot;
     boolean isBusy;
     boolean interned;
@@ -22,6 +23,7 @@ public class DeltaShadow implements Serializable {
     public DeltaShadow() {
         this.outgoing = new HashMap<>();
         this.recvCount = 0;
+        this.supervisor = -1;
         this.isRoot = false;
         this.isBusy = false;
         this.interned = false;

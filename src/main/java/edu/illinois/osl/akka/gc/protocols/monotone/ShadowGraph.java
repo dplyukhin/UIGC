@@ -99,6 +99,17 @@ public class ShadowGraph {
             updateOutgoing(shadow.outgoing, targetShadow, 1);
         }
 
+        // Spawned actors.
+        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+            if (entry.spawnedActors[i] == null) break;
+            Refob<?> child = entry.spawnedActors[i];
+
+            // Set the child's supervisor field
+            Shadow childShadow = getShadow(child);
+            childShadow.supervisor = selfShadow;
+            // NB: We don't increase the parent's created count; that info is in the child snapshot.
+        }
+
         // Deactivate refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
@@ -165,6 +176,9 @@ public class ShadowGraph {
                 // value of `false`.
                 shadow.isBusy = deltaShadow.isBusy;
                 shadow.isRoot = deltaShadow.isRoot;
+            }
+            if (deltaShadow.supervisor >= 0) {
+                shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
             }
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
                 short id = entry.getKey();
@@ -260,6 +274,17 @@ public class ShadowGraph {
                     //}
                 }
             }
+            // Mark the actor's supervisor, because it can't be stopped until its descendants are garbage.
+            Shadow supervisor = owner.supervisor;
+            if (supervisor != null) {
+                if (supervisor.mark != MARKED) {
+                    to.add(supervisor);
+                    supervisor.mark = MARKED;
+                }
+                //if (supervisor.markDepth > owner.markDepth + 1) {
+                //    supervisor.markDepth = owner.markDepth + 1;
+                //}
+            }
             // Mark the watchers
             for (Shadow target : owner.watchers) {
                 if (target.mark != MARKED) {
@@ -275,10 +300,12 @@ public class ShadowGraph {
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED) {
                 count++;
-                shadowMap.remove(shadow.self);
-                if (shadow.isLocal && shouldKill && !shadow.isHalted) {
-                    if (!shadow.self.isTerminated())
-                        shadow.self.tell(StopMsg$.MODULE$, null);
+                //shadowMap.remove(shadow.self);
+                if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill && !shadow.isHalted) {
+                    // Only ask an actor to stop if (1) it's on this node, (2) we're in kill mode, (3)
+                    // the actor hasn't already stopped, and (4) its parent is not garbage.
+                    // In Akka, stopping the parent stops the descendants - so we only ask the ancestor to stop.
+                    shadow.self.tell(StopMsg$.MODULE$, null);
                 }
             }
         }
