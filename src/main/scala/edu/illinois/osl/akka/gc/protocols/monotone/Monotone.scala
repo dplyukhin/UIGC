@@ -162,22 +162,30 @@ object Monotone extends Protocol {
     if (entry != null) sendEntry(entry, ctx)
   }
 
+  override def onThrow[T](e: Throwable, state: State, ctx: ActorContext[GCMessage[T]]): Unit = {
+    val entry = state.onThrow()
+    if (entry != null) sendEntry(entry, ctx)
+  }
+
   override def preSignal[T](
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Unit = signal match {
-    case Terminated(ref) =>
-      state.onUnmonitor(SomeActorRef(ref))
-    case _ =>
-  }
+  ): Unit = ()
 
   override def postSignal[T](
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
-    Protocol.Unhandled
+  ): Protocol.TerminationDecision = signal match {
+    case Terminated(ref) =>
+      val entry = state.onUnmonitor(SomeActorRef(ref))
+      if (entry != null) sendEntry(entry, ctx)
+      sendEntry(state.finalizeEntry(false), ctx)
+      Protocol.Unhandled
+    case _ =>
+      Protocol.Unhandled
+  }
 
   private def sendEntry[T](
     entry: Entry,

@@ -13,6 +13,7 @@ public class Entry {
     public short recvCount;
     public boolean isBusy;
     public boolean isRoot;
+    public boolean isHalted;
 
     public Entry() {
         self            = null;
@@ -22,8 +23,10 @@ public class Entry {
         monitoredRefobs = new HashMap<>(Sizes.EntryFieldSize * 5 / 4, 0.75F);
             // We set the initial capacity so the default load factor of 0.75 will never be exceeded.
         updatedInfos    = new short[Sizes.EntryFieldSize];
+        recvCount       = 0;
         isBusy          = false;
-        isRoot = false;
+        isRoot          = false;
+        isHalted        = false;
     }
 
     public void clean() {
@@ -33,7 +36,9 @@ public class Entry {
         Arrays.fill(updatedRefs, null);
         Arrays.fill(updatedInfos, (short) 0);
         monitoredRefobs.clear();
+        recvCount = 0;
         isBusy = false;
         isRoot = false;
+        isHalted = false;
     }
 }

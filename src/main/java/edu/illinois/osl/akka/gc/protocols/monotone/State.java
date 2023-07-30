@@ -26,6 +26,8 @@ public class State implements Pretty {
     short recvCount;
     /** True iff the actor is a root (i.e. manually collected) */
     boolean isRoot;
+    /** True iff the actor has thrown an exception */
+    boolean isHalted;
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
 
@@ -40,6 +42,7 @@ public class State implements Pretty {
         this.updatedIdx = 0;
         this.recvCount = (short) 0;
         this.isRoot = false;
+        this.isHalted = false;
         this.stopRequested = false;
     }
 
@@ -134,6 +137,11 @@ public class State implements Pretty {
         return oldEntry;
     }
 
+    public Entry onThrow() {
+        isHalted = true;
+        return finalizeEntry(false);
+    }
+
     public Entry getEntry() {
         Entry entry = Monotone.EntryPool().poll();
         if (entry == null) {
@@ -147,6 +155,7 @@ public class State implements Pretty {
         entry.self = self;
         entry.isBusy = isBusy;
         entry.isRoot = isRoot;
+        entry.isHalted = isHalted;
 
         for (int i = 0; i < createdIdx; i++) {
             entry.createdOwners[i] = this.createdOwners[i];

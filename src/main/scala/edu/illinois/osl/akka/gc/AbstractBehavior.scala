@@ -17,7 +17,15 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
     val appMsg = protocol.onMessage(msg, context.state, context.rawContext)
 
     val result = appMsg match {
-      case Some(msg) => onMessage(msg)
+      case Some(msg) =>
+        try {
+          onMessage(msg)
+        }
+        catch {
+          case e: Throwable =>
+            protocol.onThrow(e, context.state, context.rawContext)
+            throw e
+        }
       case None => scaladsl.Behaviors.same[protocol.GCMessage[T]]
     }
 
@@ -29,18 +37,28 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
 
   override final def receiveSignal(ctx: TypedActorContext[protocol.GCMessage[T]], msg: Signal): Behavior[T] = {
     protocol.preSignal(msg, context.state, context.rawContext)
+    println(s"Signal $msg at ${ctx.asScala.self}")
 
-    val result =
-      onSignal.applyOrElse(msg, { case _ => scaladsl.Behaviors.unhandled }: PartialFunction[Signal, Behavior[T]]) 
+    try {
+      val result =
+        onSignal.applyOrElse(msg, {
+          case _ => scaladsl.Behaviors.unhandled
+        }: PartialFunction[Signal, Behavior[T]])
 
-    protocol.postSignal(msg, context.state, context.rawContext) match {
-      case _: Protocol.Unhandled.type => result
-      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
-      case _: Protocol.ShouldContinue.type => 
-        if (result == scaladsl.Behaviors.unhandled)
-          scaladsl.Behaviors.same
-        else 
-          result
+      protocol.postSignal(msg, context.state, context.rawContext) match {
+        case _: Protocol.Unhandled.type => result
+        case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
+        case _: Protocol.ShouldContinue.type =>
+          if (result == scaladsl.Behaviors.unhandled)
+            scaladsl.Behaviors.same
+          else
+            result
+      }
+    }
+    catch {
+      case e: Throwable =>
+        protocol.onThrow(e, context.state, context.rawContext)
+        throw e
     }
   }
 

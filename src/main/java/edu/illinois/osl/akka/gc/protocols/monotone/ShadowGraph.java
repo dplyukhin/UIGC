@@ -86,6 +86,7 @@ public class ShadowGraph {
         selfShadow.recvCount += entry.recvCount;
         selfShadow.isBusy = entry.isBusy;
         selfShadow.isRoot = entry.isRoot;
+        selfShadow.isHalted = entry.isHalted;
 
         // Created refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {

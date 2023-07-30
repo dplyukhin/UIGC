@@ -1,7 +1,7 @@
 package edu.illinois.osl.akka.gc
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import akka.actor.typed.{PostStop, Signal}
+import akka.actor.typed.{ChildFailed, PostStop, Signal, Terminated}
 import akka.actor.typed.scaladsl.TimerScheduler
 import edu.illinois.osl.akka.gc.interfaces.Message
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -36,6 +36,7 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       timers: TimerScheduler[Msg]
   ) extends AbstractBehavior[Msg](context) {
 
+    private val isRoot = timers != null
     private var acquaintances: Set[ActorRef[Msg]] = Set()
 
     override def onMessage(msg: Msg): Behavior[Msg] =
@@ -84,6 +85,12 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       } else if (p < 0.8 && acquaintances.nonEmpty) {
         randomItem(acquaintances) ! Ping()
       }
+      else if (p < 0.9 && acquaintances.nonEmpty) {
+        context.watch(randomItem(acquaintances))
+      }
+      else if (p < 0.95 && !isRoot) {
+        throw new Exception();
+      }
     }
 
     /** Pick a random item from the set, assuming the set is nonempty. */
@@ -93,9 +100,17 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     }
 
     override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
+      case ChildFailed(ref, cause) =>
+        println(s"Child $ref failed! Caught by ${context.self.rawActorRef}")
+        doSomething()
+        doSomething()
+        this
+      case Terminated(_) =>
+        // Monitored actor may just have been garbage collected.
+        this
       case PostStop =>
         TerminateCounter.countDown()
-        println(TerminateCounter.getCount() + " remaining!")
+        println(TerminateCounter.getCount + " remaining!")
         this
     }
   }
