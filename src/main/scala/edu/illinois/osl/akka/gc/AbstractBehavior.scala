@@ -37,7 +37,6 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
 
   override final def receiveSignal(ctx: TypedActorContext[protocol.GCMessage[T]], msg: Signal): Behavior[T] = {
     protocol.preSignal(msg, context.state, context.rawContext)
-    println(s"Signal $msg at ${ctx.asScala.self}")
 
     try {
       val result =

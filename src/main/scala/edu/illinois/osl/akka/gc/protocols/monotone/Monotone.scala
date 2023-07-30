@@ -3,11 +3,10 @@ package edu.illinois.osl.akka.gc.protocols.monotone
 import scala.jdk.CollectionConverters._
 import akka.{actor => classic}
 import akka.actor.{ActorSelectionMessage, Address, ExtendedActorSystem}
-import akka.actor.typed.{Signal, Terminated}
+import akka.actor.typed.{ActorRef, PostStop, Signal, Terminated}
 import com.typesafe.config.ConfigFactory
 import edu.illinois.osl.akka.gc.interfaces._
 import edu.illinois.osl.akka.gc.protocols.{Protocol, monotone}
-import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
 import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 import akka.stream.stage.GraphStageLogic
@@ -111,6 +110,7 @@ object Monotone extends Protocol {
   ): Protocol.TerminationDecision =
     msg match {
       case StopMsg =>
+        state.stopRequested = true
         Protocol.ShouldStop
       case WaveMsg =>
         sendEntry(state.finalizeEntry(false), ctx)
@@ -182,6 +182,16 @@ object Monotone extends Protocol {
       val entry = state.onUnmonitor(SomeActorRef(ref))
       if (entry != null) sendEntry(entry, ctx)
       sendEntry(state.finalizeEntry(false), ctx)
+      Protocol.Unhandled
+    case PostStop =>
+      if (!state.stopRequested && !state.isHalted) {
+        // This actor was not asked to stop by the garbage collector, and
+        // it did not throw an exception either.
+        // Either the user asked this actor to stop or an ancestor actor
+        // stopped and caused this one to stop.
+        state.isHalted = true
+        sendEntry(state.finalizeEntry(false), ctx)
+      }
       Protocol.Unhandled
     case _ =>
       Protocol.Unhandled
