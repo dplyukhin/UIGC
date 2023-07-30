@@ -152,11 +152,25 @@ object Monotone extends Protocol {
     ctx: ActorContext[GCMessage[T]]
   ): Unit = ???
 
+  override def onWatch[T](ref: Refob[Nothing], state: State, ctx: ActorContext[GCMessage[T]]): Unit = {
+    val entry = state.onMonitor(SomeRefob(ref))
+    if (entry != null) sendEntry(entry, ctx)
+  }
+
+  override def onUnwatch[T](ref: Refob[Nothing], state: State, ctx: ActorContext[GCMessage[T]]): Unit = {
+    val entry = state.onUnmonitor(SomeRefob(ref))
+    if (entry != null) sendEntry(entry, ctx)
+  }
+
   override def preSignal[T](
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Unit = ()
+  ): Unit = signal match {
+    case Terminated(ref) =>
+      state.onUnmonitor(SomeActorRef(ref))
+    case _ =>
+  }
 
   override def postSignal[T](
     signal: Signal, 

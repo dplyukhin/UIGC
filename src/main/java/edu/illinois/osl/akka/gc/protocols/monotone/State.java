@@ -2,6 +2,9 @@ package edu.illinois.osl.akka.gc.protocols.monotone;
 
 import edu.illinois.osl.akka.gc.interfaces.Pretty;
 
+import java.util.HashMap;
+import java.util.HashSet;
+
 public class State implements Pretty {
 
     /** This actor's ref to itself */
@@ -9,6 +12,10 @@ public class State implements Pretty {
     /** Tracks references created by this actor */
     Refob<?>[] createdOwners;
     Refob<?>[] createdTargets;
+    /** Tracks refobs that have been monitored/unmonitored.
+     * If an actor became monitored in the entry period, the value is true.
+     * If the actor became unmonitored, the value is false. */
+    HashMap<SomeRef, Boolean> monitoredRefobs;
     /** Tracks all the refobs that have been updated in this entry period */
     Refob<?>[] updatedRefobs;
     /** Where in the array to insert the next "created" ref */
@@ -26,6 +33,8 @@ public class State implements Pretty {
         this.self = self;
         this.createdOwners = new Refob<?>[Sizes.EntryFieldSize];
         this.createdTargets = new Refob<?>[Sizes.EntryFieldSize];
+        this.monitoredRefobs = new HashMap<>(Sizes.EntryFieldSize * 5 / 4, 0.75F);
+            // We set the initial capacity so the default load factor of 0.75 will never be exceeded.
         this.updatedRefobs = new Refob<?>[Sizes.EntryFieldSize];
         this.createdIdx = 0;
         this.updatedIdx = 0;
@@ -51,6 +60,38 @@ public class State implements Pretty {
         // Supervision is modeled by giving the child a permanent reference to its parent.
         // As long as the child can become busy, it can throw an exception and wake its parent.
         return onCreate(child, self);
+    }
+
+    public Entry onMonitor(SomeRef target) {
+        Entry oldEntry =
+                monitoredRefobs.size() >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
+        Boolean isPositive = monitoredRefobs.get(target);
+        if (isPositive == null) {
+            // target does not occur in the set
+            monitoredRefobs.put(target, true);
+        }
+        else if (!isPositive) {
+            // target occurs negatively in the set, i.e. we just unmonitored it and have already
+            // begun monitoring again. The two actions cancel out.
+            monitoredRefobs.remove(target);
+        }
+        return oldEntry;
+    }
+
+    public Entry onUnmonitor(SomeRef target) {
+        Entry oldEntry =
+                monitoredRefobs.size() >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
+        Boolean isPositive = monitoredRefobs.get(target);
+        if (isPositive == null) {
+            // target does not occur in the set; we began monitoring at an earlier period.
+            monitoredRefobs.put(target, false);
+        }
+        else if (isPositive) {
+            // target occurs positively in the set, i.e. we just monitored it and have already
+            // stopped monitoring. The two actions cancel out.
+            monitoredRefobs.remove(target);
+        }
+        return oldEntry;
     }
 
     public Entry onDeactivate(Refob<?> refob) {
@@ -125,6 +166,11 @@ public class State implements Pretty {
             this.updatedRefobs[i] = null;
         }
         updatedIdx = 0;
+
+        // Trade ya! The entry's monitoredRefobs is empty, so we can just swap pointers.
+        HashMap<SomeRef, Boolean> tmp = entry.monitoredRefobs;
+        entry.monitoredRefobs = this.monitoredRefobs;
+        this.monitoredRefobs = tmp;
 
         return entry;
     }

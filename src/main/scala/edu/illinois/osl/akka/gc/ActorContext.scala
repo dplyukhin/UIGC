@@ -66,6 +66,16 @@ class ActorContext[T](
       refs.asInstanceOf[Iterable[protocol.Refob[Nothing]]],
       state, rawContext)
 
+  def watch(ref: RefobLike[Nothing]): Unit = {
+    rawContext.watch(ref.rawActorRef)
+    protocol.onWatch(ref.asInstanceOf[protocol.Refob[Nothing]], state, rawContext)
+  }
+
+  def unwatch(ref: RefobLike[Nothing]): Unit = {
+    rawContext.unwatch(ref.rawActorRef)
+    protocol.onUnwatch(ref.asInstanceOf[protocol.Refob[Nothing]], state, rawContext)
+  }
+
   /**
    * Spawn a new anonymous actor into the GC system.
    *

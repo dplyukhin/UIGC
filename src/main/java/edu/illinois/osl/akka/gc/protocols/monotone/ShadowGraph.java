@@ -17,6 +17,15 @@ public class ShadowGraph {
         shadowMap = new HashMap<>();
     }
 
+    public Shadow getShadow(SomeRef ref) {
+        if (ref instanceof SomeRefob) {
+            return getShadow(((SomeRefob) ref).refob());
+        }
+        else {
+            return getShadow(((SomeActorRef) ref).ref().classicRef()); // lol
+        }
+    }
+
     public Shadow getShadow(Refob<?> refob) {
         // Check if it's in the cache.
         //if (refob.targetShadow() != null)
@@ -116,6 +125,21 @@ public class ShadowGraph {
                 targetShadow.recvCount -= sendCount; // may be negative!
             }
         }
+
+        // Update watchers
+        for (Map.Entry<SomeRef,Boolean> pair : entry.monitoredRefobs.entrySet()) {
+            SomeRef monitoredRef = pair.getKey();
+            Shadow monitoredShadow = getShadow(monitoredRef);
+            boolean becameMonitored = pair.getValue();
+            if (becameMonitored) {
+                boolean previouslyEmpty = monitoredShadow.watchers.add(selfShadow);
+                assert(previouslyEmpty);
+            }
+            else {
+                boolean wasNonempty = monitoredShadow.watchers.remove(selfShadow);
+                assert(wasNonempty);
+            }
+        }
     }
 
     public void mergeDelta(DeltaGraph delta) {
@@ -205,8 +229,10 @@ public class ShadowGraph {
         // 2. Trace a path from every marked shadow, moving marked shadows to `to`.
         // 3. Find all unmarked shadows in `from` and kill those actors.
         // 4. The `to` set becomes the new `from` set.
+        // Being MARKED means that an actor can become busy, or it is potentially reachable by an actor
+        // that can become busy, or it has failed and is watched by some actor.
         for (Shadow shadow : from) {
-            if (isPseudoRoot(shadow)) {
+            if (isPseudoRoot(shadow) || (shadow.isHalted && !shadow.watchers.isEmpty())) {
                 to.add(shadow);
                 shadow.mark = MARKED;
                 //shadow.markDepth = 1;
@@ -214,21 +240,31 @@ public class ShadowGraph {
         }
         for (int scanptr = 0; scanptr < to.size(); scanptr++) {
             Shadow owner = to.get(scanptr);
-            if (owner.isHalted) {
-                // Don't mark actors reachable from halted actors.
-                continue;
+            // `owner` is a marked actor.
+            // If it hasn't halted, we mark all its potential acquaintances.
+            // If it is marked, we mark all its watchers because it could potentially halt.
+            // If it has halted, we mark all its watchers because we haven't yet received their
+            // latest entry in which they stopped watching the actor.
+            if (!owner.isHalted) {
+                // Mark the outgoing references whose count is greater than zero
+                for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
+                    Shadow target = entry.getKey();
+                    if (entry.getValue() > 0 && target.mark != MARKED) {
+                        to.add(target);
+                        target.mark = MARKED;
+                        //target.markDepth = owner.markDepth + 1;
+                    }
+                    //if (entry.getValue() > 0 && target.markDepth > owner.markDepth + 1) {
+                    //    target.markDepth = owner.markDepth + 1;
+                    //}
+                }
             }
-            // Mark the outgoing references whose count is greater than zero
-            for (Map.Entry<Shadow, Integer> entry : owner.outgoing.entrySet()) {
-                Shadow target = entry.getKey();
-                if (entry.getValue() > 0 && target.mark != MARKED) {
+            // Mark the watchers
+            for (Shadow target : owner.watchers) {
+                if (target.mark != MARKED) {
                     to.add(target);
                     target.mark = MARKED;
-                    //target.markDepth = owner.markDepth + 1;
                 }
-                //if (entry.getValue() > 0 && target.markDepth > owner.markDepth + 1) {
-                //    target.markDepth = owner.markDepth + 1;
-                //}
             }
         }
 

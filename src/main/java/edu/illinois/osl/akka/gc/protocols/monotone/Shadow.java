@@ -4,12 +4,14 @@ import akka.actor.Address;
 import akka.actor.ActorRef;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 
 public class Shadow {
     /** A list of active refobs pointing from this actor. */
     HashMap<Shadow, Integer> outgoing;
+    HashSet<Shadow> watchers;
     ActorRef self;
     Address location;
     int recvCount;
@@ -27,6 +29,7 @@ public class Shadow {
 
     public Shadow() {
         this.outgoing = new HashMap<>();
+        this.watchers = new HashSet<>();
         this.self = null;
         this.recvCount = 0;
         //this.markDepth = 0;

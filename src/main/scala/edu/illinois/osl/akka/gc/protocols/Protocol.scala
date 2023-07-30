@@ -96,6 +96,18 @@ trait Protocol {
       ctx: ActorContext[GCMessage[T]]
   ): Unit
 
+  def onWatch[T](
+      ref: Refob[Nothing],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Unit = ()
+
+  def onUnwatch[T](
+      ref: Refob[Nothing],
+      state: State,
+      cts: ActorContext[GCMessage[T]]
+  ): Unit = ()
+
   def spawnIngress(
       in: Inlet[InboundEnvelope],
       out: Outlet[InboundEnvelope],

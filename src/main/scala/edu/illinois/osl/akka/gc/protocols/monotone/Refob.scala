@@ -48,3 +48,7 @@ class Refob[-T](
 
   override def hashCode(): Int = target.hashCode()
 }
+
+trait SomeRef
+case class SomeRefob(refob: Refob[Nothing]) extends SomeRef
+case class SomeActorRef(ref: ActorRef[Nothing]) extends SomeRef
