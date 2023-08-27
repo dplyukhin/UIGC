@@ -12,20 +12,14 @@ object WRC extends Engine {
 
   val RC_INC: Long = 255
 
-  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T] {
-    override def pretty: String = target.toString
-  }
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T]
 
-  trait GCMessage[+T] extends Message with Pretty
-  case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean) extends GCMessage[T] {
-    override def pretty: String = s"AppMsg($payload, ${refs.toList.pretty})"
-  }
+  trait GCMessage[+T] extends Message
+  case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean) extends GCMessage[T]
   case object IncMsg extends GCMessage[Nothing] {
     override def refs: Iterable[RefobLike[Nothing]] = Nil
-    override def pretty: String = "IncMsg"
   }
   case class DecMsg(weight: Long) extends GCMessage[Nothing] {
-    override def pretty: String = s"DecMsg($weight)"
     override def refs: Iterable[RefobLike[Nothing]] = Nil
   }
 
@@ -34,17 +28,10 @@ object WRC extends Engine {
     var weight: Long = 0
   )
 
-  class State(val self: Refob[Nothing], val kind: SpawnInfo) extends Pretty {
+  class State(val self: Refob[Nothing], val kind: SpawnInfo) {
     var rc: Long = RC_INC
     var pendingSelfMessages: Long = 0
     val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
-    override def pretty: String =
-      s"""STATE:
-      < kind: $kind
-        rc:   $rc
-        actorMap: ${actorMap}
-      >
-      """
   }
 
   sealed trait SpawnInfo extends Serializable

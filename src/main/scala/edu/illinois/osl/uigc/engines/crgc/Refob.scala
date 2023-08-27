@@ -25,8 +25,6 @@ class Refob[-T](
     hasChangedThisPeriod = false
   }
 
-  override def pretty: String = target.toString
-
   // SpawnInfo is serialized by setting the Shadow field to None.
   @throws(classOf[IOException])
   private def writeObject(out: ObjectOutputStream): Unit = {

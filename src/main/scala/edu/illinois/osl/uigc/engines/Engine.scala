@@ -26,7 +26,7 @@ trait Engine {
    *
    * @tparam T The type of application messages
    */
-  type GCMessage[+T] <: Message with Pretty
+  type GCMessage[+T] <: Message
 
   /**
    * In Akka, two actors on the same ActorSystem can share the same
@@ -48,7 +48,7 @@ trait Engine {
    * Most actor GCs need to store some state at each actor. That state is represented
    * by the [[State]] type.
    */
-  type State <: Pretty
+  type State
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.

@@ -3,14 +3,12 @@ package edu.illinois.osl.uigc.engines.drl
 import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
 import edu.illinois.osl.uigc.engines.Engine
-import edu.illinois.osl.uigc.interfaces.Pretty
-import edu.illinois.osl.uigc.interfaces.Pretty._
 
 class State
 (
   val self: Name,
   val spawnInfo: DRL.SpawnInfo,
-) extends Pretty {
+) {
 
   var count: Int = 1
   
@@ -33,16 +31,6 @@ class State
   val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
   val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
-
-  override def pretty: String =
-    s"""DRL STATE:
-      < self:        ${selfRef.pretty}
-        owners:      ${owners.pretty}
-        released:    ${releasedOwners.pretty}
-        sent counts: ${prettifyMap(sentCount).pretty}
-        recv counts: ${recvCount.pretty}
-      >
-      """
 
   /** The set of refs that this actor owns that point to this actor itself */
   def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }

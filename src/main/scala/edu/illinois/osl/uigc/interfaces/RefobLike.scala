@@ -4,7 +4,7 @@ import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.typed.ActorRef
 import edu.illinois.osl.uigc.ActorContext
 
-trait RefobLike[-T] extends Pretty {
+trait RefobLike[-T] {
   def !(msg: T, refs: Iterable[RefobLike[Nothing]])(implicit ctx: ActorContext[_]): Unit =
     ctx.sendMessage(this, msg, refs)
 

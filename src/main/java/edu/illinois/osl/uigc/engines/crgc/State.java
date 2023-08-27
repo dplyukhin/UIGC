@@ -1,8 +1,6 @@
 package edu.illinois.osl.uigc.engines.crgc;
 
-import edu.illinois.osl.uigc.interfaces.Pretty;
-
-public class State implements Pretty {
+public class State {
 
     /** This actor's ref to itself */
     Refob<?> self;
@@ -143,8 +141,4 @@ public class State implements Pretty {
         return entry;
     }
 
-    @Override
-    public String pretty() {
-        return "[TODO: Implement Monotone.State.pretty]";
-    }
 }

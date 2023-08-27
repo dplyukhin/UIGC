@@ -10,22 +10,16 @@ import akka.actor.{ActorPath, Address, ExtendedActorSystem}
 import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
 object Manual extends Engine {
-  case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message with Pretty {
-    def pretty: String = payload.toString
-  }
+  case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message
 
-  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T] {
-    override def pretty: String = target.toString
-  }
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T]
 
   trait SpawnInfo extends Serializable
   case class Info() extends SpawnInfo
 
   class State(
     val selfRef: Refob[Nothing]
-  ) extends Pretty {
-    def pretty: String = "<nothing>"
-  }
+  )
 
   /**
    * Transform a message from a non-GC actor so that it can be understood

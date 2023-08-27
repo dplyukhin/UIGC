@@ -11,17 +11,6 @@ package object uigc {
       case "wrc" => engines.WRC
     }
 
-  object coerce {
-    implicit def gcmessage1[T](msg: protocol.GCMessage[T]): drl.GCMessage[T] =
-      msg.asInstanceOf[drl.GCMessage[T]]
-    implicit def gcmessage2[T](msg: drl.GCMessage[T]): protocol.GCMessage[T] =
-      msg.asInstanceOf[protocol.GCMessage[T]]
-    implicit def ActorRef[T](ref: ActorRef[protocol.GCMessage[T]]): ActorRef[drl.GCMessage[T]] =
-      ref.asInstanceOf[ActorRef[drl.GCMessage[T]]]
-    implicit def refob[T](ref: drl.Refob[T]): protocol.Refob[T] =
-      ref.asInstanceOf[protocol.Refob[T]]
-  }
-
   type ActorRef[-T] = protocol.Refob[T]
 
   type Behavior[T] = unmanaged.Behavior[protocol.GCMessage[T]]
