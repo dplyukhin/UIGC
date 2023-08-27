@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.drl
+package edu.illinois.osl.uigc.engines.drl
 
 import edu.illinois.osl.uigc.interfaces._
 import akka.actor.typed.ActorRef

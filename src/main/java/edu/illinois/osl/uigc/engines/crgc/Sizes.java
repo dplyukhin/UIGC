@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone;
+package edu.illinois.osl.uigc.engines.crgc;
 
 public class Sizes {
     final public static short DeltaGraphSize = 64;

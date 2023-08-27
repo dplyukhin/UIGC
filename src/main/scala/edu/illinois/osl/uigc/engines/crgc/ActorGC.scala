@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone
+package edu.illinois.osl.uigc.engines.crgc
 
 import akka.actor.{Actor, ActorIdentity, ActorRef, ActorSelection, ActorSystem, Address, ClassicActorSystemProvider, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, Identify, Props, RootActorPath, Timers}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, TimerScheduler}
@@ -62,8 +62,8 @@ object Bookkeeper {
 class Bookkeeper extends Actor with Timers {
   import Bookkeeper._
 
-  private val numNodes = Monotone.config.getInt("gc.crgc.num-nodes")
-  private val waveFrequency: Int = Monotone.config.getInt("gc.crgc.wave-frequency")
+  private val numNodes = CRGC.config.getInt("gc.crgc.num-nodes")
+  private val waveFrequency: Int = CRGC.config.getInt("gc.crgc.wave-frequency")
 
   private val thisAddress: Address = if (numNodes > 1)  Cluster(context.system).selfMember.address else null
   private var remoteGCs: Map[Address, ActorSelection] = Map()
@@ -95,7 +95,7 @@ class Bookkeeper extends Actor with Timers {
     // Start processing entries
     timers.startTimerWithFixedDelay(Wakeup, Wakeup, 50.millis)
     // Start triggering GC waves
-    if (Monotone.collectionStyle == Monotone.Wave) {
+    if (CRGC.collectionStyle == CRGC.Wave) {
       timers.startTimerWithFixedDelay(StartWave, StartWave, waveFrequency.millis)
     }
     // Start asking egress actors to finalize entries
@@ -245,7 +245,7 @@ class Bookkeeper extends Actor with Timers {
 
           // Put back the entry
           entry.clean()
-          Monotone.EntryPool.add(entry)
+          CRGC.EntryPool.add(entry)
           // Try and get another one
           entry = queue.poll()
         }

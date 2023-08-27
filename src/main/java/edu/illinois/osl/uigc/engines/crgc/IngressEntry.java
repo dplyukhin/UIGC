@@ -1,11 +1,10 @@
-package edu.illinois.osl.uigc.protocols.monotone;
+package edu.illinois.osl.uigc.engines.crgc;
 
 import akka.actor.Address;
 import akka.actor.ActorRef;
 
 import java.io.Serializable;
 import java.util.HashMap;
-import java.util.Iterator;
 
 public class IngressEntry implements Serializable {
     HashMap<ActorRef, Field> admitted;

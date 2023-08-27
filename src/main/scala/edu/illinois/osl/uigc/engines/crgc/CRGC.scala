@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone
+package edu.illinois.osl.uigc.engines.crgc
 
 import scala.jdk.CollectionConverters._
 import akka.{actor => classic}
@@ -6,7 +6,7 @@ import akka.actor.{ActorSelectionMessage, Address, ExtendedActorSystem}
 import akka.actor.typed.{Signal, Terminated}
 import com.typesafe.config.ConfigFactory
 import edu.illinois.osl.uigc.interfaces._
-import edu.illinois.osl.uigc.protocols.{Protocol, monotone}
+import edu.illinois.osl.uigc.engines.{Engine, crgc}
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
 import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
@@ -18,7 +18,7 @@ import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
-object Monotone extends Protocol {
+object CRGC extends Engine {
   trait CollectionStyle
   case object Wave extends CollectionStyle
   case object OnBlock extends CollectionStyle
@@ -33,9 +33,9 @@ object Monotone extends Protocol {
 
   val EntryPool: ConcurrentLinkedQueue[Entry] = new ConcurrentLinkedQueue[Entry]()
 
-  type GCMessage[+T] = monotone.GCMessage[T]
-  type Refob[-T] = monotone.Refob[T]
-  type State = monotone.State
+  type GCMessage[+T] = crgc.GCMessage[T]
+  type Refob[-T] = crgc.Refob[T]
+  type State = crgc.State
 
   class SpawnInfo(
     var creator: Option[Refob[Nothing]],
@@ -108,20 +108,20 @@ object Monotone extends Protocol {
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     msg match {
       case StopMsg =>
-        Protocol.ShouldStop
+        Engine.ShouldStop
       case WaveMsg =>
         sendEntry(state.finalizeEntry(false), ctx)
         for (child <- ctx.children) {
           child.unsafeUpcast[GCMessage[Any]].tell(WaveMsg)
         }
-        Protocol.ShouldContinue
+        Engine.ShouldContinue
       case _ =>
         if (collectionStyle == OnIdle)
           sendEntry(state.finalizeEntry(false), ctx)
-        Protocol.ShouldContinue
+        Engine.ShouldContinue
     }
 
   override def createRef[S,T](
@@ -162,8 +162,8 @@ object Monotone extends Protocol {
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
-    Protocol.Unhandled
+  ): Engine.TerminationDecision =
+    Engine.Unhandled
 
   private def sendEntry[T](
     entry: Entry,

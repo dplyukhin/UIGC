@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.drl
+package edu.illinois.osl.uigc.engines.drl
 
 import akka.actor.{Address, ExtendedActorSystem}
 import akka.actor.typed.{PostStop, Signal, Terminated}
@@ -8,9 +8,9 @@ import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelop
 
 import scala.collection.mutable
 import edu.illinois.osl.uigc.interfaces._
-import edu.illinois.osl.uigc.protocols.{Protocol, drl}
+import edu.illinois.osl.uigc.engines.{Engine, drl}
 
-object DRL extends Protocol {
+object DRL extends Engine {
 
   type GCMessage[+T] = drl.GCMessage[T]
   type Refob[-T] = drl.Refob[T]
@@ -82,10 +82,10 @@ object DRL extends Protocol {
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     msg match {
       case Kill =>
-        Protocol.ShouldStop
+        Engine.ShouldStop
       case _ =>
         tryTerminate(state, ctx)
     }
@@ -96,11 +96,11 @@ object DRL extends Protocol {
   def tryTerminate[T](
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision = {
+  ): Engine.TerminationDecision = {
     if (ctx.children.nonEmpty || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
-      Protocol.ShouldContinue
+      Engine.ShouldContinue
     else
-      Protocol.ShouldStop
+      Engine.ShouldStop
   }
 
   override def createRef[S,T](
@@ -145,12 +145,12 @@ object DRL extends Protocol {
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     signal match {
       case signal: Terminated =>
         tryTerminate(state, ctx)
       case signal =>
-        Protocol.Unhandled
+        Engine.Unhandled
     }
 
   override def sendMessage[T, S](

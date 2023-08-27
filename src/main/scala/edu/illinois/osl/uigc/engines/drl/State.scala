@@ -1,8 +1,8 @@
-package edu.illinois.osl.uigc.protocols.drl
+package edu.illinois.osl.uigc.engines.drl
 
 import akka.actor.typed.{PostStop, Terminated, Signal}
 import scala.collection.mutable
-import edu.illinois.osl.uigc.protocols.Protocol
+import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces.Pretty
 import edu.illinois.osl.uigc.interfaces.Pretty._
 

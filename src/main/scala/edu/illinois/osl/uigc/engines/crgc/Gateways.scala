@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone
+package edu.illinois.osl.uigc.engines.crgc
 
 import akka.actor.{ActorSelectionMessage, Address, ExtendedActorSystem}
 import akka.cluster.Cluster

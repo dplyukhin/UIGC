@@ -2,7 +2,7 @@ package edu.illinois.osl.uigc
 
 import akka.actor.typed.{PostStop, Terminated, Signal, ExtensibleBehavior, TypedActorContext}
 import akka.actor.typed.scaladsl
-import edu.illinois.osl.uigc.protocols.Protocol
+import edu.illinois.osl.uigc.engines.Engine
 
 abstract class AbstractBehavior[T](context: ActorContext[T])
   extends ExtensibleBehavior[protocol.GCMessage[T]] {
@@ -22,8 +22,8 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
     }
 
     protocol.onIdle(msg, context.state, context.rawContext) match {
-      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
-      case _: Protocol.ShouldContinue.type => result
+      case _: Engine.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Engine.ShouldContinue.type => result
     }
   }
 
@@ -34,9 +34,9 @@ abstract class AbstractBehavior[T](context: ActorContext[T])
       onSignal.applyOrElse(msg, { case _ => scaladsl.Behaviors.unhandled }: PartialFunction[Signal, Behavior[T]]) 
 
     protocol.postSignal(msg, context.state, context.rawContext) match {
-      case _: Protocol.Unhandled.type => result
-      case _: Protocol.ShouldStop.type => scaladsl.Behaviors.stopped
-      case _: Protocol.ShouldContinue.type => 
+      case _: Engine.Unhandled.type => result
+      case _: Engine.ShouldStop.type => scaladsl.Behaviors.stopped
+      case _: Engine.ShouldContinue.type =>
         if (result == scaladsl.Behaviors.unhandled)
           scaladsl.Behaviors.same
         else 

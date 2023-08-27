@@ -1,16 +1,14 @@
 package edu.illinois.osl
 
-import edu.illinois.osl.uigc.unmanaged
-import edu.illinois.osl.uigc.protocols._
-import edu.illinois.osl.uigc.interfaces._
+import edu.illinois.osl.uigc.engines._
 
 package object uigc {
 
-  val protocol: Protocol =
-    System.getProperty("gc.protocol") match {
-      case "NoProtocol" => protocols.NoProtocol
-      case "Monotone" => protocols.monotone.Monotone
-      case "wrc" => protocols.wrc.WRC
+  val protocol: Engine =
+    System.getProperty("gc.engine") match {
+      case "manual" => engines.Manual
+      case "crgc" => engines.crgc.CRGC
+      case "wrc" => engines.WRC
     }
 
   object coerce {

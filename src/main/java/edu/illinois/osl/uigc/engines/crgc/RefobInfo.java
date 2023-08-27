@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone;
+package edu.illinois.osl.uigc.engines.crgc;
 
 /**
  * RefobInfo consists of a message send count and a status bit indicating

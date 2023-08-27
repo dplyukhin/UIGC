@@ -1,18 +1,12 @@
-package edu.illinois.osl.uigc.protocols.wrc
+package edu.illinois.osl.uigc.engines
 
-import edu.illinois.osl.uigc.protocols.Protocol
-import edu.illinois.osl.uigc.interfaces._
-import akka.actor.typed.Signal
-import akka.actor.{ActorPath, Address, ExtendedActorSystem}
-
-import scala.annotation.unchecked.uncheckedVariance
-import scala.collection.mutable
-import akka.actor.typed.Terminated
-import akka.actor.typed.ActorRef
+import akka.actor.typed.{ActorRef, Signal, Terminated}
 import akka.actor.typed.scaladsl.ActorContext
-import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
+import edu.illinois.osl.uigc.interfaces._
 
-object WRC extends Protocol {
+import scala.collection.mutable
+
+object WRC extends Engine {
 
   type Name = ActorRef[GCMessage[Nothing]]
 
@@ -124,17 +118,17 @@ object WRC extends Protocol {
   def tryTerminate[T](
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && ctx.children.isEmpty)
-      Protocol.ShouldStop 
+      Engine.ShouldStop
     else 
-      Protocol.ShouldContinue
+      Engine.ShouldContinue
 
   def onIdle[T](
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]],
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     tryTerminate(state, ctx)
 
   def preSignal[T](
@@ -147,12 +141,12 @@ object WRC extends Protocol {
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
+  ): Engine.TerminationDecision =
     signal match {
       case signal: Terminated =>
         tryTerminate(state, ctx)
       case signal =>
-        Protocol.Unhandled
+        Engine.Unhandled
     }
 
   def createRef[S,T](

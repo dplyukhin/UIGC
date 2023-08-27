@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols
+package edu.illinois.osl.uigc.engines
 
 import edu.illinois.osl.uigc.interfaces._
 import akka.actor.typed.{ActorRef, Signal}
@@ -9,7 +9,7 @@ import scala.annotation.unchecked.uncheckedVariance
 import akka.actor.{ActorPath, Address, ExtendedActorSystem}
 import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 
-object NoProtocol extends Protocol {
+object Manual extends Engine {
   case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message with Pretty {
     def pretty: String = payload.toString
   }
@@ -69,8 +69,8 @@ object NoProtocol extends Protocol {
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]],
-  ): Protocol.TerminationDecision =
-    Protocol.ShouldContinue 
+  ): Engine.TerminationDecision =
+    Engine.ShouldContinue
 
   def preSignal[T](
     signal: Signal, 
@@ -82,8 +82,8 @@ object NoProtocol extends Protocol {
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision =
-    Protocol.Unhandled
+  ): Engine.TerminationDecision =
+    Engine.Unhandled
 
   def createRef[S,T](
     target: Refob[S], 

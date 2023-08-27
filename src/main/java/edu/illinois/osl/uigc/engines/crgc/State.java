@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols.monotone;
+package edu.illinois.osl.uigc.engines.crgc;
 
 import edu.illinois.osl.uigc.interfaces.Pretty;
 
@@ -102,7 +102,7 @@ public class State implements Pretty {
     }
 
     public Entry getEntry() {
-        Entry entry = Monotone.EntryPool().poll();
+        Entry entry = CRGC.EntryPool().poll();
         if (entry == null) {
             entry = new Entry();
         }

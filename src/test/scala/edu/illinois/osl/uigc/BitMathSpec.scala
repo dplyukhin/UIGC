@@ -4,7 +4,7 @@ import org.scalacheck._
 import org.scalacheck.Prop.{forAll, forAllNoShrink}
 
 import scala.util.Random
-import edu.illinois.osl.uigc.protocols.monotone.{RefobInfo, RefobStatus}
+import edu.illinois.osl.uigc.engines.crgc.{RefobInfo, RefobStatus}
 import org.scalacheck.Arbitrary.arbitrary
 
 object BitMathSpec extends Properties("Bitmath") {

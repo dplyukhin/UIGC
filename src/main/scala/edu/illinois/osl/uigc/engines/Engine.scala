@@ -1,4 +1,4 @@
-package edu.illinois.osl.uigc.protocols
+package edu.illinois.osl.uigc.engines
 
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal}
@@ -8,17 +8,46 @@ import akka.stream.stage.{GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{FlowShape, Inlet, Outlet}
 import edu.illinois.osl.uigc.interfaces._
 
-object Protocol {
+object Engine {
   sealed trait TerminationDecision
   case object ShouldStop extends TerminationDecision
   case object ShouldContinue extends TerminationDecision
   case object Unhandled extends TerminationDecision
 }
 
-trait Protocol {
+/** A GC engine is a collection of hooks and datatypes, used by the UIGC API. */
+trait Engine {
+  /**
+   * UIGC actors typically handle two types of messages: "Application messages"
+   * sent by the user's application, and "control messages" sent by the GC engine.
+   * Control messages are handled transparently by the UIGC middleware.
+   *
+   * The [[GCMessage]] type is a supertype of control messages and application messages.
+   *
+   * @tparam T The type of application messages
+   */
   type GCMessage[+T] <: Message with Pretty
+
+  /**
+   * In Akka, two actors on the same ActorSystem can share the same
+   * [[akka.actor.typed.ActorRef]]. In most actor GCs, it's important that actors
+   * do not share references. It's therefore useful to create a wrapper for ActorRefs.
+   * In UIGC, this wrapper is called a [[Refob]] (short for "reference object").
+   *
+   * @tparam T The type of application messages handled by this actor
+   */
   type Refob[-T] <: RefobLike[T]
+
+  /**
+   * When one actor spawns another, some actor GCs need the parent to pass information
+   * to the child. [[SpawnInfo]] is an abstract type that represents that information.
+   */
   type SpawnInfo
+
+  /**
+   * Most actor GCs need to store some state at each actor. That state is represented
+   * by the [[State]] type.
+   */
   type State <: Pretty
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
@@ -64,7 +93,7 @@ trait Protocol {
       msg: GCMessage[T],
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision
+  ): Engine.TerminationDecision
 
   def preSignal[T](
       signal: Signal,
@@ -76,7 +105,7 @@ trait Protocol {
       signal: Signal,
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Protocol.TerminationDecision
+  ): Engine.TerminationDecision
 
   def createRef[S, T](
       target: Refob[S],
