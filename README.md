@@ -29,7 +29,7 @@ can't collect cyclic garbage, e.g. if two actors have references to one another.
 ### Conflict-Replicated Garbage Collection (CRGC)
 
 This is the default GC engine, based on 
-[my PhD thesis](https://youtu.be/akBNZLNp05M). CRGC more general than WRC 
+[Dan Plyukhin's PhD thesis](https://youtu.be/akBNZLNp05M). CRGC more general than WRC 
 and has many good properties:
 
 1. _No message delivery requirements:_ CRGC can be used in Akka Cluster because
@@ -69,12 +69,14 @@ For a guide to using UIGC, see [GUIDE.md](./GUIDE.md).
 
 Working on UIGC is a great way to get involved in research and open source software!
 Start by following the [Installation](#installation) guide. Then check out
-the [issues page](https://github.com/dplyukhin/uigc/issues) to find a starter project.
+the [issues page](https://github.com/dplyukhin/UIGC/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) 
+to find a starter project.
 Once you find a project, leave a comment to let us know you're working on it.
 
 ## License
 
 Please note that this software is released under the _Hippocratic License, v3.0_; see [LICENSE.md](./LICENSE.md) for 
 details. If this license is too restrictive for your organization, feel free to discuss by
-[raising an issue on Github](https://github.com/dplyukhin/uigc/issues).
+[raising an issue](https://github.com/dplyukhin/uigc/issues) or [starting a discussion](https://github.com/dplyukhin/uigc/discussions)
+on Github.
 Please remember to be polite and thoughtful!
