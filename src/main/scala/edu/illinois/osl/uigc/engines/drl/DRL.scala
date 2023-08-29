@@ -1,33 +1,34 @@
 package edu.illinois.osl.uigc.engines.drl
 
-import akka.actor.{Address, ExtendedActorSystem}
-import akka.actor.typed.{PostStop, Signal, Terminated}
-import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
-import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
+import akka.actor.typed.{ActorRef, Signal, Terminated}
+import edu.illinois.osl.uigc.engines.{Engine, drl}
+import edu.illinois.osl.uigc.interfaces
 
 import scala.collection.mutable
-import edu.illinois.osl.uigc.interfaces._
-import edu.illinois.osl.uigc.engines.{Engine, drl}
 
-object DRL extends Engine {
-
-  type GCMessage[+T] = drl.GCMessage[T]
-  type Refob[-T] = drl.Refob[T]
-  type State = drl.State
-
+object DRL {
   class SpawnInfo(
-    val token: Option[Token],
-    val creator: Option[Name]
-  ) extends Serializable
+                   val token: Option[Token],
+                   val creator: Option[Name]
+                 ) extends interfaces.SpawnInfo
+}
 
-  override def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] =
-    AppMsg(payload, None, refs.asInstanceOf[Iterable[Refob[Nothing]]])
+class DRL extends Engine {
+  import DRL._
 
-  override def rootSpawnInfo(): SpawnInfo = 
+  override type GCMessageImpl[+T] = drl.GCMessage[T]
+  override type RefobImpl[-T] = drl.Refob[T]
+  override type StateImpl = drl.State
+  override type SpawnInfoImpl = SpawnInfo
+
+  override def rootMessageImpl[T](payload: T, refs: Iterable[Refob[Nothing]]): GCMessage[T] =
+    AppMsg(payload, None, refs)
+
+  override def rootSpawnInfoImpl(): SpawnInfo =
     new SpawnInfo(None, None)
 
-  override def initState[T](
+  override def initStateImpl[T](
     context: ActorContext[GCMessage[T]],
     spawnInfo: SpawnInfo,
   ): State = {
@@ -35,7 +36,7 @@ object DRL extends Engine {
     state
   }
 
-  def getSelfRef[T](
+  def getSelfRefImpl[T](
     state: State,
     context: ActorContext[GCMessage[T]]
   ): Refob[T] =
@@ -55,7 +56,7 @@ object DRL extends Engine {
     ref
   }
 
-  override def onMessage[T](
+  override def onMessageImpl[T](
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]]
@@ -78,7 +79,7 @@ object DRL extends Engine {
         None
     }
 
-  override def onIdle[T](
+  override def onIdleImpl[T](
     msg: GCMessage[T],
     state: State,
     ctx: ActorContext[GCMessage[T]]
@@ -103,7 +104,7 @@ object DRL extends Engine {
       Engine.ShouldStop
   }
 
-  override def createRef[S,T](
+  override def createRefImpl[S,T](
     target: Refob[S], 
     owner: Refob[Nothing],
     state: State,
@@ -114,7 +115,7 @@ object DRL extends Engine {
     ref
   }
 
-  override def release[S,T](
+  override def releaseImpl[S,T](
     releasing: Iterable[Refob[S]],
     state: State,
     ctx: ActorContext[GCMessage[T]]
@@ -129,19 +130,13 @@ object DRL extends Engine {
     }
   }
 
-  override def releaseEverything[T](
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Unit = 
-    release(state.nontrivialActiveRefs, state, ctx)
-
-  override def preSignal[T](
+  override def preSignalImpl[T](
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
-  override def postSignal[T](
+  override def postSignalImpl[T](
     signal: Signal, 
     state: State,
     ctx: ActorContext[GCMessage[T]]
@@ -153,7 +148,7 @@ object DRL extends Engine {
         Engine.Unhandled
     }
 
-  override def sendMessage[T, S](
+  override def sendMessageImpl[T, S](
     ref: Refob[T],
     msg: T,
     refs: Iterable[Refob[Nothing]],

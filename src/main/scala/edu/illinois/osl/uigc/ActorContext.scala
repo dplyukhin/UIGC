@@ -1,13 +1,13 @@
 package edu.illinois.osl.uigc
 
-import akka.actor.typed
 import akka.actor.typed.scaladsl.AskPattern.{Askable, schedulerFromActorSystem}
-import akka.actor.typed.{Props, SpawnProtocol, scaladsl}
+import akka.actor.typed.{ActorSystem, scaladsl}
 import akka.util.Timeout
-import edu.illinois.osl.uigc.interfaces.RefobLike
+import edu.illinois.osl.uigc.engines.Engine
+import edu.illinois.osl.uigc.interfaces._
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.{Duration, DurationInt}
+import scala.concurrent.{Await, Future}
 
 /**
  * A version of [[scaladsl.ActorContext]] used by garbage-collected actors. Provides
@@ -18,13 +18,15 @@ import scala.concurrent.duration.{Duration, DurationInt}
  * take on.
  */
 class ActorContext[T](
-  val rawContext: scaladsl.ActorContext[protocol.GCMessage[T]],
-  val spawnInfo: protocol.SpawnInfo,
+  val rawContext: scaladsl.ActorContext[GCMessage[T]],
+  val spawnInfo: SpawnInfo,
 ) {
 
-  private[uigc] val state: protocol.State = protocol.initState(rawContext, spawnInfo)
+  private[uigc] val engine: Engine = UIGC(rawContext.system)
 
-  val self: ActorRef[T] = protocol.getSelfRef(state, rawContext)
+  private[uigc] val state: State = engine.initState(rawContext, spawnInfo)
+
+  val self: ActorRef[T] = engine.getSelfRef(state, rawContext)
 
   def name: ActorName = rawContext.self
 
@@ -37,34 +39,27 @@ class ActorContext[T](
    * @return An [[ActorRef]] for the spawned actor.
    */
   def spawn[S](factory: ActorFactory[S], name: String): ActorRef[S] = {
-    protocol.spawnImpl(
+    engine.spawn(
       info => rawContext.spawn(factory(info), name),
       state, rawContext)
   }
 
   def spawnRemote[S](factory: String, location: unmanaged.ActorRef[RemoteSpawner.Command[S]]): ActorRef[S] = {
-    implicit val system = rawContext.system
+    implicit val system: ActorSystem[Nothing] = rawContext.system
     implicit val timeout: Timeout = Timeout(1.minute)
 
-    def spawnIt(info: protocol.SpawnInfo): unmanaged.ActorRef[protocol.GCMessage[S]] = {
-      val f: Future[unmanaged.ActorRef[protocol.GCMessage[S]]] =
-        location.ask((ref: unmanaged.ActorRef[unmanaged.ActorRef[protocol.GCMessage[S]]]) =>
+    def spawnIt(info: SpawnInfo): unmanaged.ActorRef[GCMessage[S]] = {
+      val f: Future[unmanaged.ActorRef[GCMessage[S]]] =
+        location.ask((ref: unmanaged.ActorRef[unmanaged.ActorRef[GCMessage[S]]]) =>
           RemoteSpawner.Spawn(factory, info, ref))
 
-      Await.result[unmanaged.ActorRef[protocol.GCMessage[S]]](f, Duration.Inf)
+      Await.result[unmanaged.ActorRef[GCMessage[S]]](f, Duration.Inf)
     }
 
-    protocol.spawnImpl(
+    engine.spawn(
       info => spawnIt(info),
       state, rawContext)
   }
-
-  def sendMessage[S](ref: RefobLike[S], msg: S, refs: Iterable[RefobLike[Nothing]]): Unit =
-    protocol.sendMessage(
-      ref.asInstanceOf[protocol.Refob[S]],
-      msg,
-      refs.asInstanceOf[Iterable[protocol.Refob[Nothing]]],
-      state, rawContext)
 
   /**
    * Spawn a new anonymous actor into the GC system.
@@ -74,7 +69,7 @@ class ActorContext[T](
    * @return An [[ActorRef]] for the spawned actor.
    */
   def spawnAnonymous[S](factory: ActorFactory[S]): ActorRef[S] = {
-    protocol.spawnImpl(
+    engine.spawn(
       info => rawContext.spawnAnonymous(factory(info)),
       state, rawContext)
   }
@@ -89,14 +84,14 @@ class ActorContext[T](
    * @return The created reference.
    */
   def createRef[S](target: ActorRef[S], owner: ActorRef[Nothing]): ActorRef[S] = {
-    protocol.createRef(target, owner, state, rawContext)
+    engine.createRef(target, owner, state, rawContext)
   }
 
   /**
    * Releases a collection of references from an actor.
    */
   def release(releasing: Iterable[ActorRef[Nothing]]): Unit = {
-    protocol.release(releasing, state, rawContext)
+    engine.release(releasing, state, rawContext)
   }
 
   /**
@@ -104,10 +99,5 @@ class ActorContext[T](
    * @param releasing A list of references.
    */
   def release(releasing: ActorRef[Nothing]*): Unit = release(releasing)
-
-  /**
-   * Release all references owned by this actor.
-   */
-  def releaseEverything(): Unit = protocol.releaseEverything(state, rawContext)
 
 }

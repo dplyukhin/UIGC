@@ -7,6 +7,7 @@ import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, Reusab
 import akka.stream.stage.{GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{FlowShape, Inlet, Outlet}
 import akka.util.OptionVal
+import edu.illinois.osl.uigc.UIGC
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.IterableHasAsJava
@@ -18,7 +19,7 @@ object Gateway {
     * you send a message from its garbage collector to the destination garbage collector - and the
     * message is intercepted.
     */
-  trait Msg extends Bookkeeper.Msg
+  trait Msg extends LocalGC.Msg
 }
 
 trait Gateway {
@@ -74,7 +75,7 @@ class Egress(
       override def onPush(): Unit = {
         val env = grab(in)
 
-        //println(s"Egress $location: ${env.message}")
+        // println(s"Egress $location: ${env.message}")
         env.message match {
           case msg: AppMsg[_] =>
             // Set the window, update the entry, and push it on through
@@ -86,9 +87,10 @@ class Egress(
           case ActorSelectionMessage(Egress.FinalizeEgressEntry, _, _) =>
             // Being asked to finalize the entry. Push it to the ingress.
             val oldEntry = finalizeEntry()
-            //println(s"Egress $location finalizing entry, window=${oldEntry.id}")
+            // println(s"Egress $location finalizing entry, window=${oldEntry.id}")
             push(
-              out, newOutboundEnvelope(oldEntry)
+              out,
+              newOutboundEnvelope(oldEntry)
             )
 
           case _ =>
@@ -101,19 +103,15 @@ class Egress(
   setHandler(
     out,
     new OutHandler {
-      override def onPull(): Unit = {
+      override def onPull(): Unit =
         pull(in)
-      }
     }
   )
 
   private def newOutboundEnvelope(msg: AnyRef): OutboundEnvelope =
     outboundEnvelopePool
       .acquire()
-      .init(
-        recipient = OptionVal.None,
-        message = msg,
-        sender = OptionVal.None)
+      .init(recipient = OptionVal.None, message = msg, sender = OptionVal.None)
 }
 
 object Ingress {
@@ -122,13 +120,13 @@ object Ingress {
 
 class Ingress(system: ExtendedActorSystem, adjacentAddress: Address) extends Gateway {
   override val thisAddress: Address = Cluster(system).selfAddress
+  private val gc = UIGC(system).asInstanceOf[CRGC].bookkeeper
   override var egressAddress: Address = adjacentAddress
   override var ingressAddress: Address = Cluster(system).selfAddress
   override var currentEntry: IngressEntry = createEntry()
-  private val gc = ActorGC(system).bookkeeper
   println(s"Spawned ingress actor $location.")
 
-  gc ! Bookkeeper.NewIngressActor(adjacentAddress, () => finalizeAndSendEntry(true))
+  gc ! LocalGC.NewIngressActor(adjacentAddress, () => finalizeAndSendEntry(true))
 
   def finalizeAndSendEntry(isFinal: Boolean = false): Unit = {
     val oldEntry = finalizeEntry()
@@ -138,7 +136,7 @@ class Ingress(system: ExtendedActorSystem, adjacentAddress: Address) extends Gat
       // This entry shouldn't be used again!
       currentEntry = null
     }
-    gc ! Bookkeeper.LocalIngressEntry(oldEntry)
+    gc ! LocalGC.LocalIngressEntry(oldEntry)
   }
 }
 
@@ -159,7 +157,7 @@ class MultiIngress(
         val env = grab(in)
         env.originUid
 
-        //println(s"Ingress: ${env.message} from ${env.association.toOption.map(_.remoteAddress)}")
+        // println(s"Ingress: ${env.message} from ${env.association.toOption.map(_.remoteAddress)}")
         env.message match {
           case msg: AppMsg[_] =>
             val addr = env.association.get.remoteAddress
@@ -168,7 +166,7 @@ class MultiIngress(
             push(out, env)
 
           case entry: IngressEntry =>
-            //println(s"Received egress entry (${entry.egressAddress},${entry.ingressAddress}) window=${entry.id}")
+            // println(s"Received egress entry (${entry.egressAddress},${entry.ingressAddress}) window=${entry.id}")
             ingressActors(entry.egressAddress).finalizeAndSendEntry()
             pull(in)
 

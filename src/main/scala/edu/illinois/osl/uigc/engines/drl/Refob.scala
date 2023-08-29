@@ -1,9 +1,7 @@
 package edu.illinois.osl.uigc.engines.drl
 
-import edu.illinois.osl.uigc.interfaces._
 import akka.actor.typed.ActorRef
-import akka.actor.typed.scaladsl.ActorContext
-import scala.annotation.unchecked.uncheckedVariance
+import edu.illinois.osl.uigc.interfaces
 
 /**
  * An opaque and globally unique token.
@@ -14,4 +12,4 @@ case class Refob[-T](
   token: Option[Token],
   owner: Option[ActorRef[GCMessage[Nothing]]],
   target: ActorRef[GCMessage[T]],
-) extends RefobLike[T]
+) extends interfaces.Refob[T]

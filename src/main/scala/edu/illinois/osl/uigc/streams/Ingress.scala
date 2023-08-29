@@ -1,10 +1,10 @@
 package edu.illinois.osl.uigc.streams
 
 import akka.actor.{Address, ExtendedActorSystem}
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
 import akka.remote.artery.InboundEnvelope
-import edu.illinois.osl.uigc.protocol
+import akka.stream.stage.{GraphStage, GraphStageLogic}
+import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import edu.illinois.osl.uigc.UIGC
 
 class Ingress(system: ExtendedActorSystem, adjacentSystem: Address)
   extends GraphStage[FlowShape[InboundEnvelope, InboundEnvelope]] {
@@ -14,7 +14,7 @@ class Ingress(system: ExtendedActorSystem, adjacentSystem: Address)
   val shape: FlowShape[InboundEnvelope, InboundEnvelope] = FlowShape(in, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
-    protocol.spawnIngress(in, out, shape, system, adjacentSystem)
+    UIGC(system).spawnIngress(in, out, shape, system, adjacentSystem)
   }
 }
 

@@ -1,6 +1,6 @@
 package edu.illinois.osl.uigc.engines.crgc;
 
-public class State {
+public class State implements edu.illinois.osl.uigc.interfaces.State {
 
     /** This actor's ref to itself */
     Refob<?> self;

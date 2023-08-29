@@ -1,14 +1,15 @@
 package edu.illinois.osl.uigc.engines.crgc
 
-import edu.illinois.osl.uigc.interfaces.Message
+import edu.illinois.osl.uigc.interfaces
 
-sealed trait GCMessage[+T] extends Message
+sealed trait GCMessage[+T] extends interfaces.GCMessage[T]
 
 final case class AppMsg[+T](
-  payload: T, refs: Iterable[Refob[Nothing]]
+    payload: T,
+    refs: Iterable[Refob[Nothing]]
 ) extends GCMessage[T] {
   var windowID: Int = -1
-    // This field is set by the egress if the message gets sent to another node.
+  // This field is set by the egress if the message gets sent to another node.
 }
 
 case object StopMsg extends GCMessage[Any] {

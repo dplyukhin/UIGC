@@ -1,58 +1,71 @@
 package edu.illinois.osl.uigc.engines
 
-import akka.actor.typed.{ActorRef, Signal, Terminated}
+import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
-import edu.illinois.osl.uigc.interfaces._
+import akka.actor.typed.{ActorRef, Signal, Terminated}
+import edu.illinois.osl.uigc.interfaces
 
 import scala.collection.mutable
 
-object WRC extends Engine {
-
+object WRC {
   type Name = ActorRef[GCMessage[Nothing]]
 
-  val RC_INC: Long = 255
+  private val RC_INC: Long = 255
 
-  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T]
+  sealed trait SpawnInfo extends interfaces.SpawnInfo
 
-  trait GCMessage[+T] extends Message
-  case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean) extends GCMessage[T]
-  case object IncMsg extends GCMessage[Nothing] {
-    override def refs: Iterable[RefobLike[Nothing]] = Nil
-  }
-  case class DecMsg(weight: Long) extends GCMessage[Nothing] {
-    override def refs: Iterable[RefobLike[Nothing]] = Nil
-  }
+  trait GCMessage[+T] extends interfaces.GCMessage[T]
 
-  class Pair (
-    var numRefs: Long = 0,
-    var weight: Long = 0
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T]
+
+  case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean)
+      extends GCMessage[T]
+
+  class Pair(
+      var numRefs: Long = 0,
+      var weight: Long = 0
   )
 
-  class State(val self: Refob[Nothing], val kind: SpawnInfo) {
+  class State(val self: Refob[Nothing], val kind: SpawnInfo) extends interfaces.State {
+    val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
     var rc: Long = RC_INC
     var pendingSelfMessages: Long = 0
-    val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
   }
 
-  sealed trait SpawnInfo extends Serializable
-  case object IsRoot extends SpawnInfo
-  case object NonRoot extends SpawnInfo
+  private case class DecMsg(weight: Long) extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
 
-  /**
-   * Transform a message from a non-GC actor so that it can be understood
-   * by a GC actor. Necessarily, the recipient is a root actor.
-   */
-  def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] = 
-    AppMsg(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]], isSelfMsg = false)
+  private case object IncMsg extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
 
-  /** 
-   * Produces SpawnInfo indicating to the actor that it is a root actor.
-   */
-  def rootSpawnInfo(): SpawnInfo = IsRoot
+  private case object IsRoot extends SpawnInfo
 
-  def initState[T](
-    context: ActorContext[GCMessage[T]],
-    spawnInfo: SpawnInfo,
+  private case object NonRoot extends SpawnInfo
+}
+
+class WRC(system: ExtendedActorSystem) extends Engine {
+  import WRC._
+
+  override type GCMessageImpl[+T] = WRC.GCMessage[T]
+  override type RefobImpl[-T] = WRC.Refob[T]
+  override type SpawnInfoImpl = WRC.SpawnInfo
+  override type StateImpl = WRC.State
+
+  /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
+    * Necessarily, the recipient is a root actor.
+    */
+  override def rootMessageImpl[T](payload: T, refs: Iterable[Refob[Nothing]]): GCMessage[T] =
+    AppMsg(payload, refs, isSelfMsg = false)
+
+  /** Produces SpawnInfo indicating to the actor that it is a root actor.
+    */
+  override def rootSpawnInfoImpl(): SpawnInfo = IsRoot
+
+  override def initStateImpl[T](
+      context: ActorContext[GCMessage[T]],
+      spawnInfo: SpawnInfo
   ): State = {
     val state = new State(Refob(context.self), spawnInfo)
     val pair = new Pair(numRefs = 1, weight = RC_INC)
@@ -60,16 +73,16 @@ object WRC extends Engine {
     state
   }
 
-  def getSelfRef[T](
-    state: State,
-    context: ActorContext[GCMessage[T]]
+  override def getSelfRefImpl[T](
+      state: State,
+      context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.self.asInstanceOf[Refob[T]]
 
-  def spawnImpl[S, T](
-    factory: SpawnInfo => ActorRef[GCMessage[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def spawnImpl[S, T](
+      factory: SpawnInfo => ActorRef[GCMessage[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val actorRef = factory(NonRoot)
     ctx.watch(actorRef)
@@ -79,12 +92,12 @@ object WRC extends Engine {
     refob
   }
 
-  def onMessage[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]],
+  override def onMessageImpl[T](
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Option[T] = msg match {
-    case AppMsg(payload, refs, isSelfMsg) => 
+    case AppMsg(payload, refs, isSelfMsg) =>
       if (isSelfMsg) {
         state.pendingSelfMessages -= 1
       }
@@ -94,40 +107,31 @@ object WRC extends Engine {
         pair.weight = pair.weight + 1
       }
       Some(payload)
-    case DecMsg(weight) => 
+    case DecMsg(weight) =>
       state.rc = state.rc - weight
       None
-    case IncMsg => 
-      state.rc =  state.rc + RC_INC
+    case IncMsg =>
+      state.rc = state.rc + RC_INC
       None
   }
 
-  def tryTerminate[T](
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Engine.TerminationDecision =
-    if (state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && ctx.children.isEmpty)
-      Engine.ShouldStop
-    else 
-      Engine.ShouldContinue
-
-  def onIdle[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]],
+  override def onIdleImpl[T](
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     tryTerminate(state, ctx)
 
-  def preSignal[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def preSignalImpl[T](
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
-  def postSignal[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def postSignalImpl[T](
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     signal match {
       case signal: Terminated =>
@@ -136,62 +140,61 @@ object WRC extends Engine {
         Engine.Unhandled
     }
 
-  def createRef[S,T](
-    target: Refob[S], 
-    owner: Refob[Nothing],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Refob[S] = {
+  def tryTerminate[T](
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Engine.TerminationDecision =
+    if (
+      state.kind == NonRoot && state.rc == 0 && state.pendingSelfMessages == 0 && ctx.children.isEmpty
+    )
+      Engine.ShouldStop
+    else
+      Engine.ShouldContinue
+
+  override def createRefImpl[S, T](
+      target: Refob[S],
+      owner: Refob[Nothing],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Refob[S] =
     if (target.target == ctx.self) {
       state.rc += 1
       Refob(target.target)
-    }
-    else {
+    } else {
       val pair = state.actorMap(target.target)
       if (pair.weight <= 1) {
-          pair.weight = pair.weight + RC_INC - 1
-          target.target ! IncMsg
-      }
-      else {
-          pair.weight -= 1
+        pair.weight = pair.weight + RC_INC - 1
+        target.target ! IncMsg
+      } else {
+        pair.weight -= 1
       }
       Refob(target.target)
     }
-  }
 
-  def release[S,T](
-    releasing: Iterable[Refob[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Unit = {
-    for (ref <- releasing) {
+  override def releaseImpl[S, T](
+      releasing: Iterable[Refob[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Unit =
+    for (ref <- releasing)
       if (ref.target == ctx.self) {
         state.rc -= 1
-      }
-      else {
+      } else {
         val pair = state.actorMap(ref.target)
         if (pair.numRefs <= 1) {
-            ref.target ! DecMsg(pair.weight)
-            state.actorMap.remove(ref.target)
-        }
-        else {
-            pair.numRefs -= 1
+          ref.target ! DecMsg(pair.weight)
+          state.actorMap.remove(ref.target)
+        } else {
+          pair.numRefs -= 1
         }
       }
-    }
-  }
 
-  def releaseEverything[T](
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Unit = ???
-
-  override def sendMessage[T, S](
-    ref: Refob[T],
-    msg: T,
-    refs: Iterable[Refob[Nothing]],
-    state: State,
-    ctx: ActorContext[GCMessage[S]]
+  override def sendMessageImpl[T, S](
+      ref: Refob[T],
+      msg: T,
+      refs: Iterable[Refob[Nothing]],
+      state: State,
+      ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     val isSelfMsg = ref.target == state.self.target
     if (isSelfMsg) {
