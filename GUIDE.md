@@ -40,10 +40,13 @@ akka {
 }
 ```
 
-In addition, the following settings can be used to configure UIGC itself.
-```scala
+To select a GC engine, set `uigc.engine` to "crgc", "wrc", or "manual";
+the default is "crgc".
 
-```
+If you are using the CRGC engine, you must also configure the value of
+`uigc.crgc.num-nodes`. Set this property to the total number of ActorSystems
+in the cluster. Note that garbage collection will not begin until all the
+nodes have joined the cluster.
 
 ## Overview
 
