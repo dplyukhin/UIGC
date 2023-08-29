@@ -38,10 +38,11 @@ akka {
     }
   }
 }
-my-pinned-dispatcher {
-  executor = "thread-pool-executor"
-  type = PinnedDispatcher
-}
+```
+
+In addition, the following settings can be used to configure UIGC itself.
+```scala
+
 ```
 
 ## Overview
