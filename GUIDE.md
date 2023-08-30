@@ -124,47 +124,36 @@ The last message, `BazMsg`, doesn't contain any actor references.
 As a shortcut instead of implementing `def refs = Nil`, you can simply mix in
 the trait `uigc.interfaces.NoRefs`.
 
-### Spawning root actors
+### Creating an actor system
 
-Currently, Akka doesn't understand how to interact with UIGC actors.
-We therefore need two kinds of UIGC actors:
-
-1. **Root actors**, which "pretend" to be Akka actors. Root actors
-   need to be manually garbage collected.
-2. **Managed actors**, which are automatically garbage collected.
-
-Akka only understands how to spawn root actors. Once you've spawned
-a root actor, the root actor will be capable of spawning managed actors.
-
-To spawn a root actor, use `uigc.Behaviors.setupRoot`. 
+We say that an actor is *managed* if it was created using the
+UIGC APIs. UIGC has its own versions of the `akka.actor.typed` APIs for 
+creating a managed actor system:
 
 ```scala
-import akka.actor.typed
+// Import from UIGC, *not* akka.actor.typed!
+import edu.illinois.osl.uigc.{ActorSystem, Behaviors, ActorContext, AbstractBehavior, ActorFactory}
 
-trait RootMsg extends uigc.interfaces.Message
+trait GuardianMsg extends uigc.interfaces.Message
 
-class MyRootActor(ctx: uigc.ActorContext[RootMsg]) 
-  extends uigc.AbstractBehavior[RootMsg](ctx) {
+class MyGuardianActor(ctx: ActorContext[GuardianMsg]) 
+  extends AbstractBehavior[GuardianMsg](ctx) {
     ...
 }
 
-object MyRootActor {
-  /** A recipe for spawning MyRootActor as a root. */
-  def apply(): typed.Behavior[RootMsg] =
-    Behaviors.setupRoot { context =>
-      new MyRootActor(context)
+object MyGuardianActor {
+  def apply(): ActorFactory[GuardianMsg] =
+    Behaviors.setup { context =>
+      new MyGuardianActor(context)
     }
 }
 
-// We can now create an ActorSystem with MyRootActor as a root:
-val system: typed.ActorSystem[RootMsg] = 
-  typed.ActorSystem(MyRootActor())
+val system: ActorSystem[GuardianMsg] = ActorSystem(MyGuardianActor())
 ```
 
 ### Spawning managed actors
 
-Root actors can spawn managed actors. To spawn a managed actor,
-use `uigc.Behaviors.setup`:
+To spawn a managed actor, use `uigc.Behaviors.setup`:
 
 ```scala
 object MyActor {
@@ -175,9 +164,9 @@ object MyActor {
     }
 }
 
-// Instances of MyActor can be spawned by MyRootActor:
-class MyRootActor(ctx: uigc.ActorContext[RootMsg])
-  extends uigc.AbstractBehavior[RootMsg](ctx) {
+// Instances of MyActor can be spawned by MyGuardianActor:
+class MyGuardianActor(ctx: ActorContext[GuardianMsg])
+  extends AbstractBehavior[GuardianMsg](ctx) {
   
   val child1 = ctx.spawn(MyActor())
   val child2 = ctx.spawn(MyActor())
@@ -190,8 +179,8 @@ Garbage collecting actors is all about tracking references.
 In the current version of UIGC, you'll need to create and delete references
 manually.
 
-Suppose our root actor wants `child1` to send messages to `child2`.
-The root actor needs to create a reference to `child2` for `child1`
+Suppose our guardian actor wants `child1` to send messages to `child2`.
+The guardian actor needs to create a reference to `child2` for `child1`
 to use:
 ```scala
 val child1 = ctx.spawn(MyActor())
@@ -200,8 +189,8 @@ val child2_ref_for_child1 = ctx.createRef(child2, child1)
 child1 ! FriendMsg(child2_ref_for_child1)
 ```
 
-Now suppose our root actor no longer needs references to `child1` and
-`child2`. Then the root needs to manually deactivate those references:
+Now suppose our guardian actor no longer needs references to `child1` and
+`child2`. Then the guardian needs to manually deactivate those references:
 ```scala
 ctx.release(child1)
 ctx.release(child2)
