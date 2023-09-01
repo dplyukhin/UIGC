@@ -1,28 +1,21 @@
 package edu.illinois.osl
 
-import edu.illinois.osl.uigc.engines._
+import edu.illinois.osl.uigc.interfaces._
 
 package object uigc {
 
-  val protocol: Engine =
-    System.getProperty("gc.engine") match {
-      case "manual" => engines.Manual
-      case "crgc" => engines.crgc.CRGC
-      case "wrc" => engines.WRC
-    }
+  type ActorRef[-T] = Refob[T]
 
-  type ActorRef[-T] = protocol.Refob[T]
-
-  type Behavior[T] = unmanaged.Behavior[protocol.GCMessage[T]]
+  type Behavior[T] = unmanaged.Behavior[GCMessage[T]]
 
   type ActorName = unmanaged.ActorRef[Nothing]
 
   /**
    * A recipe for spawning a garbage-collected actor. Similar to
-   * [[AkkaBehavior]], but this recipe can only be used by *GC-aware* actors,
+   * [[Behavior]], but this recipe can only be used by *GC-aware* actors,
    * i.e. a root actor or another garbage-collected actor.
    */
-  type ActorFactory[T] = protocol.SpawnInfo => Behavior[T]
+  type ActorFactory[T] = SpawnInfo => Behavior[T]
 
   object unmanaged {
     import akka.actor.typed
@@ -37,8 +30,8 @@ package object uigc {
     trait Command[T] extends Serializable
     case class Spawn[T](
       factory: String,
-      info: protocol.SpawnInfo,
-      replyTo: unmanaged.ActorRef[unmanaged.ActorRef[protocol.GCMessage[T]]]
+      info: SpawnInfo,
+      replyTo: unmanaged.ActorRef[unmanaged.ActorRef[GCMessage[T]]]
     ) extends Command[T]
 
     def apply[T](factories: Map[String, ActorContext[T] => Behavior[T]]): unmanaged.Behavior[Command[T]] =

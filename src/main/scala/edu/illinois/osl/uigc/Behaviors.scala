@@ -1,11 +1,10 @@
 package edu.illinois.osl.uigc
 
 import akka.actor.typed
-import akka.actor.typed.scaladsl
 import akka.actor.typed.BehaviorInterceptor.ReceiveTarget
 import akka.actor.typed.scaladsl.TimerScheduler
-import akka.actor.typed.{BehaviorInterceptor, TypedActorContext}
-import edu.illinois.osl.uigc.interfaces.Message
+import akka.actor.typed.{BehaviorInterceptor, TypedActorContext, scaladsl}
+import edu.illinois.osl.uigc.interfaces._
 
 import scala.reflect.ClassTag
 
@@ -15,18 +14,18 @@ object Behaviors {
    * produced by this method can only be used by *GC-aware* actors.
    */
   def setup[T](factory: ActorContext[T] => Behavior[T]): ActorFactory[T] =
-    (info: protocol.SpawnInfo) =>
+    (info: SpawnInfo) =>
       scaladsl.Behaviors.setup(context => factory(new ActorContext(context, info)))
 
   private class RootAdapter[T <: Message](
     implicit interceptMessageClassTag: ClassTag[T]
-  ) extends BehaviorInterceptor[T, protocol.GCMessage[T]] {
+  ) extends BehaviorInterceptor[T, GCMessage[T]] {
     def aroundReceive(
       ctx: TypedActorContext[T], 
       msg: T, 
-      target: ReceiveTarget[protocol.GCMessage[T]]
+      target: ReceiveTarget[GCMessage[T]]
     ): Behavior[T] =
-      target.apply(ctx, protocol.rootMessage(msg, msg.refs))
+      target.apply(ctx, UIGC(ctx.asScala.system).rootMessage(msg, msg.refs))
   }
 
   /**
@@ -41,7 +40,7 @@ object Behaviors {
   )(implicit classTag: ClassTag[T]): typed.Behavior[T] = {
 
     val b: Behavior[T] = scaladsl.Behaviors.setup(context =>
-      factory(new ActorContext(context, protocol.rootSpawnInfo()))
+      factory(new ActorContext(context, UIGC(context.system).rootSpawnInfo()))
     )
 
     scaladsl.Behaviors.intercept(() => new RootAdapter[T]())(b)

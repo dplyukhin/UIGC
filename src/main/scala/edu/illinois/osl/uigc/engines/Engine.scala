@@ -2,7 +2,7 @@ package edu.illinois.osl.uigc.engines
 
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal}
-import akka.actor.{Address, ExtendedActorSystem}
+import akka.actor.{Address, ExtendedActorSystem, Extension}
 import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
 import akka.stream.stage.{GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{FlowShape, Inlet, Outlet}
@@ -16,113 +16,204 @@ object Engine {
 }
 
 /** A GC engine is a collection of hooks and datatypes, used by the UIGC API. */
-trait Engine {
-  /**
-   * UIGC actors typically handle two types of messages: "Application messages"
-   * sent by the user's application, and "control messages" sent by the GC engine.
-   * Control messages are handled transparently by the UIGC middleware.
-   *
-   * The [[GCMessage]] type is a supertype of control messages and application messages.
-   *
-   * @tparam T The type of application messages
-   */
-  type GCMessage[+T] <: Message
-
-  /**
-   * In Akka, two actors on the same ActorSystem can share the same
-   * [[akka.actor.typed.ActorRef]]. In most actor GCs, it's important that actors
-   * do not share references. It's therefore useful to create a wrapper for ActorRefs.
-   * In UIGC, this wrapper is called a [[Refob]] (short for "reference object").
-   *
-   * @tparam T The type of application messages handled by this actor
-   */
-  type Refob[-T] <: RefobLike[T]
-
-  /**
-   * When one actor spawns another, some actor GCs need the parent to pass information
-   * to the child. [[SpawnInfo]] is an abstract type that represents that information.
-   */
-  type SpawnInfo
-
-  /**
-   * Most actor GCs need to store some state at each actor. That state is represented
-   * by the [[State]] type.
-   */
-  type State
+trait Engine extends Extension {
+  type RefobImpl[T] <: Refob[T]
+  type GCMessageImpl[T] <: GCMessage[T]
+  type SpawnInfoImpl <: SpawnInfo
+  type StateImpl <: State
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.
     */
-  def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T]
+  final def rootMessage[T](payload: T, refs: Iterable[Refob[Nothing]]): GCMessage[T] =
+    rootMessageImpl(payload, refs.asInstanceOf[Iterable[RefobImpl[Nothing]]])
+
+  def rootMessageImpl[T](payload: T, refs: Iterable[RefobImpl[Nothing]]): GCMessage[T]
 
   /** Produces SpawnInfo indicating to the actor that it is a root actor.
     */
-  def rootSpawnInfo(): SpawnInfo
+  final def rootSpawnInfo(): SpawnInfo =
+    rootSpawnInfoImpl()
 
-  def initState[T](
+  def rootSpawnInfoImpl(): SpawnInfoImpl
+
+  /** Compute the initial GC state of a managed actor.
+    */
+  final def initState[T](
       context: ActorContext[GCMessage[T]],
       spawnInfo: SpawnInfo
-  ): State
+  ): State =
+    initStateImpl(
+      context.asInstanceOf[ActorContext[GCMessageImpl[T]]],
+      spawnInfo.asInstanceOf[SpawnInfoImpl]
+    )
 
-  def getSelfRef[T](
+  def initStateImpl[T](
+      context: ActorContext[GCMessageImpl[T]],
+      spawnInfo: SpawnInfoImpl
+  ): StateImpl
+
+  /** Get a refob owned by this actor, pointing to itself.
+    */
+  final def getSelfRef[T](
       state: State,
       context: ActorContext[GCMessage[T]]
-  ): Refob[T]
+  ): Refob[T] =
+    getSelfRefImpl(
+      state.asInstanceOf[StateImpl],
+      context.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
 
-  def spawnImpl[S, T](
+  def getSelfRefImpl[T](
+      state: StateImpl,
+      context: ActorContext[GCMessageImpl[T]]
+  ): RefobImpl[T]
+
+  /** Spawn a managed actor. */
+  final def spawn[S, T](
       factory: SpawnInfo => ActorRef[GCMessage[S]],
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Refob[S]
+  ): Refob[S] =
+    spawnImpl(
+      factory.asInstanceOf[SpawnInfoImpl => ActorRef[GCMessageImpl[S]]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
 
-  def sendMessage[T, S](
+  def spawnImpl[S, T](
+      factory: SpawnInfoImpl => ActorRef[GCMessageImpl[S]],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
+  ): RefobImpl[S]
+
+  /** Send a message to a managed actor. */
+  final def sendMessage[T, S](
       ref: Refob[T],
       msg: T,
       refs: Iterable[Refob[Nothing]],
       state: State,
       ctx: ActorContext[GCMessage[S]]
+  ): Unit =
+    sendMessageImpl(
+      ref.asInstanceOf[RefobImpl[T]],
+      msg,
+      refs.asInstanceOf[Iterable[RefobImpl[Nothing]]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def sendMessageImpl[T, S](
+      ref: RefobImpl[T],
+      msg: T,
+      refs: Iterable[RefobImpl[Nothing]],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[S]]
   ): Unit
 
-  def onMessage[T](
+  final def onMessage[T](
       msg: GCMessage[T],
       state: State,
       ctx: ActorContext[GCMessage[T]]
+  ): Option[T] =
+    onMessageImpl(
+      msg.asInstanceOf[GCMessageImpl[T]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def onMessageImpl[T](
+      msg: GCMessageImpl[T],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Option[T]
 
-  def onIdle[T](
+  final def onIdle[T](
       msg: GCMessage[T],
       state: State,
       ctx: ActorContext[GCMessage[T]]
+  ): Engine.TerminationDecision =
+    onIdleImpl(
+      msg.asInstanceOf[GCMessageImpl[T]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def onIdleImpl[T](
+      msg: GCMessageImpl[T],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Engine.TerminationDecision
 
-  def preSignal[T](
+  final def preSignal[T](
       signal: Signal,
       state: State,
       ctx: ActorContext[GCMessage[T]]
+  ): Unit =
+    preSignalImpl(
+      signal,
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def preSignalImpl[T](
+      signal: Signal,
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Unit
 
-  def postSignal[T](
+  final def postSignal[T](
       signal: Signal,
       state: State,
       ctx: ActorContext[GCMessage[T]]
+  ): Engine.TerminationDecision =
+    postSignalImpl(
+      signal,
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def postSignalImpl[T](
+      signal: Signal,
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Engine.TerminationDecision
 
-  def createRef[S, T](
+  final def createRef[S, T](
       target: Refob[S],
       owner: Refob[Nothing],
       state: State,
       ctx: ActorContext[GCMessage[T]]
+  ): Refob[S] =
+    createRefImpl(
+      target.asInstanceOf[RefobImpl[S]],
+      owner.asInstanceOf[RefobImpl[Nothing]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
+
+  def createRefImpl[S, T](
+      target: RefobImpl[S],
+      owner: RefobImpl[Nothing],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Refob[S]
 
-  def release[S, T](
+  final def release[S, T](
       releasing: Iterable[Refob[S]],
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Unit
+  ): Unit =
+    releaseImpl(
+      releasing.asInstanceOf[Iterable[RefobImpl[Nothing]]],
+      state.asInstanceOf[StateImpl],
+      ctx.asInstanceOf[ActorContext[GCMessageImpl[T]]]
+    )
 
-  def releaseEverything[T](
-      state: State,
-      ctx: ActorContext[GCMessage[T]]
+  def releaseImpl[S, T](
+      releasing: Iterable[RefobImpl[S]],
+      state: StateImpl,
+      ctx: ActorContext[GCMessageImpl[T]]
   ): Unit
 
   def spawnIngress(

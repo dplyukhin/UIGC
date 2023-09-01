@@ -1,41 +1,41 @@
 package edu.illinois.osl.uigc.engines.drl
 
-import akka.actor.typed.{PostStop, Terminated, Signal}
+import edu.illinois.osl.uigc.interfaces
+
 import scala.collection.mutable
-import edu.illinois.osl.uigc.engines.Engine
 
 class State
 (
   val self: Name,
   val spawnInfo: DRL.SpawnInfo,
-) {
+) extends interfaces.State {
 
   var count: Int = 1
   
   /** This actor's self reference. */
   val selfRef: Ref = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
 
-  val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
+  private val creatorRef = Refob[Nothing](spawnInfo.token, spawnInfo.creator, self)
 
   /** References this actor owns. Starts with its self reference. */
-  val activeRefs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef)
+  private val activeRefs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef)
   /**
    * References this actor has created for other actors.
    * Maps a key reference to a value set of references that were creating using that key. */
-  val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
+  private val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
-  val owners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef, creatorRef)
+  private val owners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef, creatorRef)
   /** References to this actor discovered when they've been released. */
-  val releasedOwners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
+  private val releasedOwners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
   /** Tracks how many messages are sent using each reference. */
-  val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
+  private val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
   /** Tracks how many messages are received using each reference. */
   val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
 
   /** The set of refs that this actor owns that point to this actor itself */
-  def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }
+  private def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }
   /** The set of refs that this actor owns that do not point to itself */
-  def nontrivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target != self }
+  private def nontrivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target != self }
 
   /**
    * Adds the given ref to this actor's collection of active refs

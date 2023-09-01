@@ -1,111 +1,110 @@
 package edu.illinois.osl.uigc.engines
 
-import edu.illinois.osl.uigc.interfaces._
-import akka.actor.typed.{ActorRef, Signal}
-import akka.actor.typed.ActorRef
+import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
+import akka.actor.typed.{ActorRef, Signal}
+import edu.illinois.osl.uigc.interfaces
 
-import scala.annotation.unchecked.uncheckedVariance
-import akka.actor.{ActorPath, Address, ExtendedActorSystem}
-import akka.remote.artery.{ObjectPool, OutboundEnvelope, ReusableOutboundEnvelope}
+object Manual {
+  trait SpawnInfo extends interfaces.SpawnInfo
 
-object Manual extends Engine {
-  case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]]) extends Message
+  case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]])
+      extends interfaces.GCMessage[T]
 
-  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends RefobLike[T]
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T]
 
-  trait SpawnInfo extends Serializable
   case class Info() extends SpawnInfo
 
   class State(
-    val selfRef: Refob[Nothing]
-  )
+      val selfRef: Refob[Nothing]
+  ) extends interfaces.State
+}
 
-  /**
-   * Transform a message from a non-GC actor so that it can be understood
-   * by a GC actor. Necessarily, the recipient is a root actor.
-   */
-  def rootMessage[T](payload: T, refs: Iterable[RefobLike[Nothing]]): GCMessage[T] = 
-    GCMessage(payload, refs.asInstanceOf[Iterable[Refob[Nothing]]])
+class Manual(system: ExtendedActorSystem) extends Engine {
+  import Manual._
 
-  /** 
-   * Produces SpawnInfo indicating to the actor that it is a root actor.
-   */
-  def rootSpawnInfo(): SpawnInfo = Info()
+  override type GCMessageImpl[+T] = Manual.GCMessage[T]
+  override type RefobImpl[-T] = Manual.Refob[T]
+  override type SpawnInfoImpl = Manual.SpawnInfo
+  override type StateImpl = Manual.State
 
-  def initState[T](
-    context: ActorContext[GCMessage[T]],
-    spawnInfo: SpawnInfo,
+  /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
+    * Necessarily, the recipient is a root actor.
+    */
+  def rootMessageImpl[T](payload: T, refs: Iterable[Refob[Nothing]]): GCMessage[T] =
+    GCMessage(payload, refs)
+
+  /** Produces SpawnInfo indicating to the actor that it is a root actor.
+    */
+  def rootSpawnInfoImpl(): SpawnInfo = Info()
+
+  def initStateImpl[T](
+      context: ActorContext[GCMessage[T]],
+      spawnInfo: SpawnInfo
   ): State =
     new State(Refob(context.self))
 
-  def getSelfRef[T](
-    state: State,
-    context: ActorContext[GCMessage[T]]
+  override def getSelfRefImpl[T](
+      state: State,
+      context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
-  def spawnImpl[S, T](
-    factory: SpawnInfo => ActorRef[GCMessage[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def spawnImpl[S, T](
+      factory: SpawnInfo => ActorRef[GCMessage[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Refob[S] =
     Refob(factory(Info()))
 
-  def onMessage[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]],
+  override def onMessageImpl[T](
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Option[T] =
     Some(msg.payload)
 
-  def onIdle[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]],
+  override def onIdleImpl[T](
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     Engine.ShouldContinue
 
-  def preSignal[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def preSignalImpl[T](
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
-  def postSignal[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def postSignalImpl[T](
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     Engine.Unhandled
 
-  def createRef[S,T](
-    target: Refob[S], 
-    owner: Refob[Nothing],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Refob[S] = 
+  override def createRefImpl[S, T](
+      target: Refob[S],
+      owner: Refob[Nothing],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Refob[S] =
     Refob(target.target)
 
-  def release[S,T](
-    releasing: Iterable[Refob[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def releaseImpl[S, T](
+      releasing: Iterable[Refob[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
-  def releaseEverything[T](
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Unit = ()
-
-  override def sendMessage[T, S](
-    ref: Refob[T],
-    msg: T,
-    refs: Iterable[Refob[Nothing]],
-    state: State,
-    ctx: ActorContext[GCMessage[S]]
+  override def sendMessageImpl[T, S](
+      ref: Refob[T],
+      msg: T,
+      refs: Iterable[Refob[Nothing]],
+      state: State,
+      ctx: ActorContext[GCMessage[S]]
   ): Unit =
     ref.target ! GCMessage(msg, refs)
-
 
 }
