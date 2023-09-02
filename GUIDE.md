@@ -32,8 +32,6 @@ akka {
       advanced {
         outbound-lanes = 1
         inbound-lanes = 1
-        ingress-stage = "edu.illinois.osl.uigc.streams.Ingress"
-        egress-stage = "edu.illinois.osl.uigc.streams.Egress"
       }
     }
   }
