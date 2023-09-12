@@ -149,6 +149,15 @@ object MyGuardianActor {
 val system: ActorSystem[GuardianMsg] = ActorSystem(MyGuardianActor())
 ```
 
+{% note %}
+
+**Note:** In Akka Typed, `Behaviors.setup` returns a `Behavior[T]`.
+In UIGC, `uigc.Behaviors.setup` returns a `uigc.ActorFactory[T]`.
+You can use `uigc.ActorFactory` the same way you would use `typed.Behavior`---e.g.
+you can pass it as an argument to `ctx.spawn` or `ActorSystem`.
+
+{% endnote %}
+
 ### Spawning managed actors
 
 To spawn a managed actor, use `uigc.Behaviors.setup`:
