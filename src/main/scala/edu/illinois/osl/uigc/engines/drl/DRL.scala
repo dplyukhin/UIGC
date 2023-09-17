@@ -9,9 +9,9 @@ import scala.collection.mutable
 
 object DRL {
   class SpawnInfo(
-                   val token: Option[Token],
-                   val creator: Option[Name]
-                 ) extends interfaces.SpawnInfo
+      val token: Option[Token],
+      val creator: Option[Name]
+  ) extends interfaces.SpawnInfo
 }
 
 class DRL extends Engine {
@@ -29,23 +29,23 @@ class DRL extends Engine {
     new SpawnInfo(None, None)
 
   override def initStateImpl[T](
-    context: ActorContext[GCMessage[T]],
-    spawnInfo: SpawnInfo,
+      context: ActorContext[GCMessage[T]],
+      spawnInfo: SpawnInfo
   ): State = {
     val state = new State(context.self, spawnInfo)
     state
   }
 
   def getSelfRefImpl[T](
-    state: State,
-    context: ActorContext[GCMessage[T]]
+      state: State,
+      context: ActorContext[GCMessage[T]]
   ): Refob[T] =
     state.selfRef.asInstanceOf[Refob[T]]
 
   override def spawnImpl[S, T](
-    factory: SpawnInfo => ActorRef[GCMessage[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+      factory: SpawnInfo => ActorRef[GCMessage[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val x = state.newToken()
     val self = state.self
@@ -57,9 +57,9 @@ class DRL extends Engine {
   }
 
   override def onMessageImpl[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Option[T] =
     msg match {
       case AppMsg(payload, token, refs) =>
@@ -80,9 +80,9 @@ class DRL extends Engine {
     }
 
   override def onIdleImpl[T](
-    msg: GCMessage[T],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+      msg: GCMessage[T],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     msg match {
       case Kill =>
@@ -91,55 +91,51 @@ class DRL extends Engine {
         tryTerminate(state, ctx)
     }
 
-  /**
-   * Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
-   */
+  /** Attempts to terminate this actor, sends a [[SelfCheck]] message to try again if it can't.
+    */
   def tryTerminate[T](
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
-  ): Engine.TerminationDecision = {
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
+  ): Engine.TerminationDecision =
     if (ctx.children.nonEmpty || state.anyInverseAcquaintances || state.anyPendingSelfMessages)
       Engine.ShouldContinue
     else
       Engine.ShouldStop
-  }
 
-  override def createRefImpl[S,T](
-    target: Refob[S], 
-    owner: Refob[Nothing],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def createRefImpl[S, T](
+      target: Refob[S],
+      owner: Refob[Nothing],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val ref = state.newRef(owner, target)
     state.handleCreatedRef(target, ref)
     ref
   }
 
-  override def releaseImpl[S,T](
-    releasing: Iterable[Refob[S]],
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+  override def releaseImpl[S, T](
+      releasing: Iterable[Refob[S]],
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Unit = {
 
-    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])]
-      = state.release(releasing)
+    val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = state.release(releasing)
 
     // send the release message for each target actor
-    for ((target, (targetedRefs, createdRefs)) <- targets) {
+    for ((target, (targetedRefs, createdRefs)) <- targets)
       target ! ReleaseMsg(targetedRefs, createdRefs)
-    }
   }
 
   override def preSignalImpl[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Unit = ()
 
   override def postSignalImpl[T](
-    signal: Signal, 
-    state: State,
-    ctx: ActorContext[GCMessage[T]]
+      signal: Signal,
+      state: State,
+      ctx: ActorContext[GCMessage[T]]
   ): Engine.TerminationDecision =
     signal match {
       case signal: Terminated =>
@@ -149,11 +145,11 @@ class DRL extends Engine {
     }
 
   override def sendMessageImpl[T, S](
-    ref: Refob[T],
-    msg: T,
-    refs: Iterable[Refob[Nothing]],
-    state: State,
-    ctx: ActorContext[GCMessage[S]]
+      ref: Refob[T],
+      msg: T,
+      refs: Iterable[Refob[Nothing]],
+      state: State,
+      ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     ref.target ! AppMsg(msg, ref.token, refs)
     state.incSentCount(ref.token)

@@ -106,8 +106,8 @@ class SupervisionSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     probe.ref ! Spawned(context.name)
     var actorB: ActorRef[TestMessage] = context.spawn(Child(), "child1")
     var actorC: ActorRef[TestMessage] = context.spawn(Child(), "child2")
-    probe.ref ! Spawned(actorB.rawActorRef)
-    probe.ref ! Spawned(actorC.rawActorRef)
+    probe.ref ! Spawned(actorB.typedActorRef)
+    probe.ref ! Spawned(actorC.typedActorRef)
     override def onMessage(msg: TestMessage): Behavior[TestMessage] = {
       msg match {
         case GetRef(root) =>

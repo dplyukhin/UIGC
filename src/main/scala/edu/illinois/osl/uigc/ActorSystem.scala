@@ -1,8 +1,9 @@
 package edu.illinois.osl.uigc
 
 import akka.Done
-import akka.actor.{Address, DynamicAccess, typed}
 import akka.actor.typed.{Dispatchers, Extension, ExtensionId, Settings}
+import akka.actor.{Address, DynamicAccess, typed}
+import com.typesafe.config.Config
 import edu.illinois.osl.uigc.interfaces.GCMessage
 import org.slf4j.Logger
 
@@ -10,18 +11,23 @@ import java.util.concurrent.{CompletionStage, ThreadFactory}
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object ActorSystem {
-  def apply[T](guardianBehavior: ActorFactory[T], name: String): ActorSystem[T] = {
-    new ActorSystem(
-      typed.ActorSystem(
-        unmanaged.Behaviors.setup[GCMessage[T]] { ctx =>
-          guardianBehavior(UIGC(ctx.system).rootSpawnInfo())
-        },
-        name)
+  def apply[T](guardianBehavior: ActorFactory[T], name: String): ActorSystem[T] =
+    ActorSystem(
+      typed.ActorSystem(setup(guardianBehavior), name)
     )
-  }
+
+  def apply[T](guardianBehavior: ActorFactory[T], name: String, config: Config): ActorSystem[T] =
+    ActorSystem(
+      typed.ActorSystem(setup(guardianBehavior), name, config)
+    )
+
+  private def setup[T](guardianBehavior: ActorFactory[T]) =
+    unmanaged.Behaviors.setup[GCMessage[T]] { ctx =>
+      guardianBehavior(UIGC(ctx.system).rootSpawnInfo())
+    }
 }
 
-class ActorSystem[S](typedSystem: typed.ActorSystem[GCMessage[S]])  {
+case class ActorSystem[S](typedSystem: typed.ActorSystem[Nothing]) {
   def name: String = typedSystem.name
 
   def settings: Settings = typedSystem.settings

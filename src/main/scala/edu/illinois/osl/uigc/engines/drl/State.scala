@@ -4,14 +4,13 @@ import edu.illinois.osl.uigc.interfaces
 
 import scala.collection.mutable
 
-class State
-(
-  val self: Name,
-  val spawnInfo: DRL.SpawnInfo,
+class State(
+    val self: Name,
+    val spawnInfo: DRL.SpawnInfo
 ) extends interfaces.State {
 
   var count: Int = 1
-  
+
   /** This actor's self reference. */
   val selfRef: Ref = Refob[Nothing](Some(Token(self, 0)), Some(self), self)
 
@@ -19,54 +18,60 @@ class State
 
   /** References this actor owns. Starts with its self reference. */
   private val activeRefs: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef)
-  /**
-   * References this actor has created for other actors.
-   * Maps a key reference to a value set of references that were creating using that key. */
+
+  /** References this actor has created for other actors. Maps a key reference to a value set of
+    * references that were creating using that key.
+    */
   private val createdUsing: mutable.HashMap[Ref, Seq[Ref]] = mutable.HashMap()
+
   /** References to this actor. Starts with its self reference and its creator's reference to it. */
   private val owners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer(selfRef, creatorRef)
+
   /** References to this actor discovered when they've been released. */
   private val releasedOwners: mutable.ArrayBuffer[Ref] = mutable.ArrayBuffer()
+
   /** Tracks how many messages are sent using each reference. */
   private val sentCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
+
   /** Tracks how many messages are received using each reference. */
   val recvCount: mutable.HashMap[Token, Int] = mutable.HashMap(selfRef.token.get -> 0)
 
   /** The set of refs that this actor owns that point to this actor itself */
   private def trivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target == self }
+
   /** The set of refs that this actor owns that do not point to itself */
   private def nontrivialActiveRefs: Iterable[Ref] = activeRefs filter { _.target != self }
 
-  /**
-   * Adds the given ref to this actor's collection of active refs
-   */
-  def addRef(ref: Ref): Unit = {
+  /** Adds the given ref to this actor's collection of active refs
+    */
+  def addRef(ref: Ref): Unit =
     activeRefs += ref
-  }
 
   def newRef[S](owner: Refob[Nothing], target: Refob[S]): Refob[S] = {
     val token = newToken()
     Refob[S](Some(token), Some(owner.target), target.target)
   }
 
-  /**
-   * Accepts the references from a message and increments the receive count
-   * of the reference that was used to send the message.
-   * @param messageRefs The refs sent with the message.
-   * @param token Token of the ref this message was sent with.
-   */
+  /** Accepts the references from a message and increments the receive count of the reference that
+    * was used to send the message.
+    * @param messageRefs
+    *   The refs sent with the message.
+    * @param token
+    *   Token of the ref this message was sent with.
+    */
   def handleMessage(messageRefs: Iterable[Ref], token: Option[Token]): Unit = {
     activeRefs ++= messageRefs
     incReceivedCount(token)
   }
 
-
-  /**
-   * Handles the internal logistics of this actor receiving a [[ReleaseMsg]].
-   * @param releasing The collection of references to be released by this actor.
-   * @param created The collection of references the releaser has created.
-   * @return True if this actor's behavior should stop.
-   */
+  /** Handles the internal logistics of this actor receiving a [[ReleaseMsg]].
+    * @param releasing
+    *   The collection of references to be released by this actor.
+    * @param created
+    *   The collection of references the releaser has created.
+    * @return
+    *   True if this actor's behavior should stop.
+    */
   def handleRelease(releasing: Iterable[Ref], created: Iterable[Ref]): Unit = {
     assert(releasing.nonEmpty)
     val sender = releasing.head.owner
@@ -75,43 +80,41 @@ class State
       numPendingReleaseMessagesToSelf -= 1
     }
 
-    releasing.foreach(ref => {
+    releasing.foreach { ref =>
       // delete receive count for this refob
       recvCount remove ref.token.get
       // if this actor already knew this refob was in its owner set then remove that info,
       // otherwise add to released_owners, we didn't know about this refob
       if (owners.contains(ref)) {
         owners -= ref
-      }
-      else {
+      } else {
         releasedOwners += ref
       }
-    })
+    }
 
-    created.foreach(ref => {
+    created.foreach { ref =>
       // if this actor already discovered this refob from when it was released, remove that info
       // otherwise, add it to its owner set
       if (releasedOwners.contains(ref)) {
         releasedOwners -= ref
-      }
-      else {
+      } else {
         owners += ref
       }
-    })
+    }
   }
 
-  def handleSelfCheck(): Unit = {
+  def handleSelfCheck(): Unit =
     incReceivedCount(selfRef.token)
-  }
 
-  /** An actor can receive a reference to itself and then deactivate it, placing a Release
-   * message in its queue. We don't want to terminate actors if their message queue is nonempty.
-   * This variable indicates whether any such messages exist. */
+  /** An actor can receive a reference to itself and then deactivate it, placing a Release message
+    * in its queue. We don't want to terminate actors if their message queue is nonempty. This
+    * variable indicates whether any such messages exist.
+    */
   private var numPendingReleaseMessagesToSelf = 0
 
-  /** Assuming this actor has no inverse acquaintances besides itself, this function
-   * determines whether the actor has any undelivered messages to itself.
-   */
+  /** Assuming this actor has no inverse acquaintances besides itself, this function determines
+    * whether the actor has any undelivered messages to itself.
+    */
   def anyPendingSelfMessages: Boolean = {
     // Actors can send themselves three kinds of messages:
     // - App messages
@@ -146,26 +149,27 @@ class State
     false
   }
 
-  /** Whether this actor has any nontrivial inverse acquaintances, i.e. any other actors with unreleased
-   * references to this one. */
-  def anyInverseAcquaintances: Boolean = {
+  /** Whether this actor has any nontrivial inverse acquaintances, i.e. any other actors with
+    * unreleased references to this one.
+    */
+  def anyInverseAcquaintances: Boolean =
     // By the Chain Lemma, this check is sufficient: an actor has nontrivial inverse acquaintances iff
     // the `owners` set contains a refob owned by an actor other than itself.
     // TODO Can we test this invariant with Scalacheck?
     owners exists { ref =>
       ref.owner match {
         case Some(owner) => owner != self
-        case None => true // In this case, an external actor has a reference to it
+        case None        => true // In this case, an external actor has a reference to it
       }
     }
-  }
 
-  /**
-   * Updates this actor's state to indicate that the new ref `newRef` was created using `target`.
-   * The target of `target` should be the same as the target of `newRef`.
-   * @param target An existing ref to the target
-   * @param newRef The new ref that has been created using `target`
-   */
+  /** Updates this actor's state to indicate that the new ref `newRef` was created using `target`.
+    * The target of `target` should be the same as the target of `newRef`.
+    * @param target
+    *   An existing ref to the target
+    * @param newRef
+    *   The new ref that has been created using `target`
+    */
   def handleCreatedRef(target: Ref, newRef: Ref): Unit = {
     assert(target.target == newRef.target)
     assert(activeRefs contains target)
@@ -178,16 +182,18 @@ class State
     else {
       // Note that this code doesn't work when `target.target == self` because the `self`
       // ref never gets released; the `createdUsing` field would increase in size without bound.
-      val seq = createdUsing getOrElse(target, Seq())
+      val seq = createdUsing getOrElse (target, Seq())
       createdUsing(target) = seq :+ newRef
     }
   }
 
-  /**
-   * Releases a collection of references from an actor.
-   * @param releasing A collection of references.
-   * @return A map from actors to the refs to them being released and refs to them that have been created for other actors.
-   */
+  /** Releases a collection of references from an actor.
+    * @param releasing
+    *   A collection of references.
+    * @return
+    *   A map from actors to the refs to them being released and refs to them that have been created
+    *   for other actors.
+    */
   def release(releasing: Iterable[Ref]): mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = {
     // maps target actors being released -> (set of associated references being released, refs created using refs in that set)
     val targets: mutable.HashMap[Name, (Seq[Ref], Seq[Ref])] = mutable.HashMap()
@@ -198,9 +204,9 @@ class State
       // get the reference's target for grouping
       val key = ref.target
       // get current mapping/make new one if not found
-      val (targetRefs: Seq[Ref], targetCreated: Seq[Ref]) = targets getOrElse(key, (Seq(), Seq()))
+      val (targetRefs: Seq[Ref], targetCreated: Seq[Ref]) = targets getOrElse (key, (Seq(), Seq()))
       // get the references created using this reference
-      val created = createdUsing getOrElse(ref, Seq())
+      val created = createdUsing getOrElse (ref, Seq())
       // add this ref to the set of refs with this same target
       // append the group of refs created using this ref to the group of created refs to this target
       targets(key) = (targetRefs :+ ref, targetCreated :++ created)
@@ -208,7 +214,6 @@ class State
       createdUsing remove ref
       activeRefs -= ref
     }
-
 
     // Similarly, process the "trivial" references from this actor to itself.
     // But do not deactivate the `self` ref, because it is always accessible from
@@ -228,16 +233,15 @@ class State
       numPendingReleaseMessagesToSelf += 1
     }
 
-
     // send the release message for each target actor
     // TODO: just leave this mutable?
     targets
   }
 
-  /**
-   * Releases all of the given references.
-   * @param releasing A list of references.
-   */
+  /** Releases all of the given references.
+    * @param releasing
+    *   A list of references.
+    */
   def release(releasing: Ref*): Unit = release(releasing)
 
   // /**
@@ -252,29 +256,27 @@ class State
   //   newSnapshot(activeRefs, owners, created, releasedOwners, sent, recv)
   // }
 
-  /**
-   * Increments the received count of the given reference token, assuming it exists.
-   * @param optoken The (optional) token of the reference to be incremented.
-   */
-  def incReceivedCount(optoken: Option[Token]): Unit = {
+  /** Increments the received count of the given reference token, assuming it exists.
+    * @param optoken
+    *   The (optional) token of the reference to be incremented.
+    */
+  def incReceivedCount(optoken: Option[Token]): Unit =
     for (token <- optoken) {
       val count = recvCount getOrElse (token, 0)
       recvCount(token) = count + 1
     }
-  }
 
-  /**
-   * Increments the sent count of the given reference token, assuming it exists.
-   * @param optoken The (optional) token of the reference to be incremented.
-   */
-  def incSentCount(optoken: Option[Token]): Unit = {
+  /** Increments the sent count of the given reference token, assuming it exists.
+    * @param optoken
+    *   The (optional) token of the reference to be incremented.
+    */
+  def incSentCount(optoken: Option[Token]): Unit =
     for (token <- optoken) {
       val count = sentCount getOrElse (token, 0)
       sentCount(token) = count + 1
     }
-  }
 
-  def newToken() = { 
+  def newToken() = {
     val token = Token(self, count)
     count += 1
     token

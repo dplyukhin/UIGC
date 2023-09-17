@@ -149,14 +149,10 @@ object MyGuardianActor {
 val system: ActorSystem[GuardianMsg] = ActorSystem(MyGuardianActor())
 ```
 
-{% note %}
-
 **Note:** In Akka Typed, `Behaviors.setup` returns a `Behavior[T]`.
 In UIGC, `uigc.Behaviors.setup` returns a `uigc.ActorFactory[T]`.
 You can use `uigc.ActorFactory` the same way you would use `typed.Behavior`---e.g.
 you can pass it as an argument to `ctx.spawn` or `ActorSystem`.
-
-{% endnote %}
 
 ### Spawning managed actors
 
@@ -210,6 +206,31 @@ The WRC engine detects when an actor has no incoming
 references---i.e. every incoming reference to the actor has had
 `ctx.release` invoked on it. The CRGC engine detects a more general
 kind of garbage, called _quiescent_ garbage.
+
+### Coexistence
+
+Sometimes the `uigc` API isn't enough, and you need access to the underlying
+`akka.typed` API. For example, the `Cluster` extension requires an `akka.typed.ActorSystem`,
+not a `uigc.ActorSystem`:
+```scala
+val cluster = Cluster(context.system)
+                   // ^^^^^^^^^^^^^^ ERROR: Expected akka.typed.ActorSystem, got uigc.ActorSystem
+```
+
+To solve this problem, each class has a `.typedXXX` method that returns the underlying
+`akka.typed` object. For example, the code above can be fixed by writing:
+```scala
+val cluster = Cluster(context.system.typedSystem)
+```
+Or equivalently:
+```scala
+val cluster = Cluster(context.typedContext.system)
+```
+
+*WARNING:* Sometimes you need to turn a `uigc.ActorRef` into a `typed.ActorRef`. You
+can accomplish this with the method `uigc.ActorRef.typedActorRef`. However, UIGC won't
+be able to keep track of the resulting `typed.ActorRef`. This means that UIGC could
+garbage collect the target actor before you have a chance to send it a message.
 
 ### Complete example
 

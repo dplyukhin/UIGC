@@ -11,8 +11,8 @@ object UIGC extends ExtensionId[Engine] with ExtensionIdProvider {
   def createExtension(system: ExtendedActorSystem): Engine = {
     val config = system.settings.config
     config.getString("uigc.engine") match {
-      case "crgc" => new CRGC(system)
-      case "wrc" => new WRC(system)
+      case "crgc"   => new CRGC(system)
+      case "wrc"    => new WRC(system)
       case "manual" => new Manual(system)
     }
   }
