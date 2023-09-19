@@ -28,6 +28,9 @@ class DRL extends Engine {
   override def rootSpawnInfoImpl(): SpawnInfo =
     new SpawnInfo(None, None)
 
+  override def toRefobImpl[T](ref: ActorRef[GCMessage[T]]): Refob[T] =
+    Refob(None, None, ref)
+
   override def initStateImpl[T](
       context: ActorContext[GCMessage[T]],
       spawnInfo: SpawnInfo

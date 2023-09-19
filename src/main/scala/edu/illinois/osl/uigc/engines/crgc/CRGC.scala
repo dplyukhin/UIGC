@@ -61,6 +61,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   override def rootSpawnInfoImpl(): SpawnInfo =
     new SpawnInfo(None)
 
+  override def toRefobImpl[T](ref: ActorRef[GCMessage[T]]): Refob[T] =
+    new Refob[T](ref, targetShadow = null)
+
   override def initStateImpl[T](
       context: ActorContext[GCMessage[T]],
       spawnInfo: SpawnInfo

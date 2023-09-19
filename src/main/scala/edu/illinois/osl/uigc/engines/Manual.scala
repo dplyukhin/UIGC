@@ -11,7 +11,10 @@ object Manual {
   case class GCMessage[+T](payload: T, refs: Iterable[Refob[Nothing]])
       extends interfaces.GCMessage[T]
 
-  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T]
+  case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T] {
+    override def typedActorRef: ActorRef[interfaces.GCMessage[T]] =
+      target.asInstanceOf[ActorRef[interfaces.GCMessage[T]]]
+  }
 
   case class Info() extends SpawnInfo
 
@@ -37,6 +40,9 @@ class Manual(system: ExtendedActorSystem) extends Engine {
   /** Produces SpawnInfo indicating to the actor that it is a root actor.
     */
   def rootSpawnInfoImpl(): SpawnInfo = Info()
+
+  override def toRefobImpl[T](ref: ActorRef[GCMessage[T]]): Refob[T] =
+    Refob(ref)
 
   def initStateImpl[T](
       context: ActorContext[GCMessage[T]],

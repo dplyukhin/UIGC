@@ -1,8 +1,8 @@
 package edu.illinois.osl.uigc
 
-import akka.actor.typed.scaladsl.AskPattern.{Askable, schedulerFromActorSystem}
 import akka.actor.typed
 import akka.actor.typed.scaladsl
+import akka.actor.typed.scaladsl.AskPattern.{Askable, schedulerFromActorSystem}
 import akka.util.Timeout
 import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces._

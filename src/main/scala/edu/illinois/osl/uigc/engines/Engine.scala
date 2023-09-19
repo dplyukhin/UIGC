@@ -37,6 +37,12 @@ trait Engine extends Extension {
 
   def rootSpawnInfoImpl(): SpawnInfoImpl
 
+  /** Given an [[ActorRef]] pointing to a root actor, produce a [[Refob]]. */
+  final def toRootRefob[T](ref: ActorRef[GCMessage[T]]): Refob[T] =
+    toRefobImpl(ref)
+
+  def toRefobImpl[T](ref: ActorRef[GCMessageImpl[T]]): RefobImpl[T]
+
   /** Compute the initial GC state of a managed actor.
     */
   final def initState[T](

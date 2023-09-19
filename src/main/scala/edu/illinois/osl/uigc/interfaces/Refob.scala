@@ -17,10 +17,7 @@ trait Refob[-T] {
   def !(msg: T, refs: Iterable[Refob[Nothing]])(implicit ctx: ActorContext[_]): Unit =
     ctx.engine.sendMessage(this, msg, refs, ctx.state, ctx.typedContext)
 
-  private[uigc] def target: ActorRef[Nothing]
-
-  def typedActorRef: ActorRef[Nothing] =
-    this.target
+  def typedActorRef: ActorRef[GCMessage[T]]
 
   def tell(msg: T, refs: Iterable[Refob[Nothing]], ctx: ActorContext[_]): Unit =
     this.!(msg, refs)(ctx)

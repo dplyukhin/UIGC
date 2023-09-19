@@ -11,4 +11,7 @@ case class Refob[-T](
     token: Option[Token],
     owner: Option[ActorRef[GCMessage[Nothing]]],
     target: ActorRef[GCMessage[T]]
-) extends interfaces.Refob[T]
+) extends interfaces.Refob[T] {
+  override def typedActorRef: ActorRef[interfaces.GCMessage[T]] =
+    target.asInstanceOf[ActorRef[interfaces.GCMessage[T]]]
+}

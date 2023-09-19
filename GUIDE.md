@@ -232,6 +232,10 @@ can accomplish this with the method `uigc.ActorRef.typedActorRef`. However, UIGC
 be able to keep track of the resulting `typed.ActorRef`. This means that UIGC could
 garbage collect the target actor before you have a chance to send it a message.
 
+To convert a `typed.ActorRef` *back* into a `uigc.ActorRef`, use the `.toManaged`
+implicit method provided by `edu.illinois.osl.uigc.implicits`.
+
+
 ### Complete example
 
 TODO

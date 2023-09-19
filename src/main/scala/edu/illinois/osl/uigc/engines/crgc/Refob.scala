@@ -44,4 +44,7 @@ class Refob[-T](
     this.target = in.readObject().asInstanceOf[ActorRef[GCMessage[T]]]
     this.targetShadow = null
   }
+
+  override def typedActorRef: ActorRef[interfaces.GCMessage[T]] =
+    target.asInstanceOf[ActorRef[interfaces.GCMessage[T]]]
 }
