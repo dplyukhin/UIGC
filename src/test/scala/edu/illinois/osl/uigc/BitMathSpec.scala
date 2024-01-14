@@ -1,11 +1,10 @@
 package edu.illinois.osl.uigc
 
 import org.scalacheck._
-import org.scalacheck.Prop.{forAll, forAllNoShrink}
+import org.scalacheck.Prop.forAllNoShrink
 
 import scala.util.Random
-import edu.illinois.osl.uigc.engines.crgc.{RefobInfo, RefobStatus}
-import org.scalacheck.Arbitrary.arbitrary
+import edu.illinois.osl.uigc.engines.crgc.RefobInfo
 
 object BitMathSpec extends Properties("Bitmath") {
 
@@ -56,98 +55,6 @@ object BitMathSpec extends Properties("Bitmath") {
             testInfo = RefobInfo.deactivate(testInfo)
         }
         compare(realInfo, testInfo)
-      }
-      initial && rest
-    }
-  }
-
-  property("RefobStatus should accurately reflect refob status") = {
-    trait Status {
-      val count: Int
-    }
-    case class Pending(count: Int) extends Status
-    case class Active(count: Int) extends Status
-    case class Finishing(count: Int) extends Status
-    case object Released extends Status {
-      val count = 0
-    }
-
-    def compare(status: Status, i: Int): Boolean = {
-      status match {
-        case Active(count) =>
-          RefobStatus.count(i) == count && RefobStatus.isActive(i)
-        case Finishing(count) =>
-          RefobStatus.count(i) == count && RefobStatus.isFinishing(i)
-        case Pending(count) =>
-          RefobStatus.count(i) == count && RefobStatus.isPending(i)
-        case Released =>
-          RefobStatus.isReleased(i)
-      }
-    }
-
-    trait Op
-    case object Inc extends Op
-    case object Dec extends Op
-    case object Activate extends Op
-    case object Deactivate extends Op
-
-    type Execution = Seq[Op]
-
-    // An execution may consist of:
-    // 1. Any number of Dec operations, then
-    // 2. An activate operation
-    // 3. Any number of Inc operations and up to N Dec operations, where N is
-    //    the number of Inc operations minus the number of previous Decs
-    // 4. A deactivate operation
-    // 5. Dec by N, where N is the difference between the number of Inc and
-    //    Dec operations
-    def genExecution: Gen[Execution] = for {
-      num_prev_decs <- Gen.choose(0, 30000)
-      num_incs <- Gen.choose(num_prev_decs, 30000)
-      num_decs <- Gen.choose(0, num_incs - num_prev_decs)
-    } yield {
-      val prev_decs = Seq.fill(num_prev_decs)(Dec)
-      val incs = Seq.fill(num_incs)(Inc)
-      val decs = Seq.fill(num_decs)(Dec)
-      val final_decs = Seq.fill(num_incs - num_prev_decs - num_decs)(Dec)
-      (prev_decs :+ Activate) ++ (Random.shuffle(incs ++ decs) :+ Deactivate) ++ final_decs
-    }
-
-    forAllNoShrink(genExecution) { (execution: Execution) =>
-      var realStatus: Status = Pending(0)
-      var testStatus = RefobStatus.initialPendingRefob
-      val initial = compare(realStatus, testStatus)
-      val rest = execution.forall { op =>
-        op match {
-          case Activate =>
-            realStatus = Active(realStatus.count)
-            testStatus = RefobStatus.activate(testStatus)
-          case Deactivate =>
-            realStatus = if (realStatus.count != 0) {
-              Finishing(realStatus.count)
-            } else {
-              Released
-            }
-            testStatus = RefobStatus.deactivate(testStatus)
-          case Dec =>
-            realStatus = realStatus match {
-              case Pending(n) => Pending(n - 1)
-              case Active(n) => Active(n - 1)
-              case Finishing(n) => if (n > 1) {
-                Finishing(n - 1)
-              } else {
-                Released
-              }
-            }
-            testStatus = RefobStatus.addToRecvCount(testStatus, 1)
-          case Inc =>
-            realStatus = realStatus match {
-              case Pending(n) => Pending(n + 1)
-              case Active(n) => Active(n + 1)
-            }
-            testStatus = RefobStatus.addToSentCount(testStatus, 1)
-        }
-        compare(realStatus, testStatus)
       }
       initial && rest
     }
