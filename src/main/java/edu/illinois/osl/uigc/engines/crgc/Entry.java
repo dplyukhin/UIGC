@@ -21,7 +21,7 @@ public class Entry {
         updatedRefs    = new Refob<?>[Sizes.EntryFieldSize];
         updatedInfos   = new short[Sizes.EntryFieldSize];
         isBusy         = false;
-        isRoot = false;
+        isRoot         = false;
     }
 
     public void clean() {

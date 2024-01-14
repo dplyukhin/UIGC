@@ -14,14 +14,36 @@ import java.util.HashMap;
  */
 public class DeltaShadow implements Serializable {
     //@JsonDeserialize(keyUsing = OutgoingDeserializer.class)
+
+    /**
+     * A mapping from actors to net reference counts. If the value of outgoing(b) is positive, it
+     * means this actor has gained that many references to b. If the value is negative, it means this
+     * actor has deactivated that many references to b.
+     */
     HashMap<Short, Integer> outgoing;
+    /**
+     * The net number of messages this actor has received, according to the latest batch of entries.
+     * May be negative, meaning this actor has received fewer messages than have been sent to it.
+     */
     int recvCount;
+    /**
+     * The compressed ID of the actor supervising this one. Defaults to (-1) if the supervisor is unknown.
+     */
     short supervisor;
-    boolean isRoot;
-    boolean isBusy;
+    /**
+     * This field is true iff any of the entries in this batch were produced by this actor.
+     */
     boolean interned;
-        // This field will be set to `true` if any of the entries in this batch were
-        // produced by this actor.
+    /**
+     * If {@link DeltaShadow#interned} is true, this indicates whether the actor was a root in its latest entry.
+     * (If {@link DeltaShadow#interned} is false, this field is meaningless.)
+     */
+    boolean isRoot;
+    /**
+     * If {@link DeltaShadow#interned} is true, this indicates whether the actor was busy in its latest entry.
+     * (If {@link DeltaShadow#interned} is false, this field is meaningless.)
+     */
+    boolean isBusy;
 
     public DeltaShadow() {
         this.outgoing = new HashMap<>();
