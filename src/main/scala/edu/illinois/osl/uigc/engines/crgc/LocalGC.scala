@@ -64,8 +64,7 @@ class LocalGC extends Actor with Timers {
   private var stopCount: Int = 0
   // private val testGraph = new ShadowGraph()
   private var deltaGraphID: Int = 0
-  private var deltaGraph = new DeltaGraph()
-  deltaGraph.initialize(thisAddress)
+  private var deltaGraph = DeltaGraph.initialize(thisAddress)
 
   if (numNodes == 1) {
     start()
@@ -137,8 +136,8 @@ class LocalGC extends Actor with Timers {
         // shadowGraph.assertEquals(testGraph)
 
         if (numNodes > 1) {
-          val isFull = deltaGraph.mergeEntry(entry)
-          if (isFull) {
+          deltaGraph.mergeEntry(entry)
+          if (deltaGraph.isFull) {
             deltaCount += 1
             finalizeDeltaGraph()
           }
@@ -179,8 +178,7 @@ class LocalGC extends Actor with Timers {
     for (gc <- remoteGCs.values)
       gc ! DeltaMsg(deltaGraphID, deltaGraph, context.self)
     deltaGraphID += 1
-    deltaGraph = new DeltaGraph()
-    deltaGraph.initialize(thisAddress)
+    deltaGraph = DeltaGraph.initialize(thisAddress)
   }
 
   private def addMember(member: Member): Unit =

@@ -130,15 +130,12 @@ public class ShadowGraph {
     }
 
     public void mergeDelta(DeltaGraph delta) {
-        // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        ActorRef[] refs = new ActorRef[delta.currentSize];
-        for (Map.Entry<ActorRef, Short> entry : delta.compressionTable.entrySet()) {
-            refs[entry.getValue()] = entry.getKey();
-        }
+        // This array maps compressed IDs to ActorRefs.
+        ActorRef[] decoder = delta.decoder();
 
-        for (short i = 0; i < delta.currentSize; i++) {
+        for (short i = 0; i < delta.size; i++) {
             DeltaShadow deltaShadow = delta.shadows[i];
-            Shadow shadow = getShadow(refs[i]);
+            Shadow shadow = getShadow(decoder[i]);
 
             shadow.interned = shadow.interned || deltaShadow.interned;
                 // Set `interned` if we have already received a delta shadow in which
@@ -153,12 +150,12 @@ public class ShadowGraph {
                 shadow.isRoot = deltaShadow.isRoot;
             }
             if (deltaShadow.supervisor >= 0) {
-                shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
+                shadow.supervisor = getShadow(decoder[deltaShadow.supervisor]);
             }
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
                 short id = entry.getKey();
                 int count = entry.getValue();
-                updateOutgoing(shadow.outgoing, getShadow(refs[id]), count);
+                updateOutgoing(shadow.outgoing, getShadow(decoder[id]), count);
             }
         }
     }

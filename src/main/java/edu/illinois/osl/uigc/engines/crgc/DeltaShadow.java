@@ -7,6 +7,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
+/**
+ * An object summarizing a batch of {@link Entry}s from a single actor. ActorRefs in the DeltaShadow
+ * are encoded as short integers to save space; use the enclosing {@link DeltaGraph} to map the
+ * short integer back to an ActorRef.
+ */
 public class DeltaShadow implements Serializable {
     //@JsonDeserialize(keyUsing = OutgoingDeserializer.class)
     HashMap<Short, Integer> outgoing;
