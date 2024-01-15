@@ -61,10 +61,9 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
 
     public void onDeactivate(Refob<?> refob) {
         boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
-        refob.info_$eq(RefobInfo.deactivate(refob.info()));
+        refob.deactivate();
 
         if (!hasChangedThisPeriod) {
-            refob.hasChangedThisPeriod_$eq(true);
             updatedRefobs[updatedIdx++] = refob;
         }
         if (updatedIdx >= Sizes.EntryFieldSize)
@@ -73,13 +72,12 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
 
     public void onSend(Refob<?> refob) {
         boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
-        refob.info_$eq(RefobInfo.incSendCount(refob.info()));
+        refob.incSendCount();
 
         if (!hasChangedThisPeriod) {
-            refob.hasChangedThisPeriod_$eq(true);
             updatedRefobs[updatedIdx++] = refob;
         }
-        if (updatedIdx >= Sizes.EntryFieldSize || !RefobInfo.canIncrement(refob.info()))
+        if (updatedIdx >= Sizes.EntryFieldSize || !refob.canIncrement())
             isFull = true;
     }
 
