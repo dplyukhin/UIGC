@@ -114,8 +114,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   ): Option[T] =
     msg match {
       case AppMsg(payload, _) =>
-        val entry = state.incReceiveCount()
-        if (entry != null) sendEntry(entry, ctx)
+        state.incReceiveCount()
+        if (state.isFull)
+          sendEntry(state.finalizeEntry(true), ctx)
         Some(payload)
       case _ =>
         None
@@ -147,8 +148,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val ref = new Refob[S](target.target, target.targetShadow)
-    val entry = state.onCreate(owner, target)
-    if (entry != null) sendEntry(entry, ctx)
+    state.onCreate(owner, target)
+    if (state.isFull)
+      sendEntry(state.finalizeEntry(true), ctx)
     ref
   }
 
@@ -158,8 +160,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[T]]
   ): Unit =
     for (ref <- releasing) {
-      val entry = state.onDeactivate(ref)
-      if (entry != null) sendEntry(entry, ctx)
+      state.onDeactivate(ref)
+      if (state.isFull)
+        sendEntry(state.finalizeEntry(true), ctx)
     }
 
   private def sendEntry[T](
@@ -188,8 +191,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       state: State,
       ctx: ActorContext[GCMessage[S]]
   ): Unit = {
-    val entry = state.onSend(ref)
-    if (entry != null) sendEntry(entry, ctx)
+    state.onSend(ref)
+    if (state.isFull)
+      sendEntry(state.finalizeEntry(true), ctx)
     ref.target ! AppMsg(msg, refs)
   }
 

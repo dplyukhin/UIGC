@@ -23,6 +23,8 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     boolean isRoot;
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
+    /** True if the state is full, i.e. you need to invoke {@link State#finalizeEntry}. */
+    private boolean isFull;
 
     public State(Refob<?> self) {
         this.self = self;
@@ -36,67 +38,59 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         this.recvCount = (short) 0;
         this.isRoot = false;
         this.stopRequested = false;
+        this.isFull = false;
     }
 
     public void markAsRoot() {
         this.isRoot = true;
     }
 
-    public Entry onCreate(Refob<?> owner, Refob<?> target) {
-        Entry oldEntry =
-            createdIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
+    public void onCreate(Refob<?> owner, Refob<?> target) {
         int i = createdIdx++;
         createdOwners[i] = owner;
         createdTargets[i] = target;
-        return oldEntry;
+        if (createdIdx >= Sizes.EntryFieldSize)
+            isFull = true;
     }
 
-    public Entry onSpawn(Refob<?> child) {
-        Entry oldEntry =
-                spawnedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
-        int i = spawnedIdx++;
-        spawnedActors[i] = child;
-        return oldEntry;
+    public void onSpawn(Refob<?> child) {
+        spawnedActors[spawnedIdx++] = child;
+        if (spawnedIdx >= Sizes.EntryFieldSize)
+            isFull = true;
     }
 
-    public Entry onDeactivate(Refob<?> refob) {
+    public void onDeactivate(Refob<?> refob) {
+        boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
         refob.info_$eq(RefobInfo.deactivate(refob.info()));
-        return updateRefob(refob);
+
+        if (!hasChangedThisPeriod) {
+            refob.hasChangedThisPeriod_$eq(true);
+            updatedRefobs[updatedIdx++] = refob;
+        }
+        if (updatedIdx >= Sizes.EntryFieldSize)
+            isFull = true;
     }
 
-    public Entry onSend(Refob<?> refob) {
-        if (RefobInfo.canIncrement(refob.info())) {
-            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
-            return updateRefob(refob);
+    public void onSend(Refob<?> refob) {
+        boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
+        refob.info_$eq(RefobInfo.incSendCount(refob.info()));
+
+        if (!hasChangedThisPeriod) {
+            refob.hasChangedThisPeriod_$eq(true);
+            updatedRefobs[updatedIdx++] = refob;
         }
-        else {
-            Entry oldEntry = finalizeEntry(true);
-                // Now the counter has been reset
-            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
-            updateRefob(refob);
-                // We know this will not overflow because we have a fresh entry.
-            return oldEntry;
-        }
+        if (updatedIdx >= Sizes.EntryFieldSize || !RefobInfo.canIncrement(refob.info()))
+            isFull = true;
     }
 
-    private Entry updateRefob(Refob<?> refob) {
-        if (refob.hasChangedThisPeriod()) {
-            // This change will automatically be reflected in the entry
-            return null;
-        }
-        // We'll need to add to the entry; finalize first if need be
-        Entry oldEntry =
-            updatedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
-        refob.hasChangedThisPeriod_$eq(true);
-        updatedRefobs[updatedIdx++] = refob;
-        return oldEntry;
-    }
-
-    public Entry incReceiveCount() {
-        Entry oldEntry =
-            recvCount == Short.MAX_VALUE ? finalizeEntry(true) : null;
+    public void incReceiveCount() {
         recvCount++;
-        return oldEntry;
+        if (recvCount == Short.MAX_VALUE)
+            isFull = true;
+    }
+
+    public boolean isFull() {
+        return isFull;
     }
 
     public Entry getEntry() {
@@ -108,6 +102,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public Entry finalizeEntry(boolean isBusy) {
+        isFull = false;
         Entry entry = getEntry();
         entry.self = self;
         entry.isBusy = isBusy;
