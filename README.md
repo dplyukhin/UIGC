@@ -57,6 +57,7 @@ the Github issue that tracks our progress towards this goal.
    It should now read: `val akkaVersion = <YOUR_AKKA_VERSION>`.
 4. In the CRGC build directory, run `sbt publishLocal`.
 
+Or you can run the scripts/build-linux-mac.sh script on Linux, macOS, or in the Bash environment on Windows.
 If the above instructions don't work for you, or if you can think of an easier install process,
 please raise a Github issue!
  
