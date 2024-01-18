@@ -18,13 +18,13 @@ public class ShadowGraph {
     }
 
     public Shadow getShadow(Refob<?> refob) {
-        // Check if it's in the cache.
-        //if (refob.targetShadow() != null)
-        //    return refob.targetShadow();
+        // Check if it's in the cache. This saves us an expensive hash table lookup.
+        if (refob.targetShadow() != null)
+            return refob.targetShadow();
 
         // Try to get it from the collection of all my shadows. Save it in the cache.
         Shadow shadow = getShadow(refob.target().classicRef());
-        //refob.targetShadow_$eq(shadow);
+        refob.targetShadow_$eq(shadow);
 
         return shadow;
     }
@@ -100,45 +100,34 @@ public class ShadowGraph {
             // NB: We don't increase the parent's created count; that info is in the child snapshot.
         }
 
-        // Deactivate refs.
+        // Update refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
-            Shadow targetShadow = getShadow(entry.updatedRefs[i]);
+            Refob<?> target = entry.updatedRefs[i];
+            Shadow targetShadow = getShadow(target);
             short info = entry.updatedInfos[i];
+            short sendCount = RefobInfo.count(info);
             boolean isActive = RefobInfo.isActive(info);
             boolean isDeactivated = !isActive;
 
             // Update the owner's outgoing references
+            if (sendCount > 0) {
+                targetShadow.recvCount -= sendCount; // may be negative!
+            }
             if (isDeactivated) {
                 updateOutgoing(selfShadow.outgoing, targetShadow, -1);
             }
         }
 
-        // Update send counts
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
-            if (entry.updatedRefs[i] == null) break;
-            Refob<?> target = entry.updatedRefs[i];
-            short info = entry.updatedInfos[i];
-            short sendCount = RefobInfo.count(info);
-
-            // Update the target's receive count
-            if (sendCount > 0) {
-                Shadow targetShadow = getShadow(target);
-                targetShadow.recvCount -= sendCount; // may be negative!
-            }
-        }
     }
 
     public void mergeDelta(DeltaGraph delta) {
-        // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        ActorRef[] refs = new ActorRef[delta.currentSize];
-        for (Map.Entry<ActorRef, Short> entry : delta.compressionTable.entrySet()) {
-            refs[entry.getValue()] = entry.getKey();
-        }
+        // This array maps compressed IDs to ActorRefs.
+        ActorRef[] decoder = delta.decoder();
 
-        for (short i = 0; i < delta.currentSize; i++) {
+        for (short i = 0; i < delta.size; i++) {
             DeltaShadow deltaShadow = delta.shadows[i];
-            Shadow shadow = getShadow(refs[i]);
+            Shadow shadow = getShadow(decoder[i]);
 
             shadow.interned = shadow.interned || deltaShadow.interned;
                 // Set `interned` if we have already received a delta shadow in which
@@ -153,12 +142,12 @@ public class ShadowGraph {
                 shadow.isRoot = deltaShadow.isRoot;
             }
             if (deltaShadow.supervisor >= 0) {
-                shadow.supervisor = getShadow(refs[deltaShadow.supervisor]);
+                shadow.supervisor = getShadow(decoder[deltaShadow.supervisor]);
             }
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
                 short id = entry.getKey();
                 int count = entry.getValue();
-                updateOutgoing(shadow.outgoing, getShadow(refs[id]), count);
+                updateOutgoing(shadow.outgoing, getShadow(decoder[id]), count);
             }
         }
     }

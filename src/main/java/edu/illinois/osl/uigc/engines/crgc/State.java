@@ -42,73 +42,48 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         this.isRoot = true;
     }
 
-    public Entry onCreate(Refob<?> owner, Refob<?> target) {
-        Entry oldEntry =
-            createdIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
+    public boolean canRecordNewRefob() {
+        return createdIdx < Sizes.EntryFieldSize;
+    }
+
+    public void recordNewRefob(Refob<?> owner, Refob<?> target) {
+        assert(canRecordNewRefob());
         int i = createdIdx++;
         createdOwners[i] = owner;
         createdTargets[i] = target;
-        return oldEntry;
     }
 
-    public Entry onSpawn(Refob<?> child) {
-        Entry oldEntry =
-                spawnedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
-        int i = spawnedIdx++;
-        spawnedActors[i] = child;
-        return oldEntry;
+    public boolean canRecordNewActor() {
+        return spawnedIdx < Sizes.EntryFieldSize;
     }
 
-    public Entry onDeactivate(Refob<?> refob) {
-        refob.info_$eq(RefobInfo.deactivate(refob.info()));
-        return updateRefob(refob);
+    public void recordNewActor(Refob<?> child) {
+        assert(canRecordNewActor());
+        spawnedActors[spawnedIdx++] = child;
     }
 
-    public Entry onSend(Refob<?> refob) {
-        if (RefobInfo.canIncrement(refob.info())) {
-            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
-            return updateRefob(refob);
-        }
-        else {
-            Entry oldEntry = finalizeEntry(true);
-                // Now the counter has been reset
-            refob.info_$eq(RefobInfo.incSendCount(refob.info()));
-            updateRefob(refob);
-                // We know this will not overflow because we have a fresh entry.
-            return oldEntry;
-        }
+    public boolean canRecordUpdatedRefob(Refob<?> refob) {
+        return refob.hasBeenRecorded() || updatedIdx < Sizes.EntryFieldSize;
     }
 
-    private Entry updateRefob(Refob<?> refob) {
-        if (refob.hasChangedThisPeriod()) {
-            // This change will automatically be reflected in the entry
-            return null;
-        }
-        // We'll need to add to the entry; finalize first if need be
-        Entry oldEntry =
-            updatedIdx >= Sizes.EntryFieldSize ? finalizeEntry(true) : null;
-        refob.hasChangedThisPeriod_$eq(true);
+    public void recordUpdatedRefob(Refob<?> refob) {
+        assert(canRecordUpdatedRefob(refob));
+        if (refob.hasBeenRecorded())
+            return;
+        refob.setHasBeenRecorded();
         updatedRefobs[updatedIdx++] = refob;
-        return oldEntry;
     }
 
-    public Entry incReceiveCount() {
-        Entry oldEntry =
-            recvCount == Short.MAX_VALUE ? finalizeEntry(true) : null;
+    public boolean canRecordMessageReceived() {
+        return recvCount < Short.MAX_VALUE;
+    }
+
+    public void recordMessageReceived() {
+        assert(canRecordMessageReceived());
         recvCount++;
-        return oldEntry;
     }
 
-    public Entry getEntry() {
-        Entry entry = CRGC.EntryPool().poll();
-        if (entry == null) {
-            entry = new Entry();
-        }
-        return entry;
-    }
-
-    public Entry finalizeEntry(boolean isBusy) {
-        Entry entry = getEntry();
+    public void flushToEntry(boolean isBusy, Entry entry) {
         entry.self = self;
         entry.isBusy = isBusy;
         entry.isRoot = isRoot;
@@ -133,12 +108,10 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         for (int i = 0; i < updatedIdx; i++) {
             entry.updatedRefs[i] = this.updatedRefobs[i];
             entry.updatedInfos[i] = this.updatedRefobs[i].info();
-            this.updatedRefobs[i].resetInfo();
+            this.updatedRefobs[i].reset();
             this.updatedRefobs[i] = null;
         }
         updatedIdx = 0;
-
-        return entry;
     }
 
 }

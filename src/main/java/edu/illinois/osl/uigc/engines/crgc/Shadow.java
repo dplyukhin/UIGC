@@ -8,18 +8,31 @@ import java.util.Map;
 import java.util.Objects;
 
 public class Shadow {
-    /** A list of active refobs pointing from this actor. */
-    HashMap<Shadow, Integer> outgoing;
     ActorRef self;
     Address location;
+    /**
+     * A collection of actors that this actor may be acquainted with. The value of <tt>outgoing(b)</tt> is the
+     * number of references this actor appears to have for <tt>b</tt>. The value may be negative, meaning this
+     * actor has deactivated more references than have been created for it.
+     */
+    HashMap<Shadow, Integer> outgoing;
+    /**
+     * This actor's parent, if it is known; {@code null} otherwise.
+     */
     Shadow supervisor;
+    /**
+     * The difference between the number of messages this actor has received and the number of messages that
+     * have been sent to this actor. May be positive or negative.
+     */
     int recvCount;
     //int markDepth;
+    /** A marker bit, used by {@link ShadowGraph} during tracing. */
     boolean mark;
+    /** Indicates whether the actor was a root in its latest entry. */
     boolean isRoot;
-    /** Indicates whether the GC has received a snapshot from this actor yet. */
+    /** Indicates whether the GC has received an entry from this actor yet. */
     boolean interned;
-    /** Indicates whether the actor is on the same node as this GC. */
+    /** Indicates whether this actor is on the same node as this GC. */
     boolean isLocal;
     /** Whether this actor was busy in its latest entry. */
     boolean isBusy;

@@ -38,19 +38,16 @@ public class UndoLog {
 
     public void mergeDeltaGraph(DeltaGraph delta) {
         // This will act as a hashmap, mapping compressed IDs to actorRefs.
-        ActorRef[] refs = new ActorRef[delta.currentSize];
-        for (Map.Entry<ActorRef, Short> entry : delta.compressionTable.entrySet()) {
-            refs[entry.getValue()] = entry.getKey();
-        }
+        ActorRef[] decoder = delta.decoder();
 
-        for (short i = 0; i < delta.currentSize; i++) {
+        for (short i = 0; i < delta.size; i++) {
             DeltaShadow deltaShadow = delta.shadows[i];
             if (deltaShadow.interned)
                 // We only care about messages sent and references created by this node
                 // *for actors on other nodes*.
                 continue;
 
-            ActorRef thisActor = refs[i];
+            ActorRef thisActor = decoder[i];
             Field field = admitted.get(thisActor);
             if (field == null) {
                 field = new Field();
@@ -62,7 +59,7 @@ public class UndoLog {
 
             // Undo any of the references this node claims to have created for the recipient
             for (Map.Entry<Short, Integer> entry : deltaShadow.outgoing.entrySet()) {
-                ActorRef targetActor = refs[entry.getKey()];
+                ActorRef targetActor = decoder[entry.getKey()];
                 int count = entry.getValue();
                 updateOutgoing(field.createdRefs, targetActor, -count);
             }

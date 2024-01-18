@@ -11,12 +11,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.Random
 
-/** This spec spawns around 10 actors in a random configuration and then waits until they have all
-  * been collected. If the GC is unsound, it is likely to throw an exception. If it is incomplete,
-  * the test will time out.
+/** This spec spawns a lot of actors in a random configuration and then waits until they have all
+  * been collected. If the GC is unsound, this is likely to throw an exception or to log dead letters.
+  * If the GC is incomplete, the test will time out.
   */
 class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
-  val MAX_ACTORS = 1000
+  val MAX_ACTORS = 10000
   val PING_FREQUENCY: FiniteDuration = 1.millis
   val SpawnCounter: AtomicInteger = new AtomicInteger()
   val TerminateCounter: CountDownLatch = new CountDownLatch(MAX_ACTORS)
@@ -95,7 +95,7 @@ class RandomSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
     override def onSignal: PartialFunction[Signal, Behavior[Msg]] = {
       case PostStop =>
         TerminateCounter.countDown()
-        println(TerminateCounter.getCount() + " remaining!")
+        println(TerminateCounter.getCount + " remaining!")
         this
     }
   }
