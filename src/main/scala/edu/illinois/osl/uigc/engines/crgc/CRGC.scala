@@ -104,6 +104,8 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     val ref = new Refob[S](child, null)
     // NB: "onCreate" is only updated at the child, not the parent.
     state.onSpawn(ref)
+    if (state.isFull)
+      sendEntry(state.finalizeEntry(true), ctx)
     ref
   }
 
