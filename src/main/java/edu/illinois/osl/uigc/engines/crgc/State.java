@@ -83,16 +83,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         recvCount++;
     }
 
-    public Entry getEntry() {
-        Entry entry = CRGC.EntryPool().poll();
-        if (entry == null) {
-            entry = new Entry();
-        }
-        return entry;
-    }
-
-    public Entry finalizeEntry(boolean isBusy) {
-        Entry entry = getEntry();
+    public void flushToEntry(boolean isBusy, Entry entry) {
         entry.self = self;
         entry.isBusy = isBusy;
         entry.isRoot = isRoot;
@@ -121,8 +112,6 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
             this.updatedRefobs[i] = null;
         }
         updatedIdx = 0;
-
-        return entry;
     }
 
 }

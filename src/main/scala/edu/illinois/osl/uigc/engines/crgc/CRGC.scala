@@ -80,12 +80,12 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     }
 
     def onBlock(): Unit =
-      sendEntry(state.finalizeEntry(false), context)
+      sendEntry(state, isBusy=false)
 
     if (collectionStyle == OnBlock)
       context.queue.onFinishedProcessingHook = onBlock
     if ((collectionStyle == Wave && state.isRoot) || collectionStyle == OnIdle)
-      sendEntry(state.finalizeEntry(false), context)
+      sendEntry(state, isBusy=false)
     state
   }
 
@@ -104,7 +104,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     val ref = new Refob[S](child, null)
     // NB: "onCreate" is only updated at the child, not the parent.
     if (!state.canRecordNewActor)
-      sendEntry(state.finalizeEntry(true), ctx)
+      sendEntry(state, isBusy=true)
     state.recordNewActor(ref)
     ref
   }
@@ -117,7 +117,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     msg match {
       case AppMsg(payload, _) =>
         if (!state.canRecordMessageReceived)
-          sendEntry(state.finalizeEntry(true), ctx)
+          sendEntry(state, isBusy=true)
         state.recordMessageReceived()
         Some(payload)
       case _ =>
@@ -133,13 +133,13 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       case StopMsg =>
         Engine.ShouldStop
       case WaveMsg =>
-        sendEntry(state.finalizeEntry(false), ctx)
+        sendEntry(state, isBusy=false)
         for (child <- ctx.children)
           child.unsafeUpcast[GCMessage[Any]].tell(WaveMsg)
         Engine.ShouldContinue
       case _ =>
         if (collectionStyle == OnIdle)
-          sendEntry(state.finalizeEntry(false), ctx)
+          sendEntry(state, isBusy=false)
         Engine.ShouldContinue
     }
 
@@ -151,7 +151,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   ): Refob[S] = {
     val ref = new Refob[S](target.target, target.targetShadow)
     if (!state.canRecordNewRefob)
-      sendEntry(state.finalizeEntry(true), ctx)
+      sendEntry(state, isBusy=true)
     state.recordNewRefob(owner, target)
     ref
   }
@@ -163,16 +163,21 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   ): Unit =
     for (ref <- releasing) {
       if (!state.canRecordUpdatedRefob(ref))
-        sendEntry(state.finalizeEntry(true), ctx)
+        sendEntry(state, isBusy=true)
       ref.deactivate()
       state.recordUpdatedRefob(ref)
     }
 
-  private def sendEntry[T](
-      entry: Entry,
-      ctx: ActorContext[GCMessage[T]]
-  ): Unit =
+  private def sendEntry(
+      state: State,
+      isBusy: Boolean
+  ): Unit = {
+    var entry = CRGC.EntryPool.poll()
+    if (entry == null)
+      entry = new Entry()
+    state.flushToEntry(isBusy, entry)
     Queue.add(entry)
+  }
 
   override def preSignalImpl[T](
       signal: Signal,
@@ -195,7 +200,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[S]]
   ): Unit = {
     if (!ref.canIncSendCount || !state.canRecordUpdatedRefob(ref))
-      sendEntry(state.finalizeEntry(true), ctx)
+      sendEntry(state, isBusy=true)
     ref.incSendCount()
     state.recordUpdatedRefob(ref)
 
