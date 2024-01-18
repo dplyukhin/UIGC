@@ -23,8 +23,6 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     boolean isRoot;
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
-    /** True if the state is full, i.e. you need to invoke {@link State#finalizeEntry}. */
-    private boolean isFull;
 
     public State(Refob<?> self) {
         this.self = self;
@@ -38,57 +36,51 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         this.recvCount = (short) 0;
         this.isRoot = false;
         this.stopRequested = false;
-        this.isFull = false;
     }
 
     public void markAsRoot() {
         this.isRoot = true;
     }
 
-    public void onCreate(Refob<?> owner, Refob<?> target) {
+    public boolean canRecordNewRefob() {
+        return createdIdx < Sizes.EntryFieldSize;
+    }
+
+    public void recordNewRefob(Refob<?> owner, Refob<?> target) {
+        assert(canRecordNewRefob());
         int i = createdIdx++;
         createdOwners[i] = owner;
         createdTargets[i] = target;
-        if (createdIdx >= Sizes.EntryFieldSize)
-            isFull = true;
     }
 
-    public void onSpawn(Refob<?> child) {
+    public boolean canRecordNewActor() {
+        return spawnedIdx < Sizes.EntryFieldSize;
+    }
+
+    public void recordNewActor(Refob<?> child) {
+        assert(canRecordNewActor());
         spawnedActors[spawnedIdx++] = child;
-        if (spawnedIdx >= Sizes.EntryFieldSize)
-            isFull = true;
     }
 
-    public void onDeactivate(Refob<?> refob) {
-        boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
-        refob.deactivate();
-
-        if (!hasChangedThisPeriod) {
-            updatedRefobs[updatedIdx++] = refob;
-        }
-        if (updatedIdx >= Sizes.EntryFieldSize)
-            isFull = true;
+    public boolean canRecordUpdatedRefob(Refob<?> refob) {
+        return refob.hasBeenRecorded() || updatedIdx < Sizes.EntryFieldSize;
     }
 
-    public void onSend(Refob<?> refob) {
-        boolean hasChangedThisPeriod = refob.hasChangedThisPeriod();
-        refob.incSendCount();
-
-        if (!hasChangedThisPeriod) {
-            updatedRefobs[updatedIdx++] = refob;
-        }
-        if (updatedIdx >= Sizes.EntryFieldSize || !refob.canIncrement())
-            isFull = true;
+    public void recordUpdatedRefob(Refob<?> refob) {
+        assert(canRecordUpdatedRefob(refob));
+        if (refob.hasBeenRecorded())
+            return;
+        refob.setHasBeenRecorded();
+        updatedRefobs[updatedIdx++] = refob;
     }
 
-    public void incReceiveCount() {
+    public boolean canRecordMessageReceived() {
+        return recvCount < Short.MAX_VALUE;
+    }
+
+    public void recordMessageReceived() {
+        assert(canRecordMessageReceived());
         recvCount++;
-        if (recvCount == Short.MAX_VALUE)
-            isFull = true;
-    }
-
-    public boolean isFull() {
-        return isFull;
     }
 
     public Entry getEntry() {
@@ -100,7 +92,6 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public Entry finalizeEntry(boolean isBusy) {
-        isFull = false;
         Entry entry = getEntry();
         entry.self = self;
         entry.isBusy = isBusy;
@@ -126,7 +117,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
         for (int i = 0; i < updatedIdx; i++) {
             entry.updatedRefs[i] = this.updatedRefobs[i];
             entry.updatedInfos[i] = this.updatedRefobs[i].info();
-            this.updatedRefobs[i].resetInfo();
+            this.updatedRefobs[i].reset();
             this.updatedRefobs[i] = null;
         }
         updatedIdx = 0;

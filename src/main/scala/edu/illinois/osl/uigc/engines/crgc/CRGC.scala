@@ -71,10 +71,10 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     val self = context.self
     val selfRefob = new Refob[Nothing](self, targetShadow = null)
     val state = new State(selfRefob)
-    state.onCreate(selfRefob, selfRefob)
+    state.recordNewRefob(selfRefob, selfRefob)
     spawnInfo.creator match {
       case Some(creator) =>
-        state.onCreate(creator, selfRefob)
+        state.recordNewRefob(creator, selfRefob)
       case None =>
         state.markAsRoot()
     }
@@ -103,9 +103,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     val child = factory(new SpawnInfo(Some(state.self)))
     val ref = new Refob[S](child, null)
     // NB: "onCreate" is only updated at the child, not the parent.
-    state.onSpawn(ref)
-    if (state.isFull)
+    if (!state.canRecordNewActor)
       sendEntry(state.finalizeEntry(true), ctx)
+    state.recordNewActor(ref)
     ref
   }
 
@@ -116,9 +116,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   ): Option[T] =
     msg match {
       case AppMsg(payload, _) =>
-        state.incReceiveCount()
-        if (state.isFull)
+        if (!state.canRecordMessageReceived)
           sendEntry(state.finalizeEntry(true), ctx)
+        state.recordMessageReceived()
         Some(payload)
       case _ =>
         None
@@ -150,9 +150,9 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[T]]
   ): Refob[S] = {
     val ref = new Refob[S](target.target, target.targetShadow)
-    state.onCreate(owner, target)
-    if (state.isFull)
+    if (!state.canRecordNewRefob)
       sendEntry(state.finalizeEntry(true), ctx)
+    state.recordNewRefob(owner, target)
     ref
   }
 
@@ -162,9 +162,10 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[T]]
   ): Unit =
     for (ref <- releasing) {
-      state.onDeactivate(ref)
-      if (state.isFull)
+      if (!state.canRecordUpdatedRefob(ref))
         sendEntry(state.finalizeEntry(true), ctx)
+      ref.deactivate()
+      state.recordUpdatedRefob(ref)
     }
 
   private def sendEntry[T](
@@ -193,9 +194,11 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       state: State,
       ctx: ActorContext[GCMessage[S]]
   ): Unit = {
-    state.onSend(ref)
-    if (state.isFull)
+    if (!ref.canIncSendCount || !state.canRecordUpdatedRefob(ref))
       sendEntry(state.finalizeEntry(true), ctx)
+    ref.incSendCount()
+    state.recordUpdatedRefob(ref)
+
     ref.target ! AppMsg(msg, refs)
   }
 

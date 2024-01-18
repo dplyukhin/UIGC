@@ -18,30 +18,32 @@ class Refob[-T](
 ) extends interfaces.Refob[T]
     with Serializable {
 
-  private var _hasChangedThisPeriod: Boolean = false
+  private var _hasBeenRecorded: Boolean = false
   private var _info: Short = RefobInfo.activeRefob
 
-  def info(): Short = _info
+  def info: Short = _info
 
-  def hasChangedThisPeriod: Boolean = _hasChangedThisPeriod
+  def hasBeenRecorded: Boolean = _hasBeenRecorded
+
+  def setHasBeenRecorded(): Unit = {
+    _hasBeenRecorded = true
+  }
 
   def deactivate(): Unit = {
     _info = RefobInfo.deactivate(_info)
-    _hasChangedThisPeriod = true
   }
 
   def incSendCount(): Unit = {
     _info = RefobInfo.incSendCount(_info)
-    _hasChangedThisPeriod = true
   }
 
-  def canIncrement: Boolean = {
+  def canIncSendCount: Boolean = {
     RefobInfo.canIncrement(_info)
   }
 
-  def resetInfo(): Unit = {
+  def reset(): Unit = {
     _info = RefobInfo.resetCount(_info)
-    _hasChangedThisPeriod = false
+    _hasBeenRecorded = false
   }
 
   override def equals(that: Any): Boolean =
