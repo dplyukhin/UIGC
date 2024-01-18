@@ -1,12 +1,11 @@
-package edu.illinois.osl.uigc
+package edu.illinois.osl.uigc.engines.crgc
 
-import org.scalacheck._
 import org.scalacheck.Prop.forAllNoShrink
+import org.scalacheck._
 
 import scala.util.Random
-import edu.illinois.osl.uigc.engines.crgc.RefobInfo
 
-object BitMathSpec extends Properties("Bitmath") {
+object RefobInfoSpec extends Properties("RefobInfo") {
 
   property("RefobInfo should accurately reflect refob info") = {
     trait Info {
