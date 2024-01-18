@@ -100,33 +100,25 @@ public class ShadowGraph {
             // NB: We don't increase the parent's created count; that info is in the child snapshot.
         }
 
-        // Deactivate refs.
+        // Update refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
-            Shadow targetShadow = getShadow(entry.updatedRefs[i]);
+            Refob<?> target = entry.updatedRefs[i];
+            Shadow targetShadow = getShadow(target);
             short info = entry.updatedInfos[i];
+            short sendCount = RefobInfo.count(info);
             boolean isActive = RefobInfo.isActive(info);
             boolean isDeactivated = !isActive;
 
             // Update the owner's outgoing references
+            if (sendCount > 0) {
+                targetShadow.recvCount -= sendCount; // may be negative!
+            }
             if (isDeactivated) {
                 updateOutgoing(selfShadow.outgoing, targetShadow, -1);
             }
         }
 
-        // Update send counts
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
-            if (entry.updatedRefs[i] == null) break;
-            Refob<?> target = entry.updatedRefs[i];
-            short info = entry.updatedInfos[i];
-            short sendCount = RefobInfo.count(info);
-
-            // Update the target's receive count
-            if (sendCount > 0) {
-                Shadow targetShadow = getShadow(target);
-                targetShadow.recvCount -= sendCount; // may be negative!
-            }
-        }
     }
 
     public void mergeDelta(DeltaGraph delta) {

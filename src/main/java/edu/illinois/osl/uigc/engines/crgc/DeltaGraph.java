@@ -110,29 +110,20 @@ public class DeltaGraph implements Serializable {
         // Deactivate refs.
         for (int i = 0; i < Sizes.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
-            short targetID = encode(entry.updatedRefs[i]);
             short info = entry.updatedInfos[i];
+            Refob<?> target = entry.updatedRefs[i];
+            short targetID = encode(target);
+            short sendCount = RefobInfo.count(info);
             boolean isActive = RefobInfo.isActive(info);
             boolean isDeactivated = !isActive;
 
             // Update the owner's outgoing references
-            if (isDeactivated) {
-                updateOutgoing(selfShadow.outgoing, targetID, -1);
-            }
-        }
-
-        // Update send counts
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
-            if (entry.updatedRefs[i] == null) break;
-            Refob<?> target = entry.updatedRefs[i];
-            short info = entry.updatedInfos[i];
-            short sendCount = RefobInfo.count(info);
-
-            // Update the target's receive count
             if (sendCount > 0) {
-                short targetID = encode(target);
                 DeltaShadow targetShadow = shadows[targetID];
                 targetShadow.recvCount -= sendCount; // may be negative!
+            }
+            if (isDeactivated) {
+                updateOutgoing(selfShadow.outgoing, targetID, -1);
             }
         }
 
