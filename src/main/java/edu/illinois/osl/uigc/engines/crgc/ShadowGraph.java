@@ -18,13 +18,13 @@ public class ShadowGraph {
     }
 
     public Shadow getShadow(Refob<?> refob) {
-        // Check if it's in the cache.
-        //if (refob.targetShadow() != null)
-        //    return refob.targetShadow();
+        // Check if it's in the cache. This saves us an expensive hash table lookup.
+        if (refob.targetShadow() != null)
+            return refob.targetShadow();
 
         // Try to get it from the collection of all my shadows. Save it in the cache.
         Shadow shadow = getShadow(refob.target().classicRef());
-        //refob.targetShadow_$eq(shadow);
+        refob.targetShadow_$eq(shadow);
 
         return shadow;
     }
