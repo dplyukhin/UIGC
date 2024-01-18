@@ -23,5 +23,7 @@ lazy val lib = (project in file("."))
     scalacOptions in Compile ++= Seq(
       "-optimise", 
       "-Xdisable-assertions"
-    )
+    ),
+    javaOptions in Test += "-ea",
+    fork in Test := true
   )
