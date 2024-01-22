@@ -47,12 +47,12 @@ class ManyMessagesSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       Behaviors.setupRoot(context => new Root(context))
   }
   class Root(context: ActorContext[Msg]) extends AbstractBehavior[Msg](context) {
+    val actorA: ActorRef[Msg] = context.spawn(ActorA(), "actorA")
+    val actorB: ActorRef[Msg] = context.spawn(ActorB(), "actorB")
+    actorA ! NewAcquaintance(context.createRef(actorB, actorA))
+    context.release(actorA, actorB)
 
     override def onMessage(msg: Msg): Behavior[Msg] = {
-      val actorA: ActorRef[Msg] = context.spawn(ActorA(), "actorA")
-      val actorB: ActorRef[Msg] = context.spawn(ActorB(), "actorB")
-      actorA ! NewAcquaintance(context.createRef(actorB, actorA))
-      context.release(actorA, actorB)
       this
     }
   }
