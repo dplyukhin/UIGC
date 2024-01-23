@@ -201,7 +201,7 @@ public class ShadowGraph {
 
     public int trace(boolean shouldKill) {
         //System.out.println("Scanning " + from.size() + " actors...");
-        ArrayList<Shadow> to = new ArrayList<>();
+        ArrayList<Shadow> to = new ArrayList<>(from.size());
         // 0. Assume all shadows in `from` are in the UNMARKED state.
         //    Also assume that, if an actor has an incoming external actor, that external has a snapshot in `from`.
         // 1. Find all the shadows that are pseudoroots and mark them and move them to `to`.
@@ -233,7 +233,22 @@ public class ShadowGraph {
                 //    target.markDepth = owner.markDepth + 1;
                 //}
             }
-            // Mark the actors that are monitoring or supervising this one
+            // Next, we mark the actors that are monitoring or supervising this one.
+            //
+            // Since killing a supervisor causes all its descendants to be killed, a supervisor
+            // should not be killed unless all of its descendants are garbage. We can prevent
+            // supervisors from being killed by marking them, i.e. telling the GC that they're
+            // not garbage.
+            //
+            // In theory, marking supervisors violates completeness. A supervisor S could become garbage and
+            // one of its descendants D might never become garbage. If S has a
+            // reference to a garbage actor G, then G should be collected. But since S
+            // is marked as non-garbage, G will also be marked as non-garbage.
+            //
+            // I don't think these situations come up in practice, so our little shortcut
+            // of marking supervisors is good enough. If we wanted theoretical completeness,
+            // we'd need an extra bit of information that says "this actor is garbage but
+            // should not be killed yet."
             Shadow supervisor = owner.supervisor;
             if (supervisor != null) {
                 if (supervisor.mark != MARKED) {
@@ -246,8 +261,9 @@ public class ShadowGraph {
             }
         }
 
-        // Unmarked actors are garbage. Due to supervision, an actor will only be garbage if all its descendants
-        // are also garbage.
+        // Unmarked actors are garbage. Killing an actor causes all its descendants to die too.
+        // As remarked above, an actor will only be unmarked if all its descendants are unmarked.
+        // So it suffices to send StopMsg to the oldest unmarked ancestors, not their descendants.
         int count = 0;
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED) {
