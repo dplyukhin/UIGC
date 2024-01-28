@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./uigc-logo.svg" alt="UIGC Logo" width="240px" title="UIGC Logo" />
+  <img src="./uigc-logo.svg" alt="UIGC Logo" width="500px" title="UIGC Logo" />
 </p>
 
 UIGC is a middleware for Akka that provides _actor garbage collection (actor GC)_. 
