@@ -1,4 +1,6 @@
-# UIGC
+<p align="center">
+  <img src="./uigc-logo.svg" alt="UIGC Logo" width="240px" title="UIGC Logo" />
+</p>
 
 UIGC is a middleware for Akka that provides _actor garbage collection (actor GC)_. 
 When you implement an Akka actor with UIGC, the middleware will 
