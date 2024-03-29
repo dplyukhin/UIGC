@@ -7,6 +7,7 @@ import akka.remote.artery.{InboundEnvelope, ObjectPool, OutboundEnvelope, Reusab
 import akka.stream.stage.GraphStageLogic
 import akka.stream.{FlowShape, Inlet, Outlet}
 import com.typesafe.config.Config
+import edu.illinois.osl.uigc.engines.crgc.jfr.EntrySendEvent
 import edu.illinois.osl.uigc.engines.{Engine, crgc}
 import edu.illinois.osl.uigc.interfaces
 
@@ -172,11 +173,16 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       state: State,
       isBusy: Boolean
   ): Unit = {
+    val metrics = new EntrySendEvent()
+    metrics.begin()
     var entry = CRGC.EntryPool.poll()
-    if (entry == null)
+    if (entry == null) {
       entry = new Entry()
+      metrics.allocatedMemory = true
+    }
     state.flushToEntry(isBusy, entry)
     Queue.add(entry)
+    metrics.commit()
   }
 
   override def preSignalImpl[T](

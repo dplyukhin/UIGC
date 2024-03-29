@@ -2,6 +2,7 @@ package edu.illinois.osl.uigc.engines.crgc;
 
 import akka.actor.Address;
 import akka.actor.ActorRef;
+import edu.illinois.osl.uigc.engines.crgc.jfr.TracingEvent;
 
 import java.util.*;
 
@@ -199,7 +200,10 @@ public class ShadowGraph {
         return (shadow.isRoot || shadow.isBusy || shadow.recvCount != 0 || !shadow.interned) && !shadow.isHalted;
     }
 
-    public int trace(boolean shouldKill) {
+    public void trace(boolean shouldKill) {
+        TracingEvent tracingEvent = new TracingEvent();
+        tracingEvent.begin();
+
         //System.out.println("Scanning " + from.size() + " actors...");
         ArrayList<Shadow> to = new ArrayList<>(from.size());
         // 0. Assume all shadows in `from` are in the UNMARKED state.
@@ -264,19 +268,22 @@ public class ShadowGraph {
         // Unmarked actors are garbage. Killing an actor causes all its descendants to die too.
         // As remarked above, an actor will only be unmarked if all its descendants are unmarked.
         // So it suffices to send StopMsg to the oldest unmarked ancestors, not their descendants.
-        int count = 0;
         for (Shadow shadow : from) {
             if (shadow.mark != MARKED) {
-                count++;
+                tracingEvent.numGarbageActors++;
                 shadowMap.remove(shadow.self);
                 if (shadow.isLocal && shadow.supervisor.mark == MARKED && shouldKill && !shadow.isHalted) {
                     shadow.self.tell(StopMsg$.MODULE$, null);
                 }
             }
+            else {
+                tracingEvent.numLiveActors++;
+            }
         }
         from = to;
         MARKED = !MARKED;
-        return count;
+
+        tracingEvent.commit();
     }
 
     public void startWave() {

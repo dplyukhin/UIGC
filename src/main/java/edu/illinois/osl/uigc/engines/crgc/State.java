@@ -1,5 +1,7 @@
 package edu.illinois.osl.uigc.engines.crgc;
 
+import edu.illinois.osl.uigc.engines.crgc.jfr.EntryFlushEvent;
+
 public class State implements edu.illinois.osl.uigc.interfaces.State {
 
     /** This actor's ref to itself */
@@ -84,6 +86,9 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public void flushToEntry(boolean isBusy, Entry entry) {
+        EntryFlushEvent metrics = new EntryFlushEvent();
+        metrics.recvCount = recvCount;
+
         entry.self = self;
         entry.isBusy = isBusy;
         entry.isRoot = isRoot;
@@ -112,6 +117,8 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
             this.updatedRefobs[i] = null;
         }
         updatedIdx = 0;
+
+        metrics.commit();
     }
 
 }
