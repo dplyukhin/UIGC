@@ -4,7 +4,7 @@ import jdk.jfr.*;
 
 @Label("CRGC Entry Sent")
 @Category("UIGC")
-@Description("An actor sending an update about its local GC state to the local garbage collector.")
+@Description("An actor flushing an update about its local GC state to the local garbage collector.")
 @StackTrace(false)
 @Enabled(false)
 public class EntrySendEvent extends Event {
