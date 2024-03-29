@@ -153,6 +153,7 @@ class LocalGC extends Actor with Timers {
         // Try and get another one
         entry = queue.poll()
       }
+      entryProcessingStats.numEntries = count;
       entryProcessingStats.commit()
 
       if (numNodes > 1 && deltaGraph.nonEmpty()) {
@@ -160,20 +161,12 @@ class LocalGC extends Actor with Timers {
         finalizeDeltaGraph()
       }
 
-      // var end = System.currentTimeMillis()
-      // println(s"Scanned $count entries and $deltaCount delta-graphs in ${end - start}ms.")
       totalEntries += count
 
-      // start = System.currentTimeMillis()
-      count = shadowGraph.trace(true)
-      // count = testGraph.trace(false)
+      shadowGraph.trace(true)
       // shadowGraph.assertEquals(testGraph)
-      // end = System.currentTimeMillis()
-      // println(s"Found $count garbage actors in ${end - start}ms.")
 
       stopCount += count
-
-    // println(s"Found $stopCount garbage actors so far.")
 
     case StartWave =>
       shadowGraph.startWave()
@@ -251,10 +244,7 @@ class LocalGC extends Actor with Timers {
         )
 
         shadowGraph.mergeUndoLog(undoLogs(addr))
-        val count = shadowGraph.trace(true)
-        println(
-          s"Merged undo log and found $count garbage actors. New heap size: ${shadowGraph.from.size()}"
-        )
+        shadowGraph.trace(true)
         // val remaining = shadowGraph.investigateRemotelyHeldActors(addr)
         // println(s"Now $addr prevents $remaining from being collected.")
       }
