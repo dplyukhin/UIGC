@@ -153,13 +153,14 @@ class LocalGC extends Actor with Timers {
         // Try and get another one
         entry = queue.poll()
       }
-      entryProcessingStats.numEntries = count;
-      entryProcessingStats.commit()
 
       if (numNodes > 1 && deltaGraph.nonEmpty()) {
         deltaCount += 1
         finalizeDeltaGraph()
       }
+
+      entryProcessingStats.numEntries = count;
+      entryProcessingStats.commit()
 
       totalEntries += count
 
