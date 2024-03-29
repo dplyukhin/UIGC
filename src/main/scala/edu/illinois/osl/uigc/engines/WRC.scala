@@ -4,6 +4,7 @@ import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal, Terminated}
 import edu.illinois.osl.uigc.interfaces
+import jdk.jfr._
 
 import scala.collection.mutable
 
@@ -33,6 +34,10 @@ object WRC {
     val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
     var rc: Long = RC_INC
     var pendingSelfMessages: Long = 0
+
+    // We keep the data below just for metrics.
+    var appMsgCount: Int = 0
+    var ctrlMsgCount: Int = 0
   }
 
   private case class DecMsg(weight: Long) extends GCMessage[Nothing] {
@@ -46,6 +51,15 @@ object WRC {
   private case object IsRoot extends SpawnInfo
 
   private case object NonRoot extends SpawnInfo
+
+  @Label("WRC Blocked")
+  @Category(Array("UIGC"))
+  @Description("An actor has finished processing messages.")
+  @StackTrace(false)
+  private class ActorBlockedEvent extends Event {
+    @Label("Number of Application Messages Received") var appMsgCount = 0
+    @Label("Number of Control Messages Received") var ctrlMsgCount = 0
+  }
 }
 
 class WRC(system: ExtendedActorSystem) extends Engine {
@@ -76,6 +90,18 @@ class WRC(system: ExtendedActorSystem) extends Engine {
     val state = new State(Refob(context.self), spawnInfo)
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(context.self) = pair
+
+    def logMetrics(): Unit = {
+      val event = new ActorBlockedEvent()
+      event.appMsgCount = state.appMsgCount
+      event.ctrlMsgCount = state.ctrlMsgCount
+      state.appMsgCount = 0
+      state.ctrlMsgCount = 0
+      event.commit()
+    }
+
+    context.queue.onFinishedProcessingHook = logMetrics
+
     state
   }
 
@@ -104,6 +130,7 @@ class WRC(system: ExtendedActorSystem) extends Engine {
       ctx: ActorContext[GCMessage[T]]
   ): Option[T] = msg match {
     case AppMsg(payload, refs, isSelfMsg) =>
+      state.appMsgCount += 1
       if (isSelfMsg) {
         state.pendingSelfMessages -= 1
       }
@@ -114,9 +141,11 @@ class WRC(system: ExtendedActorSystem) extends Engine {
       }
       Some(payload)
     case DecMsg(weight) =>
+      state.ctrlMsgCount += 1
       state.rc = state.rc - weight
       None
     case IncMsg =>
+      state.ctrlMsgCount += 1
       state.rc = state.rc + RC_INC
       None
   }
