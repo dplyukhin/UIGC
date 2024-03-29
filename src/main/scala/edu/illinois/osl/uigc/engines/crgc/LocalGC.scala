@@ -125,7 +125,6 @@ class LocalGC extends Actor with Timers {
 
     case Wakeup =>
       // println("Bookkeeper woke up!")
-      // var start = System.currentTimeMillis()
       val entryProcessingStats = new ProcessingEntries()
       entryProcessingStats.begin()
 

@@ -189,9 +189,8 @@ public class DeltaGraph implements Serializable {
         return size + (4 * Sizes.EntryFieldSize) + 1 >= Sizes.DeltaGraphSize;
     }
 
-    /**
-     * Override the serializer to track the serialized size of the graph.
-     */
+
+    // Override the serializer to track the serialized size of the graph.
     @Serial
     private void writeObject(ObjectOutputStream out) throws IOException {
         DeltaGraphSerialization metrics = new DeltaGraphSerialization();
