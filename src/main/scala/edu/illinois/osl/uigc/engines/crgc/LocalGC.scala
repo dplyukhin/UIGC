@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorRef, ActorSelection, Address, RootActorPath, Time
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberRemoved, MemberUp}
 import akka.cluster.{Cluster, Member, MemberStatus}
 import edu.illinois.osl.uigc.UIGC
+import edu.illinois.osl.uigc.engines.crgc.jfr.ProcessingEntries
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.IterableHasAsJava
@@ -125,6 +126,9 @@ class LocalGC extends Actor with Timers {
     case Wakeup =>
       // println("Bookkeeper woke up!")
       // var start = System.currentTimeMillis()
+      val entryProcessingStats = new ProcessingEntries()
+      entryProcessingStats.begin()
+
       val queue = engine.Queue
       var count = 0
       var deltaCount = 0
@@ -149,6 +153,7 @@ class LocalGC extends Actor with Timers {
         // Try and get another one
         entry = queue.poll()
       }
+      entryProcessingStats.commit()
 
       if (numNodes > 1 && deltaGraph.nonEmpty()) {
         deltaCount += 1

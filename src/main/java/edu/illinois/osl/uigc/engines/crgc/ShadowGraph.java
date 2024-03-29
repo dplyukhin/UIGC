@@ -2,6 +2,7 @@ package edu.illinois.osl.uigc.engines.crgc;
 
 import akka.actor.Address;
 import akka.actor.ActorRef;
+import edu.illinois.osl.uigc.engines.crgc.jfr.TracingEvent;
 
 import java.util.*;
 
@@ -200,6 +201,9 @@ public class ShadowGraph {
     }
 
     public int trace(boolean shouldKill) {
+        TracingEvent tracingEvent = new TracingEvent();
+        tracingEvent.begin();
+
         //System.out.println("Scanning " + from.size() + " actors...");
         ArrayList<Shadow> to = new ArrayList<>(from.size());
         // 0. Assume all shadows in `from` are in the UNMARKED state.
@@ -276,6 +280,9 @@ public class ShadowGraph {
         }
         from = to;
         MARKED = !MARKED;
+
+        tracingEvent.commit();
+
         return count;
     }
 
