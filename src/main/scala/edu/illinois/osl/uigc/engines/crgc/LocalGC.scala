@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef, ActorSelection, Address, RootActorPath, Time
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberRemoved, MemberUp}
 import akka.cluster.{Cluster, Member, MemberStatus}
 import edu.illinois.osl.uigc.UIGC
-import edu.illinois.osl.uigc.engines.crgc.jfr.ProcessingEntries
+import edu.illinois.osl.uigc.engines.crgc.jfr.{MergingDeltaGraphs, MergingIngressEntries, ProcessingEntries}
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.IterableHasAsJava
@@ -103,18 +103,37 @@ class LocalGC extends Actor with Timers {
       for ((addr, gc) <- remoteGCs; if addr != entry.egressAddress)
         // Tell each remote GC, except the one that is adjacent to this entry, about the entry.
         gc ! RemoteIngressEntry(entry)
+
+      val metrics = new MergingIngressEntries()
+      metrics.begin()
+      metrics.sender = thisAddress.toString
+
       mergeIngressEntry(entry)
+
+      metrics.commit()
 
     case RemoteIngressEntry(entry) =>
       // println(s"GC got remote ingress entry (${entry.egressAddress},${entry.ingressAddress}) ${entry.id}")
+      val metrics = new MergingIngressEntries()
+      metrics.begin()
+      metrics.sender = entry.ingressAddress.toString
+
       mergeIngressEntry(entry)
+
+      metrics.commit()
 
     case DeltaMsg(id, delta, replyTo) =>
       // println(s"GC ${id} deltas from $replyTo")
       if (remoteGCs.contains(delta.address)) {
+        val metrics = new MergingDeltaGraphs()
+        metrics.begin()
+        metrics.sender = delta.address.toString
+
         // Only merge shadow graphs from nodes that have not yet been removed.
         shadowGraph.mergeDelta(delta)
         undoLogs(delta.address).mergeDeltaGraph(delta)
+
+        metrics.commit()
       }
     // var i = 0
     // while (i < delta.entries.size()) {
