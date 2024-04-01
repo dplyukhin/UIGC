@@ -53,7 +53,7 @@ object MAC {
 
   private case object NonRoot extends SpawnInfo
 
-  @Label("WRC Blocked")
+  @Label("MAC Blocked")
   @Category(Array("UIGC"))
   @Description("An actor has finished processing messages.")
   @StackTrace(false)

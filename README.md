@@ -19,20 +19,10 @@ UIGC consists of two parts:
 2. A collection of _GC engines_ that UIGC uses to detect when actors are garbage.
    UIGC currently supports two GC engines, described below.
 
-### Weighted Reference Counting (WRC)
-
-A lightweight implementation of [weighted reference counting](https://en.wikipedia.org/wiki/Reference_counting#Weighted_reference_counting) 
-based on [Pony's acyclic GC](https://github.com/ponylang/ponyc). WRC requires causal message
-delivery, which Akka can only provide [within a single JVM](https://doc.akka.io/docs/akka/current/general/message-delivery-reliability.html#ordering-of-local-message-sends).
-
-WRC detects when an actor has no incoming references. This approach
-can't collect cyclic garbage, e.g. if two actors have references to one another.
-
 ### Conflict-Replicated Garbage Collection (CRGC)
 
 This is the default GC engine, based on 
-[Dan Plyukhin's PhD thesis](https://youtu.be/akBNZLNp05M). CRGC more general than WRC 
-and has many good properties:
+[Dan Plyukhin's PhD thesis](https://youtu.be/akBNZLNp05M). CRGC has many good properties:
 
 1. _No message delivery requirements:_ CRGC can be used in Akka Cluster because
    it does not require that messages are delivered in any particular order.
@@ -43,6 +33,16 @@ and has many good properties:
 
 That last point means you don't have to worry about garbage collection,
 even when things go wrong!
+
+### Message-Based Actor Collection (MAC)
+
+An implementation of Pony's [MAC algorithm](https://doi.org/10.1145/2509136.2509557).
+To collect acyclic garbage, MAC uses [weighted reference counting (WRC)](https://en.wikipedia.org/wiki/Reference_counting#Weighted_reference_counting).
+To collect cyclic garbage (e.g. when two garbage actors have references to each other) actors send messages to a centralized *cycle detector*.
+Currently, the UIGC implementation of MAC only collects acyclic garbage.
+
+This engine requires causal message delivery, which Akka only supports [within a single JVM](https://doc.akka.io/docs/akka/current/general/message-delivery-reliability.html#ordering-of-local-message-sends).
+Consequently, MAC cannot be used with Akka Cluster.
 
 ## Installation
 

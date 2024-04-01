@@ -38,7 +38,7 @@ akka {
 }
 ```
 
-To select a GC engine, set `uigc.engine` to "crgc", "wrc", or "manual";
+To select a GC engine, set `uigc.engine` to "crgc", "mac", or "manual";
 the default is "crgc".
 
 If you are using the CRGC engine, you must also configure the value of
@@ -202,7 +202,7 @@ ctx.release(child2)
 ### Garbage actors
 
 Different GC engines collect different kinds of garbage.
-The WRC engine detects when an actor has no incoming
+The MAC engine implements *weighted reference counting*, which detects when an actor has no incoming
 references---i.e. every incoming reference to the actor has had
 `ctx.release` invoked on it. The CRGC engine detects a more general
 kind of garbage, called _quiescent_ garbage.
