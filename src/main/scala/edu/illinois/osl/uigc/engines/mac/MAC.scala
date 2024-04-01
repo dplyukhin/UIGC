@@ -3,6 +3,7 @@ package edu.illinois.osl.uigc.engines.mac
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal, Terminated}
+import com.typesafe.config.Config
 import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces
 import jdk.jfr._
@@ -70,6 +71,11 @@ class MAC(system: ExtendedActorSystem) extends Engine {
   override type RefobImpl[-T] = MAC.Refob[T]
   override type SpawnInfoImpl = MAC.SpawnInfo
   override type StateImpl = MAC.State
+
+
+  val config: Config = system.settings.config
+  val cycleDetectionEnabled: Boolean =
+    config.getBoolean("uigc.mac.cycle-detection")
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.
