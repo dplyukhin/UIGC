@@ -1,14 +1,15 @@
-package edu.illinois.osl.uigc.engines
+package edu.illinois.osl.uigc.engines.mac
 
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal, Terminated}
+import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces
 import jdk.jfr._
 
 import scala.collection.mutable
 
-object WRC {
+object MAC {
   type Name = ActorRef[GCMessage[Nothing]]
 
   private val RC_INC: Long = 255
@@ -62,13 +63,13 @@ object WRC {
   }
 }
 
-class WRC(system: ExtendedActorSystem) extends Engine {
-  import WRC._
+class MAC(system: ExtendedActorSystem) extends Engine {
+  import MAC._
 
-  override type GCMessageImpl[+T] = WRC.GCMessage[T]
-  override type RefobImpl[-T] = WRC.Refob[T]
-  override type SpawnInfoImpl = WRC.SpawnInfo
-  override type StateImpl = WRC.State
+  override type GCMessageImpl[+T] = MAC.GCMessage[T]
+  override type RefobImpl[-T] = MAC.Refob[T]
+  override type SpawnInfoImpl = MAC.SpawnInfo
+  override type StateImpl = MAC.State
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.
