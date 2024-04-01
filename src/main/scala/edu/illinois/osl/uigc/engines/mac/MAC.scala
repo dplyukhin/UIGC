@@ -8,6 +8,7 @@ import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces
 import jdk.jfr._
 
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.collection.mutable
 
 object MAC {
@@ -15,22 +16,40 @@ object MAC {
 
   private val RC_INC: Long = 255
 
-  sealed trait SpawnInfo extends interfaces.SpawnInfo
-
-  trait GCMessage[+T] extends interfaces.GCMessage[T]
-
   case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T] {
     override def typedActorRef: ActorRef[interfaces.GCMessage[T]] =
       target.asInstanceOf[ActorRef[interfaces.GCMessage[T]]]
   }
 
+  ////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////// MESSAGES /////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
+
+  trait GCMessage[+T] extends interfaces.GCMessage[T]
+
   case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean)
       extends GCMessage[T]
 
-  class Pair(
-      var numRefs: Long = 0,
-      var weight: Long = 0
-  )
+  private case class DecMsg(weight: Long) extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
+
+  private case object IncMsg extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
+
+  /**
+   * If the cycle detector perceives an actor to be in a cycle, the cycle detector sends
+   * the actor this message.
+   * @param token a unique identifier for the cycle perceived by the cycle detector
+   */
+  case class CNF(token: Int) extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////// STATE //////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
 
   class State(val self: Refob[Nothing], val kind: SpawnInfo) extends interfaces.State {
     val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
@@ -42,17 +61,18 @@ object MAC {
     var ctrlMsgCount: Int = 0
   }
 
-  private case class DecMsg(weight: Long) extends GCMessage[Nothing] {
-    override def refs: Iterable[Refob[Nothing]] = Nil
-  }
+  class Pair(
+    var numRefs: Long = 0,
+    var weight: Long = 0
+  )
 
-  private case object IncMsg extends GCMessage[Nothing] {
-    override def refs: Iterable[Refob[Nothing]] = Nil
-  }
-
+  sealed trait SpawnInfo extends interfaces.SpawnInfo
   private case object IsRoot extends SpawnInfo
-
   private case object NonRoot extends SpawnInfo
+
+  ////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////// METRICS /////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
 
   @Label("MAC Blocked")
   @Category(Array("UIGC"))
@@ -76,6 +96,15 @@ class MAC(system: ExtendedActorSystem) extends Engine {
   val config: Config = system.settings.config
   val cycleDetectionEnabled: Boolean =
     config.getBoolean("uigc.mac.cycle-detection")
+
+  val Queue: ConcurrentLinkedQueue[CycleDetector.CycleDetectionProtocol] = new ConcurrentLinkedQueue()
+
+  val bookkeeper: akka.actor.ActorRef =
+    system.systemActorOf(
+      akka.actor.Props[CycleDetector]().withDispatcher("my-pinned-dispatcher"),
+      "CycleDetector"
+    )
+
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.
