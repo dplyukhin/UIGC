@@ -94,16 +94,19 @@ class MAC(system: ExtendedActorSystem) extends Engine {
 
 
   val config: Config = system.settings.config
-  val cycleDetectionEnabled: Boolean =
+  private val cycleDetectionEnabled: Boolean =
     config.getBoolean("uigc.mac.cycle-detection")
 
   val Queue: ConcurrentLinkedQueue[CycleDetector.CycleDetectionProtocol] = new ConcurrentLinkedQueue()
 
-  val bookkeeper: akka.actor.ActorRef =
-    system.systemActorOf(
-      akka.actor.Props[CycleDetector]().withDispatcher("my-pinned-dispatcher"),
-      "CycleDetector"
-    )
+  val bookkeeper: akka.actor.ActorRef = {
+    if (cycleDetectionEnabled)
+      system.systemActorOf(
+        akka.actor.Props[CycleDetector]().withDispatcher("my-pinned-dispatcher"),
+        "CycleDetector"
+      )
+    else null
+  }
 
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
@@ -127,7 +130,9 @@ class MAC(system: ExtendedActorSystem) extends Engine {
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(context.self) = pair
 
-    def logMetrics(): Unit = {
+    def onBlock(): Unit = {
+      if (cycleDetectionEnabled)
+        Queue.add(CycleDetector.BLK(context.self.classicRef))
       val event = new ActorBlockedEvent()
       event.appMsgCount = state.appMsgCount
       event.ctrlMsgCount = state.ctrlMsgCount
@@ -136,7 +141,7 @@ class MAC(system: ExtendedActorSystem) extends Engine {
       event.commit()
     }
 
-    context.queue.onFinishedProcessingHook = logMetrics
+    context.queue.onFinishedProcessingHook = onBlock
 
     state
   }
