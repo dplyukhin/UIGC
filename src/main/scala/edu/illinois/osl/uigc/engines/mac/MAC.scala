@@ -55,6 +55,7 @@ object MAC {
     val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
     var rc: Long = RC_INC
     var pendingSelfMessages: Long = 0
+    var hasSentBLK: Boolean = false
 
     // We keep the data below just for metrics.
     var appMsgCount: Int = 0
@@ -131,8 +132,19 @@ class MAC(system: ExtendedActorSystem) extends Engine {
     state.actorMap(context.self) = pair
 
     def onBlock(): Unit = {
-      if (cycleDetectionEnabled)
-        Queue.add(CycleDetector.BLK(context.self.classicRef))
+      if (cycleDetectionEnabled && !state.hasSentBLK) {
+        // Copy the names and weights of state.actorMap into an array.
+        // Then send it in a BLK message to the cycle detector.
+        val array = new Array[(Name, Long)](state.actorMap.size)
+        var i = 0
+        for ((name, pair) <- state.actorMap) {
+          array(i) = (name, pair.weight)
+          i += 1
+        }
+        Queue.add(CycleDetector.BLK(context.self.classicRef, array))
+        state.hasSentBLK = true
+      }
+      // Record metrics.
       val event = new ActorBlockedEvent()
       event.appMsgCount = state.appMsgCount
       event.ctrlMsgCount = state.ctrlMsgCount
@@ -165,12 +177,20 @@ class MAC(system: ExtendedActorSystem) extends Engine {
     refob
   }
 
+  private def unblocked[T](state: State, value: ActorContext[GCMessage[T]]): Unit = {
+    if (cycleDetectionEnabled && state.hasSentBLK) {
+      state.hasSentBLK = false
+      Queue.add(CycleDetector.UNB(value.self.classicRef))
+    }
+  }
+
   override def onMessageImpl[T](
       msg: GCMessage[T],
       state: State,
       ctx: ActorContext[GCMessage[T]]
   ): Option[T] = msg match {
     case AppMsg(payload, refs, isSelfMsg) =>
+      unblocked(state, ctx)
       state.appMsgCount += 1
       if (isSelfMsg) {
         state.pendingSelfMessages -= 1
@@ -182,10 +202,12 @@ class MAC(system: ExtendedActorSystem) extends Engine {
       }
       Some(payload)
     case DecMsg(weight) =>
+      unblocked(state, ctx)
       state.ctrlMsgCount += 1
       state.rc = state.rc - weight
       None
     case IncMsg =>
+      unblocked(state, ctx)
       state.ctrlMsgCount += 1
       state.rc = state.rc + RC_INC
       None

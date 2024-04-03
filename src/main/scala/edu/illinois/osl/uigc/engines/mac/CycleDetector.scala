@@ -22,7 +22,13 @@ object CycleDetector {
    * has blocked.
    * @param sender the actor that has blocked
    */
-  case class BLK(sender: ActorRef) extends CycleDetectionProtocol
+  case class BLK(sender: ActorRef, actorMap: Array[(MAC.Name, Long)]) extends CycleDetectionProtocol
+
+  /**
+   * Message sent by a garbage-collected actor to the cycle detector after BLK, if the actor receives
+   * an application message.
+   */
+   case class UNB(sender: ActorRef) extends CycleDetectionProtocol
 
   /**
    * If an actor receives [[MAC.CNF]] and it hasn't received any messages since sending out a BLK
