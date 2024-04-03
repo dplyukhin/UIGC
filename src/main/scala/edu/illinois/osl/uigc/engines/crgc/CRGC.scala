@@ -21,7 +21,7 @@ object CRGC {
 
   class SpawnInfo(
       var creator: Option[Refob[Nothing]]
-  ) extends interfaces.SpawnInfo
+  ) extends interfaces.SpawnInfo with Serializable
 
   case object Wave extends CollectionStyle
 

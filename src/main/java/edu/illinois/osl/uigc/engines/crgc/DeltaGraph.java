@@ -5,13 +5,9 @@ import akka.actor.ActorRef;
 import akka.serialization.jackson.ActorRefDeserializer;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.KeyDeserializer;
-import edu.illinois.osl.uigc.engines.crgc.jfr.CountingObjectStream;
 import edu.illinois.osl.uigc.engines.crgc.jfr.DeltaGraphSerialization;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.Serial;
-import java.io.Serializable;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -195,12 +191,7 @@ public class DeltaGraph implements Serializable {
     private void writeObject(ObjectOutputStream out) throws IOException {
         DeltaGraphSerialization metrics = new DeltaGraphSerialization();
         metrics.begin();
-
-        CountingObjectStream countingStream = new CountingObjectStream(out);
-        ObjectOutputStream oos = new ObjectOutputStream(countingStream);
-        oos.defaultWriteObject();
-
-        metrics.size = countingStream.getBytesWritten();
+        out.defaultWriteObject();
         metrics.commit();
     }
 

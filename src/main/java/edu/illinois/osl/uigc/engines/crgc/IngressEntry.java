@@ -2,14 +2,9 @@ package edu.illinois.osl.uigc.engines.crgc;
 
 import akka.actor.Address;
 import akka.actor.ActorRef;
-import edu.illinois.osl.uigc.engines.crgc.jfr.CountingObjectStream;
-import edu.illinois.osl.uigc.engines.crgc.jfr.DeltaGraphSerialization;
 import edu.illinois.osl.uigc.engines.crgc.jfr.IngressEntrySerialization;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.Serial;
-import java.io.Serializable;
+import java.io.*;
 import java.util.HashMap;
 
 public class IngressEntry implements Serializable {
@@ -63,12 +58,7 @@ public class IngressEntry implements Serializable {
     private void writeObject(ObjectOutputStream out) throws IOException {
         IngressEntrySerialization metrics = new IngressEntrySerialization();
         metrics.begin();
-
-        CountingObjectStream countingStream = new CountingObjectStream(out);
-        ObjectOutputStream oos = new ObjectOutputStream(countingStream);
-        oos.defaultWriteObject();
-
-        metrics.size = countingStream.getBytesWritten();
+        out.defaultWriteObject();
         metrics.commit();
     }
 
