@@ -59,12 +59,27 @@ class CycleDetector extends Actor with Timers {
       var count = 0
       var deltaCount = 0
       var msg: CycleDetectionProtocol = queue.poll()
+      var actorsToConfirm = Set.empty[ActorRef]
       while (msg != null) {
         count += 1
+
+        msg match {
+          case BLK(sender, actorMap) =>
+            actorsToConfirm += sender
+          case UNB(sender) =>
+            actorsToConfirm -= sender
+          case ACK(sender, token) =>
+            // Confirmed that the actor is blocked, do nothing.
+        }
 
         // Try and get another one
         msg = queue.poll()
       }
+
+      for (apparentlyBlockedActor <- actorsToConfirm) {
+        apparentlyBlockedActor ! MAC.CNF(0)
+      }
+      // println(s"Cycle detector processed $count entries, sent ${actorsToConfirm.size} confirmation requests.")
 
       totalEntries += count
 

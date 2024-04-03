@@ -142,6 +142,7 @@ class MAC(system: ExtendedActorSystem) extends Engine {
           i += 1
         }
         Queue.add(CycleDetector.BLK(context.self.classicRef, array))
+        state.ctrlMsgCount += 1
         state.hasSentBLK = true
       }
       // Record metrics.
@@ -210,6 +211,12 @@ class MAC(system: ExtendedActorSystem) extends Engine {
       unblocked(state, ctx)
       state.ctrlMsgCount += 1
       state.rc = state.rc + RC_INC
+      None
+    case CNF(token) =>
+      state.ctrlMsgCount += 1
+      if (cycleDetectionEnabled && state.hasSentBLK) {
+        Queue.add(CycleDetector.ACK(ctx.self.classicRef, token))
+      }
       None
   }
 
