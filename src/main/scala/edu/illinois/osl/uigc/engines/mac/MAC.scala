@@ -1,39 +1,34 @@
-package edu.illinois.osl.uigc.engines
+package edu.illinois.osl.uigc.engines.mac
 
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal, Terminated}
+import com.typesafe.config.Config
+import edu.illinois.osl.uigc.engines.Engine
 import edu.illinois.osl.uigc.interfaces
+import jdk.jfr._
 
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.collection.mutable
 
-object WRC {
+object MAC {
   type Name = ActorRef[GCMessage[Nothing]]
 
   private val RC_INC: Long = 255
-
-  sealed trait SpawnInfo extends interfaces.SpawnInfo
-
-  trait GCMessage[+T] extends interfaces.GCMessage[T]
 
   case class Refob[-T](target: ActorRef[GCMessage[T]]) extends interfaces.Refob[T] {
     override def typedActorRef: ActorRef[interfaces.GCMessage[T]] =
       target.asInstanceOf[ActorRef[interfaces.GCMessage[T]]]
   }
 
+  ////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////// MESSAGES /////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
+
+  trait GCMessage[+T] extends interfaces.GCMessage[T]
+
   case class AppMsg[T](payload: T, refs: Iterable[Refob[Nothing]], isSelfMsg: Boolean)
       extends GCMessage[T]
-
-  class Pair(
-      var numRefs: Long = 0,
-      var weight: Long = 0
-  )
-
-  class State(val self: Refob[Nothing], val kind: SpawnInfo) extends interfaces.State {
-    val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
-    var rc: Long = RC_INC
-    var pendingSelfMessages: Long = 0
-  }
 
   private case class DecMsg(weight: Long) extends GCMessage[Nothing] {
     override def refs: Iterable[Refob[Nothing]] = Nil
@@ -43,18 +38,77 @@ object WRC {
     override def refs: Iterable[Refob[Nothing]] = Nil
   }
 
-  private case object IsRoot extends SpawnInfo
+  /**
+   * If the cycle detector perceives an actor to be in a cycle, the cycle detector sends
+   * the actor this message.
+   * @param token a unique identifier for the cycle perceived by the cycle detector
+   */
+  case class CNF(token: Int) extends GCMessage[Nothing] {
+    override def refs: Iterable[Refob[Nothing]] = Nil
+  }
 
+  ////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////// STATE //////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
+
+  class State(val self: Refob[Nothing], val kind: SpawnInfo) extends interfaces.State {
+    val actorMap: mutable.HashMap[Name, Pair] = mutable.HashMap()
+    var rc: Long = RC_INC
+    var pendingSelfMessages: Long = 0
+    var hasSentBLK: Boolean = false
+
+    // We keep the data below just for metrics.
+    var appMsgCount: Int = 0
+    var ctrlMsgCount: Int = 0
+  }
+
+  class Pair(
+    var numRefs: Long = 0,
+    var weight: Long = 0
+  )
+
+  sealed trait SpawnInfo extends interfaces.SpawnInfo
+  private case object IsRoot extends SpawnInfo
   private case object NonRoot extends SpawnInfo
+
+  ////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////// METRICS /////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
+
+  @Label("MAC Blocked")
+  @Category(Array("UIGC"))
+  @Description("An actor has finished processing messages.")
+  @StackTrace(false)
+  private class ActorBlockedEvent extends Event {
+    @Label("Number of Application Messages Received") var appMsgCount = 0
+    @Label("Number of Control Messages Received") var ctrlMsgCount = 0
+  }
 }
 
-class WRC(system: ExtendedActorSystem) extends Engine {
-  import WRC._
+class MAC(system: ExtendedActorSystem) extends Engine {
+  import MAC._
 
-  override type GCMessageImpl[+T] = WRC.GCMessage[T]
-  override type RefobImpl[-T] = WRC.Refob[T]
-  override type SpawnInfoImpl = WRC.SpawnInfo
-  override type StateImpl = WRC.State
+  override type GCMessageImpl[+T] = MAC.GCMessage[T]
+  override type RefobImpl[-T] = MAC.Refob[T]
+  override type SpawnInfoImpl = MAC.SpawnInfo
+  override type StateImpl = MAC.State
+
+
+  val config: Config = system.settings.config
+  private val cycleDetectionEnabled: Boolean =
+    config.getBoolean("uigc.mac.cycle-detection")
+
+  val Queue: ConcurrentLinkedQueue[CycleDetector.CycleDetectionProtocol] = new ConcurrentLinkedQueue()
+
+  val bookkeeper: akka.actor.ActorRef = {
+    if (cycleDetectionEnabled)
+      system.systemActorOf(
+        akka.actor.Props[CycleDetector]().withDispatcher("my-pinned-dispatcher"),
+        "CycleDetector"
+      )
+    else null
+  }
+
 
   /** Transform a message from a non-GC actor so that it can be understood by a GC actor.
     * Necessarily, the recipient is a root actor.
@@ -76,6 +130,32 @@ class WRC(system: ExtendedActorSystem) extends Engine {
     val state = new State(Refob(context.self), spawnInfo)
     val pair = new Pair(numRefs = 1, weight = RC_INC)
     state.actorMap(context.self) = pair
+
+    def onBlock(): Unit = {
+      if (cycleDetectionEnabled && !state.hasSentBLK) {
+        // Copy the names and weights of state.actorMap into an array.
+        // Then send it in a BLK message to the cycle detector.
+        val array = new Array[(Name, Long)](state.actorMap.size)
+        var i = 0
+        for ((name, pair) <- state.actorMap) {
+          array(i) = (name, pair.weight)
+          i += 1
+        }
+        Queue.add(CycleDetector.BLK(context.self.classicRef, array))
+        state.ctrlMsgCount += 1
+        state.hasSentBLK = true
+      }
+      // Record metrics.
+      val event = new ActorBlockedEvent()
+      event.appMsgCount = state.appMsgCount
+      event.ctrlMsgCount = state.ctrlMsgCount
+      state.appMsgCount = 0
+      state.ctrlMsgCount = 0
+      event.commit()
+    }
+
+    context.queue.onFinishedProcessingHook = onBlock
+
     state
   }
 
@@ -98,12 +178,21 @@ class WRC(system: ExtendedActorSystem) extends Engine {
     refob
   }
 
+  private def unblocked[T](state: State, value: ActorContext[GCMessage[T]]): Unit = {
+    if (cycleDetectionEnabled && state.hasSentBLK) {
+      state.hasSentBLK = false
+      Queue.add(CycleDetector.UNB(value.self.classicRef))
+    }
+  }
+
   override def onMessageImpl[T](
       msg: GCMessage[T],
       state: State,
       ctx: ActorContext[GCMessage[T]]
   ): Option[T] = msg match {
     case AppMsg(payload, refs, isSelfMsg) =>
+      unblocked(state, ctx)
+      state.appMsgCount += 1
       if (isSelfMsg) {
         state.pendingSelfMessages -= 1
       }
@@ -114,10 +203,20 @@ class WRC(system: ExtendedActorSystem) extends Engine {
       }
       Some(payload)
     case DecMsg(weight) =>
+      unblocked(state, ctx)
+      state.ctrlMsgCount += 1
       state.rc = state.rc - weight
       None
     case IncMsg =>
+      unblocked(state, ctx)
+      state.ctrlMsgCount += 1
       state.rc = state.rc + RC_INC
+      None
+    case CNF(token) =>
+      state.ctrlMsgCount += 1
+      if (cycleDetectionEnabled && state.hasSentBLK) {
+        Queue.add(CycleDetector.ACK(ctx.self.classicRef, token))
+      }
       None
   }
 
