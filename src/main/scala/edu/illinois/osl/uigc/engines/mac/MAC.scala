@@ -5,8 +5,8 @@ import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, Signal, Terminated}
 import com.typesafe.config.Config
 import edu.illinois.osl.uigc.engines.Engine
+import edu.illinois.osl.uigc.engines.mac.jfr.ActorBlockedEvent
 import edu.illinois.osl.uigc.interfaces
-import jdk.jfr._
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.collection.mutable
@@ -71,18 +71,6 @@ object MAC {
   private case object IsRoot extends SpawnInfo
   private case object NonRoot extends SpawnInfo
 
-  ////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////// METRICS /////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////
-
-  @Label("MAC Blocked")
-  @Category(Array("UIGC"))
-  @Description("An actor has finished processing messages.")
-  @StackTrace(false)
-  private class ActorBlockedEvent extends Event {
-    @Label("Number of Application Messages Received") var appMsgCount = 0
-    @Label("Number of Control Messages Received") var ctrlMsgCount = 0
-  }
 }
 
 class MAC(system: ExtendedActorSystem) extends Engine {
@@ -142,7 +130,6 @@ class MAC(system: ExtendedActorSystem) extends Engine {
           i += 1
         }
         Queue.add(CycleDetector.BLK(context.self.classicRef, array))
-        state.ctrlMsgCount += 1
         state.hasSentBLK = true
       }
       // Record metrics.

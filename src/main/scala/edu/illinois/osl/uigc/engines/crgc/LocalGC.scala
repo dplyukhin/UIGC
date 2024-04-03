@@ -62,7 +62,6 @@ class LocalGC extends Actor with Timers {
   private var undoneGCs: Set[Address] = Set()
   private var ingressHooks: Map[Address, () => Unit] = Map()
   private var totalEntries: Int = 0
-  private var stopCount: Int = 0
   // private val testGraph = new ShadowGraph()
   private var deltaGraphID: Int = 0
   private var deltaGraph = DeltaGraph.initialize(thisAddress)
@@ -177,15 +176,13 @@ class LocalGC extends Actor with Timers {
         finalizeDeltaGraph()
       }
 
-      entryProcessingStats.numEntries = count;
+      entryProcessingStats.numEntries = count
       entryProcessingStats.commit()
 
       totalEntries += count
 
       shadowGraph.trace(true)
       // shadowGraph.assertEquals(testGraph)
-
-      stopCount += count
 
     case StartWave =>
       shadowGraph.startWave()
@@ -202,7 +199,7 @@ class LocalGC extends Actor with Timers {
     if (member != Cluster(context.system).selfMember) {
       val addr = member.address
       val gc = context.actorSelection(RootActorPath(addr) / "system" / "Bookkeeper")
-      println(s"${context.self} connected to $gc on ${addr}")
+      println(s"${context.self} connected to $gc on $addr")
       remoteGCs = remoteGCs + (addr -> gc)
       if (!undoLogs.contains(addr))
         undoLogs = undoLogs + (addr -> new UndoLog(addr))
@@ -273,7 +270,7 @@ class LocalGC extends Actor with Timers {
   override def postStop(): Unit = {
     println(
       s"Bookkeeper stopped! Read $totalEntries entries, produced $deltaGraphID delta-graphs, " +
-        s"and stopped $stopCount (of ${shadowGraph.totalActorsSeen}) actors."
+        s"and discovered ${shadowGraph.totalActorsSeen} actors."
     )
     for (addr <- downedGCs) {
       val count = shadowGraph.investigateRemotelyHeldActors(addr)

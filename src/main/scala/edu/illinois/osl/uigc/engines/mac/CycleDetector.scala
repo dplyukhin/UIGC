@@ -1,12 +1,10 @@
 package edu.illinois.osl.uigc.engines.mac
 
-import akka.actor.{Actor, ActorRef, ActorSelection, Address, RootActorPath, Timers}
-import akka.cluster.ClusterEvent.{CurrentClusterState, MemberRemoved, MemberUp}
-import akka.cluster.{Cluster, Member, MemberStatus}
+import akka.actor.{Actor, ActorRef, Timers}
 import edu.illinois.osl.uigc.UIGC
+import edu.illinois.osl.uigc.engines.mac.jfr.ProcessingMessages
 
 import scala.concurrent.duration.DurationInt
-import scala.jdk.CollectionConverters.IterableHasAsJava
 
 object CycleDetector {
   /**
@@ -54,6 +52,8 @@ class CycleDetector extends Actor with Timers {
 
     case Wakeup =>
       // println("Cycle detector woke up!")
+      val metrics = new ProcessingMessages()
+      metrics.begin()
 
       val queue = engine.Queue
       var count = 0
@@ -80,6 +80,9 @@ class CycleDetector extends Actor with Timers {
         apparentlyBlockedActor ! MAC.CNF(0)
       }
       // println(s"Cycle detector processed $count entries, sent ${actorsToConfirm.size} confirmation requests.")
+
+      metrics.numMessages = count
+      metrics.commit()
 
       totalEntries += count
 
