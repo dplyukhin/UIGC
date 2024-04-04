@@ -8,8 +8,11 @@ import jdk.jfr.*;
 @StackTrace(false)
 public class DeltaGraphSerialization extends Event {
 
-    @Label("Size")
+    @Label("Size of Shadow Array")
     @DataAmount
-    public long size;
+    public long shadowSize;
 
+    @Label("Size of Compression Table")
+    @DataAmount
+    public long compressionTableSize;
 }

@@ -1,10 +1,6 @@
 package edu.illinois.osl.uigc.engines.crgc;
 
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.KeyDeserializer;
-
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.util.HashMap;
 
 /**
@@ -54,11 +50,36 @@ public class DeltaShadow implements Serializable {
         this.interned = false;
     }
 
-    public static class OutgoingDeserializer extends KeyDeserializer {
+    /**
+     * Serialize the shadow to the output stream.
+     * @return the number of bytes written
+     */
+    public int serialize(ObjectOutputStream out) throws IOException {
+        out.writeInt(recvCount);
+        out.writeShort(supervisor);
+        out.writeBoolean(interned);
+        out.writeBoolean(isRoot);
+        out.writeBoolean(isBusy);
+        out.writeInt(outgoing.size());
+        for (var entry : outgoing.entrySet()) {
+            out.writeShort(entry.getKey());
+            out.writeInt(entry.getValue());
+        }
+        return 4 + 2 + 1 + 1 + 1 + 4 + outgoing.size() * (2 + 4);
+    }
 
-        @Override
-        public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
-            return Short.parseShort(key);
+    public void deserialize(ObjectInputStream in) throws IOException {
+        recvCount = in.readInt();
+        supervisor = in.readShort();
+        interned = in.readBoolean();
+        isRoot = in.readBoolean();
+        isBusy = in.readBoolean();
+        int size = in.readInt();
+        outgoing = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            short key = in.readShort();
+            int value = in.readInt();
+            outgoing.put(key, value);
         }
     }
 }
