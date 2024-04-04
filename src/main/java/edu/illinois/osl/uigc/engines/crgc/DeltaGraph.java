@@ -2,9 +2,6 @@ package edu.illinois.osl.uigc.engines.crgc;
 
 import akka.actor.Address;
 import akka.actor.ActorRef;
-import akka.serialization.jackson.ActorRefDeserializer;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.KeyDeserializer;
 import edu.illinois.osl.uigc.engines.crgc.jfr.DeltaGraphSerialization;
 
 import java.io.*;
@@ -190,10 +187,7 @@ public class DeltaGraph implements Serializable {
 
         // Serialize the address
         out.writeObject(address);
-        metrics.size +=
-                address.protocol().length() + address.system().length()
-                + (address.host().isDefined() ? address.host().get().length() : 0)
-                + (address.port().isDefined() ? 4 : 0);
+        metrics.size += 2 + address.toString().length();
 
         // Serialize the shadows
         out.writeShort(size);

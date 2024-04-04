@@ -3,6 +3,7 @@ package edu.illinois.osl.uigc.engines.crgc
 import akka.actor.Address
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import org.scalatest.wordspec.AnyWordSpecLike
+import scala.jdk.CollectionConverters._
 
 class SerializationSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
@@ -93,6 +94,31 @@ class SerializationSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
       graph.size shouldEqual 2
 
       testKit.serializationTestKit.verifySerialization(graph)
+    }
+
+  }
+
+  "Ingress Entries" must {
+
+    "serialize and deserialize correctly - empty entries" in {
+      val entry = new IngressEntry()
+      entry.egressAddress = system.address
+      entry.ingressAddress = system.address
+      testKit.serializationTestKit.verifySerialization(entry)
+    }
+
+    "serialize and deserialize correctly - non-empty entries" in {
+      val ref1: TestProbe[GCMessage[Nothing]] = testKit.createTestProbe()
+      val ref2: TestProbe[GCMessage[Nothing]] = testKit.createTestProbe()
+      val refob1: Refob[Nothing] = new Refob[Nothing](ref1.ref, null)
+      val refob2: Refob[Nothing] = new Refob[Nothing](ref2.ref, null)
+
+      val entry = new IngressEntry()
+      entry.egressAddress = system.address
+      entry.ingressAddress = system.address
+      entry.onMessage(ref1.ref.classicRef, Nil.asJava)
+      entry.onMessage(ref2.ref.classicRef, (refob1 :: Nil).asJava)
+      testKit.serializationTestKit.verifySerialization(entry)
     }
 
   }
