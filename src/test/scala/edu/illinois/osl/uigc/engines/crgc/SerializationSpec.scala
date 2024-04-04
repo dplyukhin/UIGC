@@ -1,9 +1,10 @@
 package edu.illinois.osl.uigc.engines.crgc
 
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import akka.actor.Address
+import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class SerializationSpec extends AnyWordSpecLike {
+class SerializationSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
   "Delta Shadows" must {
     "serialize and deserialize correctly - test 1" in {
@@ -63,5 +64,36 @@ class SerializationSpec extends AnyWordSpecLike {
       shadow2.isBusy shouldEqual shadow.isBusy
       shadow2.outgoing shouldEqual shadow.outgoing
     }
+  }
+
+  "Delta Graphs" must {
+
+    val address: Address = system.address
+
+    "serialize and deserialize correctly - empty graphs" in {
+      val graph = DeltaGraph.initialize(address)
+      testKit.serializationTestKit.verifySerialization(graph)
+    }
+
+    "serialize and deserialize correctly - two-actor graph" in {
+      val ref1: TestProbe[GCMessage[Nothing]] = testKit.createTestProbe()
+      val ref2: TestProbe[GCMessage[Nothing]] = testKit.createTestProbe()
+      val refob1: Refob[Nothing] = new Refob[Nothing](ref1.ref, null)
+      val refob2: Refob[Nothing] = new Refob[Nothing](ref2.ref, null)
+      val state1 = new State(refob1)
+
+      state1.recordNewActor(refob2)
+      refob2.incSendCount()
+      state1.recordUpdatedRefob(refob2)
+      val entry = new Entry()
+      state1.flushToEntry(false, entry)
+
+      val graph = DeltaGraph.initialize(address)
+      graph.mergeEntry(entry)
+      graph.size shouldEqual 2
+
+      testKit.serializationTestKit.verifySerialization(graph)
+    }
+
   }
 }

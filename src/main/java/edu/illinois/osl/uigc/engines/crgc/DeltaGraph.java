@@ -29,19 +29,15 @@ public class DeltaGraph implements Serializable {
     /**
      * The compression table that maps ActorRefs to compressed IDs.
      */
-    private final HashMap<ActorRef, Short> compressionTable;
+    HashMap<ActorRef, Short> compressionTable;
     /**
      * Delta shadows are stored in this array. An actor's compressed ID is its position in the array.
      */
-    final DeltaShadow[] shadows;
+    DeltaShadow[] shadows;
     /**
      * The address of the node that produced this graph.
      */
     Address address;
-    /**
-     * The number of entries that have been merged into this graph.
-     */
-    int numEntriesMerged;
     /**
      * The number of delta shadows in this graph.
      */
@@ -56,7 +52,6 @@ public class DeltaGraph implements Serializable {
     public DeltaGraph() {
         this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
         this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
-        this.numEntriesMerged = 0;
         this.size = 0;
     }
 
@@ -126,8 +121,6 @@ public class DeltaGraph implements Serializable {
                 updateOutgoing(selfShadow.outgoing, targetID, -1);
             }
         }
-
-        numEntriesMerged++;
     }
 
     private void updateOutgoing(Map<Short, Integer> outgoing, Short target, int delta) {
@@ -185,16 +178,6 @@ public class DeltaGraph implements Serializable {
         return size + (4 * Sizes.EntryFieldSize) + 1 >= Sizes.DeltaGraphSize;
     }
 
-
-    // Override the serializer to track the serialized size of the graph.
-    @Serial
-    private void writeObject(ObjectOutputStream out) throws IOException {
-        DeltaGraphSerialization metrics = new DeltaGraphSerialization();
-        metrics.begin();
-        out.defaultWriteObject();
-        metrics.commit();
-    }
-
     /**
      * Whether the graph is nonempty, i.e. there is at least one {@link DeltaShadow} in the graph.
      */
@@ -202,11 +185,71 @@ public class DeltaGraph implements Serializable {
         return size > 0;
     }
 
-    public static class CompressionDeserializer extends KeyDeserializer {
+    public void serialize(ObjectOutputStream out) throws IOException {
+        DeltaGraphSerialization metrics = new DeltaGraphSerialization();
 
-        @Override
-        public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
-            return ActorRefDeserializer.instance().deserialize(ctxt.getParser(), ctxt);
+        // Serialize the address
+        out.writeObject(address);
+        metrics.size +=
+                address.protocol().length() + address.system().length()
+                + (address.host().isDefined() ? address.host().get().length() : 0)
+                + (address.port().isDefined() ? 4 : 0);
+
+        // Serialize the shadows
+        out.writeShort(size);
+        for (int i = 0; i < size; i++) {
+            metrics.size += shadows[i].serialize(out);
+        }
+
+        // Serialize the compression table
+        assert(compressionTable.size() == size);
+        for (Map.Entry<ActorRef, Short> entry : compressionTable.entrySet()) {
+            out.writeShort(entry.getValue());
+            out.writeObject(entry.getKey());
+            metrics.size += 2 + entry.getKey().toString().length();
+        }
+
+        metrics.commit();
+    }
+
+    public void deserialize(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        // Deserialize the address
+        address = (Address) in.readObject();
+
+        // Deserialize the shadows
+        size = in.readShort();
+        shadows = new DeltaShadow[size];
+        for (int i = 0; i < size; i++) {
+            shadows[i] = new DeltaShadow();
+            shadows[i].deserialize(in);
+        }
+
+        // Deserialize the compression table; it will have size `size`
+        compressionTable = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            short id = in.readShort();
+            ActorRef ref = (ActorRef) in.readObject();
+            compressionTable.put(ref, id);
         }
     }
+
+    @Serial
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        serialize(out);
+    }
+
+    @Serial
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        deserialize(in);
+    }
+
+    // Implement equality check
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        DeltaGraph that = (DeltaGraph) obj;
+        return size == that.size && compressionTable.equals(that.compressionTable) && address.equals(that.address);
+    }
+
 }
