@@ -55,7 +55,7 @@ class LocalGC extends Actor with Timers {
 
   private val thisAddress: Address =
     if (numNodes > 1) Cluster(context.system).selfMember.address else null
-  private val shadowGraph = new ShadowGraph()
+  private val shadowGraph = new ShadowGraph(engine.crgcContext)
   private var remoteGCs: Map[Address, ActorSelection] = Map()
   private var undoLogs: Map[Address, UndoLog] = Map()
   private var downedGCs: Set[Address] = Set()
@@ -64,7 +64,7 @@ class LocalGC extends Actor with Timers {
   private var totalEntries: Int = 0
   // private val testGraph = new ShadowGraph()
   private var deltaGraphID: Int = 0
-  private var deltaGraph = DeltaGraph.initialize(thisAddress)
+  private var deltaGraph = DeltaGraph.initialize(thisAddress, engine.crgcContext)
 
   if (numNodes == 1) {
     start()
@@ -192,7 +192,7 @@ class LocalGC extends Actor with Timers {
     for (gc <- remoteGCs.values)
       gc ! DeltaMsg(deltaGraphID, deltaGraph, context.self)
     deltaGraphID += 1
-    deltaGraph = DeltaGraph.initialize(thisAddress)
+    deltaGraph = DeltaGraph.initialize(thisAddress, engine.crgcContext)
   }
 
   private def addMember(member: Member): Unit =

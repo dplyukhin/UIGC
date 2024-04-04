@@ -25,13 +25,15 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     boolean isRoot;
     /** True if the GC has asked this actor to stop */
     boolean stopRequested;
+    Context context;
 
-    public State(Refob<?> self) {
+    public State(Refob<?> self, Context context) {
         this.self = self;
-        this.createdOwners = new Refob<?>[Sizes.EntryFieldSize];
-        this.createdTargets = new Refob<?>[Sizes.EntryFieldSize];
-        this.spawnedActors = new Refob<?>[Sizes.EntryFieldSize];
-        this.updatedRefobs = new Refob<?>[Sizes.EntryFieldSize];
+        this.context = context;
+        this.createdOwners = new Refob<?>[context.EntryFieldSize];
+        this.createdTargets = new Refob<?>[context.EntryFieldSize];
+        this.spawnedActors = new Refob<?>[context.EntryFieldSize];
+        this.updatedRefobs = new Refob<?>[context.EntryFieldSize];
         this.createdIdx = 0;
         this.spawnedIdx = 0;
         this.updatedIdx = 0;
@@ -45,7 +47,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public boolean canRecordNewRefob() {
-        return createdIdx < Sizes.EntryFieldSize;
+        return createdIdx < context.EntryFieldSize;
     }
 
     public void recordNewRefob(Refob<?> owner, Refob<?> target) {
@@ -56,7 +58,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public boolean canRecordNewActor() {
-        return spawnedIdx < Sizes.EntryFieldSize;
+        return spawnedIdx < context.EntryFieldSize;
     }
 
     public void recordNewActor(Refob<?> child) {
@@ -65,7 +67,7 @@ public class State implements edu.illinois.osl.uigc.interfaces.State {
     }
 
     public boolean canRecordUpdatedRefob(Refob<?> refob) {
-        return refob.hasBeenRecorded() || updatedIdx < Sizes.EntryFieldSize;
+        return refob.hasBeenRecorded() || updatedIdx < context.EntryFieldSize;
     }
 
     public void recordUpdatedRefob(Refob<?> refob) {

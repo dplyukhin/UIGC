@@ -39,6 +39,10 @@ public class DeltaGraph implements Serializable {
      * The number of delta shadows in this graph.
      */
     short size;
+    /**
+     * CRGC Configuration options.
+     */
+    Context context;
 
     /**
      * FOR INTERNAL USE ONLY! The serializer wants a public empty constructor.
@@ -46,20 +50,20 @@ public class DeltaGraph implements Serializable {
      *
      * @deprecated
      */
-    public DeltaGraph() {
-        this.compressionTable = new HashMap<>(Sizes.DeltaGraphSize);
-        this.shadows = new DeltaShadow[Sizes.DeltaGraphSize];
-        this.size = 0;
-    }
+    public DeltaGraph() {}
 
     /**
      * The main constructor for delta graphs.
      *
      * @param address the address of the ActorSystem that created this graph
      */
-    public static DeltaGraph initialize(Address address) {
+    public static DeltaGraph initialize(Address address, Context context) {
         DeltaGraph graph = new DeltaGraph();
+        graph.compressionTable = new HashMap<>(context.DeltaGraphSize);
+        graph.shadows = new DeltaShadow[context.DeltaGraphSize];
+        graph.size = 0;
         graph.address = address;
+        graph.context = context;
         return graph;
     }
 
@@ -76,7 +80,7 @@ public class DeltaGraph implements Serializable {
         selfShadow.isRoot = entry.isRoot;
 
         // Created refs.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.createdOwners[i] == null) break;
             Refob<?> owner = entry.createdOwners[i];
             short targetID = encode(entry.createdTargets[i]);
@@ -88,7 +92,7 @@ public class DeltaGraph implements Serializable {
         }
 
         // Spawned actors.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.spawnedActors[i] == null) break;
             Refob<?> child = entry.spawnedActors[i];
 
@@ -100,7 +104,7 @@ public class DeltaGraph implements Serializable {
         }
 
         // Deactivate refs.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
             short info = entry.updatedInfos[i];
             Refob<?> target = entry.updatedRefs[i];
@@ -172,7 +176,7 @@ public class DeltaGraph implements Serializable {
          * so many new shadows. So we never fill the delta graph to actual capacity; we
          * tell the GC to finalize the delta graph if the next entry *could potentially*
          * cause an overflow. */
-        return size + (4 * Sizes.EntryFieldSize) + 1 >= Sizes.DeltaGraphSize;
+        return size + (4 * context.EntryFieldSize) + 1 >= context.DeltaGraphSize;
     }
 
     /**

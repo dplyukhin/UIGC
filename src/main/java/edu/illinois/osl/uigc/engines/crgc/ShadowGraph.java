@@ -12,10 +12,12 @@ public class ShadowGraph {
     int totalActorsSeen = 0;
     ArrayList<Shadow> from;
     HashMap<ActorRef, Shadow> shadowMap;
+    Context context;
 
-    public ShadowGraph() {
-        from = new ArrayList<>();
-        shadowMap = new HashMap<>();
+    public ShadowGraph(Context context) {
+        this.from = new ArrayList<>();
+        this.shadowMap = new HashMap<>();
+        this.context = context;
     }
 
     public Shadow getShadow(Refob<?> refob) {
@@ -80,7 +82,7 @@ public class ShadowGraph {
         selfShadow.isRoot = entry.isRoot;
 
         // Created refs.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.createdOwners[i] == null) break;
             Refob<?> owner = entry.createdOwners[i];
             Shadow targetShadow = getShadow(entry.createdTargets[i]);
@@ -91,7 +93,7 @@ public class ShadowGraph {
         }
 
         // Spawned actors.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.spawnedActors[i] == null) break;
             Refob<?> child = entry.spawnedActors[i];
 
@@ -102,7 +104,7 @@ public class ShadowGraph {
         }
 
         // Update refs.
-        for (int i = 0; i < Sizes.EntryFieldSize; i++) {
+        for (int i = 0; i < context.EntryFieldSize; i++) {
             if (entry.updatedRefs[i] == null) break;
             Refob<?> target = entry.updatedRefs[i];
             Shadow targetShadow = getShadow(target);

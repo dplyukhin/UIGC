@@ -13,13 +13,13 @@ public class Entry {
     public boolean isBusy;
     public boolean isRoot;
 
-    public Entry() {
+    public Entry(Context context) {
         self           = null;
-        createdOwners  = new Refob<?>[Sizes.EntryFieldSize];
-        createdTargets = new Refob<?>[Sizes.EntryFieldSize];
-        spawnedActors  = new Refob<?>[Sizes.EntryFieldSize];
-        updatedRefs    = new Refob<?>[Sizes.EntryFieldSize];
-        updatedInfos   = new short[Sizes.EntryFieldSize];
+        createdOwners  = new Refob<?>[context.EntryFieldSize];
+        createdTargets = new Refob<?>[context.EntryFieldSize];
+        spawnedActors  = new Refob<?>[context.EntryFieldSize];
+        updatedRefs    = new Refob<?>[context.EntryFieldSize];
+        updatedInfos   = new short[context.EntryFieldSize];
         isBusy         = false;
         isRoot         = false;
     }

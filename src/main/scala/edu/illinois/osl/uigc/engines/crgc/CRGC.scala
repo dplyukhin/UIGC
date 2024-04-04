@@ -46,6 +46,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       case "on-block" => OnBlock
       case "on-idle"  => OnIdle
     }
+  val crgcContext = new Context(config)
 
   // This could be split into multiple queues if contention becomes high
   val Queue: ConcurrentLinkedQueue[Entry] = new ConcurrentLinkedQueue[Entry]()
@@ -71,7 +72,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
   ): State = {
     val self = context.self
     val selfRefob = new Refob[Nothing](self, targetShadow = null)
-    val state = new State(selfRefob)
+    val state = new State(selfRefob, crgcContext)
     state.recordNewRefob(selfRefob, selfRefob)
     spawnInfo.creator match {
       case Some(creator) =>
@@ -177,7 +178,7 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
     metrics.begin()
     var entry = CRGC.EntryPool.poll()
     if (entry == null) {
-      entry = new Entry()
+      entry = new Entry(crgcContext)
       metrics.allocatedMemory = true
     }
     state.flushToEntry(isBusy, entry)
