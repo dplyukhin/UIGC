@@ -187,12 +187,12 @@ public class DeltaGraph implements Serializable {
 
         // Serialize the address
         out.writeObject(address);
-        metrics.size += 2 + address.toString().length();
 
         // Serialize the shadows
         out.writeShort(size);
+        metrics.shadowSize += 2;
         for (int i = 0; i < size; i++) {
-            metrics.size += shadows[i].serialize(out);
+            metrics.shadowSize += shadows[i].serialize(out);
         }
 
         // Serialize the compression table
@@ -200,7 +200,7 @@ public class DeltaGraph implements Serializable {
         for (Map.Entry<ActorRef, Short> entry : compressionTable.entrySet()) {
             out.writeShort(entry.getValue());
             out.writeObject(entry.getKey());
-            metrics.size += 2 + entry.getKey().toString().length();
+            metrics.compressionTableSize += 2 + entry.getKey().toString().length();
         }
 
         metrics.commit();
