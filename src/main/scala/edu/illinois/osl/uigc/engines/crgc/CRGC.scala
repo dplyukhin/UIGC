@@ -136,8 +136,11 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
         Engine.ShouldStop
       case WaveMsg =>
         sendEntry(state, isBusy=false)
-        for (child <- ctx.children)
+        val it = ctx.children.iterator
+        while (it.hasNext) {
+          val child = it.next()
           child.unsafeUpcast[GCMessage[Any]].tell(WaveMsg)
+        }
         Engine.ShouldContinue
       case _ =>
         if (collectionStyle == OnIdle)
@@ -162,13 +165,16 @@ class CRGC(system: ExtendedActorSystem) extends Engine {
       releasing: Iterable[Refob[S]],
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Unit =
-    for (ref <- releasing) {
+  ): Unit = {
+    val it = releasing.iterator
+    while (it.hasNext) {
+      val ref = it.next()
       if (!state.canRecordUpdatedRefob(ref))
         sendEntry(state, isBusy=true)
       ref.deactivate()
       state.recordUpdatedRefob(ref)
     }
+  }
 
   private def sendEntry(
       state: State,

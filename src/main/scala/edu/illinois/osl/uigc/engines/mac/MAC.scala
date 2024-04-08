@@ -183,7 +183,9 @@ class MAC(system: ExtendedActorSystem) extends Engine {
       if (isSelfMsg) {
         state.pendingSelfMessages -= 1
       }
-      for (ref <- refs) {
+      val it = refs.iterator
+      while (it.hasNext) {
+        val ref = it.next()
         val pair = state.actorMap.getOrElseUpdate(ref.target, new Pair())
         pair.numRefs = pair.numRefs + 1
         pair.weight = pair.weight + 1
@@ -267,8 +269,10 @@ class MAC(system: ExtendedActorSystem) extends Engine {
       releasing: Iterable[Refob[S]],
       state: State,
       ctx: ActorContext[GCMessage[T]]
-  ): Unit =
-    for (ref <- releasing)
+  ): Unit = {
+    val it = releasing.iterator
+    while (it.hasNext) {
+      val ref = it.next()
       if (ref.target == ctx.self) {
         state.rc -= 1
       } else {
@@ -280,6 +284,8 @@ class MAC(system: ExtendedActorSystem) extends Engine {
           pair.numRefs -= 1
         }
       }
+    }
+  }
 
   override def sendMessageImpl[T, S](
       ref: Refob[T],
