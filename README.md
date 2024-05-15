@@ -46,7 +46,7 @@ Consequently, MAC cannot be used with Akka Cluster.
 
 ## Installation
 
-UIGC requires a [forked version of Akka](https://github.com/dplyukhin/akka), which
+UIGC requires Java 17 and a [forked version of Akka](https://github.com/dplyukhin/akka) that
 exposes some of Akka's internals to the garbage collector. Eventually, we plan for 
 UIGC to build against the official Akka binaries. See
 the Github issue that tracks our progress towards this goal.
